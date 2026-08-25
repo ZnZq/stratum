@@ -2,102 +2,92 @@ import 'dart:math' as math;
 
 import 'number_style.dart';
 
-/// Число з розширеною експонентою: `mantissa × 10^exponent`.
+/// A number with an extended exponent: `mantissa × 10^exponent`.
 ///
-/// Інваріант нормалізації: або число точно нуль (`mantissa == 0 && exponent == 0`),
-/// або `1 ≤ |mantissa| < 10`. Інваріант тримає рівність і порівняння тривіальними —
-/// без нього `1e3` і `10e2` були б одним числом у двох поданнях.
+/// Normalization invariant: the value is either exactly zero
+/// (`mantissa == 0 && exponent == 0`) or `1 ≤ |mantissa| < 10`. The invariant is
+/// what keeps equality and comparison trivial — without it `1e3` and `10e2`
+/// would be one number in two shapes.
 class BigDouble implements Comparable<BigDouble> {
-  /// Створює число з довільної пари мантиси й експоненти, нормалізуючи її.
   factory BigDouble(double mantissa, int exponent) =>
       _normalized(mantissa, exponent);
 
-  /// Створює число з `int` або `double`.
   factory BigDouble.fromNum(num value) => _normalized(value.toDouble(), 0);
 
-  /// Створює число з ВЖЕ нормалізованої пари, без обчислень.
+  /// Builds from an ALREADY normalized pair, without computing anything.
   ///
-  /// Потрібен там, де число має бути `const`: нормалізація вимагає логарифма,
-  /// а в константному контексті обчислення неможливі. Інваріант тут на совісті
-  /// того, хто пише константу, тому його стереже асерт.
+  /// Needed where a number has to be `const`: normalization needs a logarithm,
+  /// and a const context cannot compute. The invariant is on whoever writes the
+  /// constant, so an assert guards it.
   const BigDouble.fromMantissaExponent(this.mantissa, this.exponent)
       : style = null,
         assert(
-          mantissa == 0 || (mantissa >= 1 && mantissa < 10) ||
+          mantissa == 0 ||
+              (mantissa >= 1 && mantissa < 10) ||
               (mantissa <= -1 && mantissa > -10),
-          'мантиса має бути нулем або лежати в [1, 10) за модулем',
+          'mantissa must be zero or within [1, 10) in magnitude',
         ),
-        assert(mantissa != 0 || exponent == 0, 'нуль має канонічну експоненту');
+        assert(mantissa != 0 || exponent == 0, 'zero has a canonical exponent');
 
   const BigDouble._raw(this.mantissa, this.exponent, [this.style]);
 
-  /// Значуща частина числа. Нуль, або в межах `[1, 10)` за модулем.
   final double mantissa;
 
-  /// Десяткова експонента.
   final int exponent;
 
-  /// Персональний стиль виводу цього числа.
+  /// This number's own output style.
   ///
-  /// Не бере участі ні в рівності, ні в порівнянні, ні в серіалізації — це
-  /// подання, а не значення.
+  /// Takes part in neither equality, comparison, nor serialization: it is
+  /// presentation, not value.
   final NumberStyle? style;
 
-  /// Копія з іншим стилем виводу.
   BigDouble withStyle(NumberStyle? style) =>
       BigDouble._raw(mantissa, exponent, style);
 
-  /// Внутрішній шлях, яким операції переносять стиль лівого операнда.
   BigDouble _styled(NumberStyle? style) => identical(style, this.style)
       ? this
       : BigDouble._raw(mantissa, exponent, style);
 
-  /// Найбільша дозволена експонента за модулем.
-  ///
-  /// Значення взяте з break_infinity.js (`EXP_LIMIT`) заради паритету семантики
-  /// з референсними реалізаціями жанру.
+  /// From break_infinity.js (`EXP_LIMIT`), for parity with the reference
+  /// implementations of the genre.
   static const int expLimit = 9000000000000000;
 
-  /// Скільки значущих цифр несе мантиса.
+  /// How many significant digits the mantissa carries.
   ///
-  /// Якщо експоненти двох доданків розходяться більше ніж на це число, менший
-  /// не впливає на результат жодним бітом — і додавання має право його
-  /// відкинути. Значення взяте з break_infinity.js (`MAX_SIGNIFICANT_DIGITS`).
+  /// When two addends' exponents differ by more than this, the smaller one
+  /// cannot influence a single bit of the result, so addition may drop it.
+  /// From break_infinity.js (`MAX_SIGNIFICANT_DIGITS`).
   static const int maxSignificantDigits = 17;
 
-  /// Дефолтний ВІДНОСНИЙ допуск для порівнянь.
+  /// Default RELATIVE tolerance for comparisons, from break_infinity.js
+  /// (`ROUND_TOLERANCE`).
   ///
-  /// Значення з break_infinity.js (`ROUND_TOLERANCE`). Ігрові гейти — «чи
-  /// вистачає ресурсів», «чи КВ ≥ поріг» — мають користуватись версіями з
-  /// допуском, бо два різні шляхи обчислення того самого числа розходяться
-  /// в останніх бітах, і строге порівняння тоді бреше гравцеві.
+  /// Game gates — "can I afford this", "is quantonium past the threshold" — must
+  /// use the tolerant comparisons: two ways of computing the same number drift
+  /// in the last bits, and a strict comparison then lies to the player.
   static const double roundTolerance = 1e-10;
 
-  /// Чи падати на некоректному вході замість того, щоб насичувати значення.
+  /// Whether to throw on invalid input instead of saturating the value.
   ///
-  /// За замовчуванням увімкнено там, де ввімкнені асерти (debug і тести), і
-  /// вимкнено в release. Причина компромісу: у розробці отруєне значення має
-  /// впасти в точці виникнення, бо інакше воно тихо розповзеться по стану й
-  /// спливе в сейві через годину; у гравця ж сесія важливіша за чистоту, тож
-  /// там значення насичується, а факт іде в [onDomainError].
+  /// On wherever asserts are on (debug and tests), off in release. The
+  /// trade-off: during development a poisoned value must fail where it is born,
+  /// or it spreads through the state and surfaces in a save file an hour later;
+  /// for a player the session matters more than purity, so there the value
+  /// saturates and the fact goes to [onDomainError].
   static bool strictMode = _assertsEnabled();
 
-  /// Куди повідомляти про підміну значення в нестрогому режимі.
-  ///
-  /// Застосунок може підставити сюди лог або телеметрію. `null` — тиша.
+  /// Where to report a substituted value in non-strict mode. `null` is silence.
   static void Function(String message)? onDomainError;
 
   static bool _assertsEnabled() {
-    // `assert` вирізається в release, тож побічний ефект спрацює лише в debug.
-    // Це єдиний спосіб дізнатись режим, не імпортуючи flutter/foundation.
+    // `assert` is stripped in release, so the side effect only lands in debug.
+    // This is the only way to learn the mode without importing
+    // flutter/foundation.
     var enabled = false;
     assert(enabled = true);
     return enabled;
   }
 
-  /// Спільний шлях для всіх порушень області визначення.
-  ///
-  /// У строгому режимі кидає, у нестрогому повідомляє й віддає запасне значення.
   static BigDouble _domainError(String message, BigDouble fallback) {
     if (strictMode) throw ArgumentError(message);
     onDomainError?.call(message);
@@ -106,38 +96,32 @@ class BigDouble implements Comparable<BigDouble> {
 
   static const BigDouble zero = BigDouble._raw(0, 0);
   static const BigDouble one = BigDouble._raw(1, 0);
-
-  /// Найбільше додатне значення, яке тип здатен подати.
   static const BigDouble maxValue = BigDouble._raw(1, expLimit);
-
-  /// Найменше додатне ненульове значення, яке тип здатен подати.
   static const BigDouble minPositive = BigDouble._raw(1, -expLimit);
 
   bool get isZero => mantissa == 0;
 
   bool get isNegative => mantissa < 0;
 
-  /// Наближення звичайним `double`. Лоссі за побудовою.
+  /// Lossy by construction.
   double toDouble() {
     if (isZero) return 0;
     return mantissa * _pow10(exponent);
   }
 
-  /// −1 для від'ємних, 0 для нуля, 1 для додатних.
   int get sign => mantissa == 0 ? 0 : (mantissa < 0 ? -1 : 1);
 
   BigDouble operator +(BigDouble other) {
     if (isZero) return other._styled(style);
     if (other.isZero) return this;
 
-    // Якщо експоненти розходяться більше ніж на кількість значущих цифр, менший
-    // доданок не може вплинути на жоден біт результату. Це не оптимізація заради
-    // швидкості, а тотожність: 1e50 + 1e10 у цій арифметиці ДОРІВНЮЄ 1e50.
+    // When the exponents differ by more than the significant digits, the
+    // smaller addend cannot touch a single bit of the result. This is not a
+    // speed trick but an identity: in this arithmetic 1e50 + 1e10 EQUALS 1e50.
     final gap = exponent - other.exponent;
     if (gap > maxSignificantDigits) return this;
     if (gap < -maxSignificantDigits) return other._styled(style);
 
-    // Зводимо обидва доданки до більшої експоненти й додаємо мантиси.
     final bigger = gap >= 0 ? this : other;
     final smaller = gap >= 0 ? other : this;
     final scaled =
@@ -160,7 +144,7 @@ class BigDouble implements Comparable<BigDouble> {
   BigDouble operator /(BigDouble other) {
     if (other.isZero) {
       return _domainError(
-        'ділення на нуль: $this / $other',
+        'division by zero: $this / $other',
         isZero ? zero : (isNegative ? -maxValue : maxValue),
       );
     }
@@ -174,61 +158,62 @@ class BigDouble implements Comparable<BigDouble> {
 
   BigDouble reciprocal() => one / this;
 
-  /// Десятковий логарифм.
-  ///
-  /// Повертає звичайний `double`, а не [BigDouble], і це безпечно: результат за
-  /// модулем не перевищує [expLimit] = 9e15, що лежить під 2^53 ≈ 9.007e15 —
-  /// межею точних цілих у `double`. Межу типу було обрано в тому числі заради
-  /// цієї властивості.
+  /// Returns a plain `double`, which is safe: the result never exceeds
+  /// [expLimit] = 9e15 in magnitude, and that sits below 2^53 ≈ 9.007e15, the
+  /// exact-integer boundary of a `double`. The type limit was chosen partly for
+  /// this property.
   double log10() {
     if (sign <= 0) {
-      throw ArgumentError.value(this, 'this', 'логарифм визначено лише для додатних');
+      throw ArgumentError.value(
+        this,
+        'this',
+        'logarithm is defined for positive values only',
+      );
     }
     return exponent + (math.log(mantissa) / math.ln10);
   }
 
-  /// Натуральний логарифм.
   double ln() => log10() * math.ln10;
 
-  /// Логарифм за довільною основою.
   double log(double base) => log10() / (math.log(base) / math.ln10);
 
-  /// Піднесення до степеня за сталий час незалежно від показника.
+  /// Raises to a power in constant time regardless of the exponent.
   ///
-  /// Працює через логарифм: `x^p = 10^(log10(x)·p)`. Саме тому криві на кшталт
-  /// `1.055^м` чи `1.13^бури` коштують стільки ж на 10-му метрі, скільки на
-  /// десятитисячному.
+  /// The general path goes through logarithms: `x^p = 10^(log10(x)·p)`. That is
+  /// why curves like `1.055^metres` or `1.13^drills` cost the same at metre ten
+  /// as at metre ten thousand.
   BigDouble pow(double power) {
     if (power == 0) return one._styled(style);
     if (isZero) return this;
     if (power == 1) return this;
 
     if (isNegative) {
-      // Від'ємна основа має сенс лише в цілому степені: для дробового результат
-      // комплексний, і мовчки повертати NaN тут гірше, ніж впасти.
+      // A negative base only makes sense at an integer power; for a fractional
+      // one the result is complex, and quietly returning NaN is worse than
+      // failing.
       if (power != power.roundToDouble()) {
         throw ArgumentError.value(
           power,
           'power',
-          'дробовий степінь від\'ємної основи не визначений у дійсних числах',
+          'a fractional power of a negative base is not a real number',
         );
       }
       final magnitude = abs().pow(power);
       return power.toInt().isEven ? magnitude : -magnitude;
     }
 
-    // Цілий степінь рахуємо множенням, а не логарифмом. Логарифмічний шлях дає
-    // 2^3 = 7.999999999999997, і така похибка потім тече в ціни та пороги. У цій
-    // грі майже всі степені цілі (1.13^бури, 1.055^метри, 2.5^страти), тож шлях
-    // не екзотичний, а основний — і на малих показниках ще й швидший.
+    // Integer powers go through multiplication, not logarithms. The log path
+    // yields 2^3 = 7.999999999999997, and that error then leaks into prices and
+    // thresholds. In this game nearly every power is an integer, so this path
+    // is the main one, and for small exponents it is also faster.
     if (power == power.roundToDouble() && power.abs() <= _maxExactIntegerPower) {
       final magnitude = _powBySquaring(power.abs().toInt());
       return (power < 0 ? one / magnitude : magnitude)._styled(style);
     }
 
-    // log10 повертає double, тож добуток може вилетіти за межу типу задовго до
-    // того, як щось перетвориться на int — перевіряємо до конвертації, інакше
-    // toInt() на нескінченності кине, а на великому значенні обгорнеться.
+    // log10 returns a double, so the product can leave the type's range long
+    // before anything becomes an int. Checking before the conversion matters:
+    // toInt() on infinity throws, and on a huge value it wraps.
     final logResult = log10() * power;
     if (!logResult.isFinite || logResult.abs() > expLimit) {
       if (logResult.isNegative) return zero._styled(style);
@@ -240,14 +225,13 @@ class BigDouble implements Comparable<BigDouble> {
         _pow10Fractional(logResult - wholePart), wholePart.toInt(), style);
   }
 
-  /// Стеля для точного шляху піднесення до цілого степеня.
+  /// Ceiling for the exact integer-power path.
   ///
-  /// Бінарне піднесення робить ~log2(n) множень, тож навіть на межі це близько
-  /// тридцяти операцій. Вище — логарифмічний шлях: на таких масштабах різниця
-  /// в останніх бітах уже не має сенсу.
+  /// Squaring takes about log2(n) multiplications, so even at the limit that is
+  /// around thirty operations. Above it the logarithmic path takes over: at
+  /// those scales a difference in the last bits stops meaning anything.
   static const double _maxExactIntegerPower = 1e9;
 
-  /// Бінарне піднесення до невід'ємного цілого степеня.
   BigDouble _powBySquaring(int power) {
     var result = one;
     var base = this;
@@ -262,26 +246,25 @@ class BigDouble implements Comparable<BigDouble> {
     return result;
   }
 
-  /// Квадратний корінь.
   BigDouble sqrt() {
     if (isZero) return this;
     if (isNegative) {
-      throw ArgumentError.value(this, 'this', 'корінь з від\'ємного не визначений');
+      throw ArgumentError.value(
+        this,
+        'this',
+        'the square root of a negative value is not a real number',
+      );
     }
     return pow(0.5);
   }
 
-  /// `10^f` для дробового `f` у межах `[0, 1)`.
   static double _pow10Fractional(double f) => math.pow(10.0, f).toDouble();
 
-  // --- Серії покупок -------------------------------------------------------
-  //
-  // Ціни в грі ростуть геометрично (бур: 15·1.13^n, вузол дерева: 3·1.4^lvl).
-  // Питання «скільки я можу купити за наявне» без цих формул перетворюється на
-  // цикл, що на пізніх ранах робить тисячі ітерацій на кожне натискання. Тут
-  // воно коштує сталий час.
+  // Purchase series. Prices in this game grow geometrically (a drill costs
+  // 15·1.13^n, a tree node 3·1.4^level). Without these formulas "how many can I
+  // buy" becomes a loop running thousands of iterations per tap in a late run.
+  // Here it costs constant time.
 
-  /// Сумарна ціна [count] наступних покупок при геометричному зростанні.
   static BigDouble sumGeometricSeries(
     BigDouble count,
     BigDouble firstCost,
@@ -291,16 +274,13 @@ class BigDouble implements Comparable<BigDouble> {
     if (count.isZero) return zero;
     final startingPrice = firstCost * growth.pow(owned.toDouble());
 
-    // Ріст рівно вдвічі-втричі — норма, а ріст рівно в одиницю ламає формулу
-    // діленням на нуль: там усі покупки коштують однаково.
+    // A growth of exactly one breaks the closed form with a division by zero;
+    // there every purchase costs the same.
     if (growth == one) return startingPrice * count;
 
-    return startingPrice *
-        (growth.pow(count.toDouble()) - one) /
-        (growth - one);
+    return startingPrice * (growth.pow(count.toDouble()) - one) / (growth - one);
   }
 
-  /// Скільки покупок можна зробити за [resources] при геометричному зростанні.
   static BigDouble affordGeometricSeries(
     BigDouble resources,
     BigDouble firstCost,
@@ -311,12 +291,10 @@ class BigDouble implements Comparable<BigDouble> {
     if (resources < startingPrice) return zero;
     if (growth == one) return (resources / startingPrice).floor();
 
-    // Обертання формули суми відносно count.
     final ratio = resources / startingPrice * (growth - one) + one;
     return BigDouble.fromNum(ratio.log(growth.toDouble())).floor();
   }
 
-  /// Сумарна ціна [count] наступних покупок при лінійному зростанні.
   static BigDouble sumArithmeticSeries(
     BigDouble count,
     BigDouble firstCost,
@@ -330,7 +308,6 @@ class BigDouble implements Comparable<BigDouble> {
     return count * (two * startingPrice + (count - one) * step) / two;
   }
 
-  /// Скільки покупок можна зробити за [resources] при лінійному зростанні.
   static BigDouble affordArithmeticSeries(
     BigDouble resources,
     BigDouble firstCost,
@@ -341,8 +318,8 @@ class BigDouble implements Comparable<BigDouble> {
     if (resources < startingPrice) return zero;
     if (step.isZero) return (resources / startingPrice).floor();
 
-    // Сума лінійного ряду — квадратична за count, тож розв'язуємо квадратне
-    // рівняння й беремо додатний корінь.
+    // The sum of a linear ladder is quadratic in count, so solve the quadratic
+    // and take the positive root.
     final two = BigDouble.fromNum(2);
     final b = startingPrice - step / two;
     final discriminant = b * b + two * step * resources;
@@ -358,28 +335,26 @@ class BigDouble implements Comparable<BigDouble> {
 
   BigDouble truncate() => _rounded((d) => d.truncateToDouble());
 
-  /// Спільний шлях для всіх видів округлення.
-  ///
-  /// За межею значущих цифр дробової частини не існує фізично: у числа з
-  /// експонентою ≥ [maxSignificantDigits] мантиса вже не має де тримати дріб,
-  /// тож округлювати нічого і значення повертається як є.
+  /// Past the significant digits a fractional part does not physically exist:
+  /// with an exponent at or above [maxSignificantDigits] the mantissa has
+  /// nowhere left to hold one, so the value comes back untouched.
   BigDouble _rounded(double Function(double) apply) {
     if (isZero || exponent >= maxSignificantDigits) return this;
     return _normalized(apply(toDouble()), 0, style);
   }
 
-  /// Серіалізація у формат `{mantissa}e{exponent}` — той самий, що приймає
-  /// [parse]. Один формат на весь життєвий цикл значення означає, що сейв
-  /// можна прочитати очима.
+  /// Serializes to `{mantissa}e{exponent}`, the same shape [parse] accepts. One
+  /// format for the whole life of a value means a save file stays readable by
+  /// eye.
   String toJson() => '${mantissa}e$exponent';
 
   static BigDouble fromJson(String source) => parse(source);
 
-  /// Розбирає `{mantissa}e{exponent}`, а також звичайне число без експоненти.
+  /// Accepts `{mantissa}e{exponent}` as well as a plain number.
   static BigDouble parse(String source) {
     final parsed = tryParse(source);
     if (parsed == null) {
-      throw FormatException('не вдалось розібрати як BigDouble', source);
+      throw FormatException('not a BigDouble', source);
     }
     return parsed;
   }
@@ -409,13 +384,13 @@ class BigDouble implements Comparable<BigDouble> {
 
   @override
   int compareTo(BigDouble other) {
-    // Знак вирішує все: будь-яке від'ємне менше за будь-яке додатне, незалежно
-    // від того, наскільки велика його експонента.
+    // Sign decides everything: any negative is below any positive no matter how
+    // large its exponent.
     if (sign != other.sign) return sign < other.sign ? -1 : 1;
     if (isZero) return 0;
 
-    // У межах одного знака порядок дає експонента, далі мантиса. Для від'ємних
-    // обидва порівняння перевертаються.
+    // Within one sign the exponent orders first, the mantissa second. For
+    // negatives both comparisons flip.
     final flip = isNegative ? -1 : 1;
     if (exponent != other.exponent) {
       return exponent < other.exponent ? -flip : flip;
@@ -442,11 +417,12 @@ class BigDouble implements Comparable<BigDouble> {
     return this;
   }
 
-  /// Порівняння з відносним допуском: `|a − b| ≤ tolerance × max(|a|, |b|)`.
+  /// Compares with a RELATIVE tolerance: `|a − b| ≤ tolerance × max(|a|, |b|)`.
   ///
-  /// Відносний, а не абсолютний — щоб те саме рішення ухвалювалось однаково
-  /// і на `1e-100`, і на `1e100`.
-  bool equalsWithTolerance(BigDouble other, [double tolerance = roundTolerance]) {
+  /// Relative rather than absolute, so the same decision is made the same way
+  /// at `1e-100` and at `1e100`.
+  bool equalsWithTolerance(BigDouble other,
+      [double tolerance = roundTolerance]) {
     if (isZero && other.isZero) return true;
     if (sign != other.sign) return false;
 
@@ -455,7 +431,8 @@ class BigDouble implements Comparable<BigDouble> {
     return difference <= scale * BigDouble.fromNum(tolerance);
   }
 
-  int compareWithTolerance(BigDouble other, [double tolerance = roundTolerance]) {
+  int compareWithTolerance(BigDouble other,
+      [double tolerance = roundTolerance]) {
     if (equalsWithTolerance(other, tolerance)) return 0;
     return compareTo(other);
   }
@@ -475,11 +452,9 @@ class BigDouble implements Comparable<BigDouble> {
   @override
   int get hashCode => Object.hash(mantissa, exponent);
 
-  /// Текстове подання.
-  ///
-  /// Пріоритет: явний аргумент, далі власний стиль числа, далі
-  /// [NumberStyle.global]. Один метод замість двох: інтерполяція йде цим самим
-  /// шляхом, тож іншого способу надрукувати число не існує.
+  /// Precedence: the explicit argument, then this number's own style, then
+  /// [NumberStyle.global]. One method rather than two, since interpolation goes
+  /// down the same path, so no other way to print a number exists.
   @override
   String toString([NumberStyle? style]) =>
       (style ?? this.style ?? NumberStyle.global).format(this);
@@ -487,11 +462,11 @@ class BigDouble implements Comparable<BigDouble> {
   static BigDouble _normalized(double mantissa, int exponent,
       [NumberStyle? style]) {
     if (mantissa.isNaN) {
-      return _domainError('NaN не є значенням BigDouble', zero);
+      return _domainError('NaN is not a BigDouble value', zero);
     }
     if (mantissa.isInfinite) {
       return _domainError(
-        'нескінченність не є значенням BigDouble',
+        'infinity is not a BigDouble value',
         mantissa.isNegative ? -maxValue : maxValue,
       );
     }
@@ -501,8 +476,9 @@ class BigDouble implements Comparable<BigDouble> {
     var m = shift >= 0 ? mantissa / _pow10(shift) : mantissa * _pow10(-shift);
     var e = exponent + shift;
 
-    // Логарифм на межах степеня десятки дає похибку в останньому біті, через яку
-    // мантиса може вийти за [1, 10). Поправка одним кроком — інших не буває.
+    // On the boundaries of a power of ten the logarithm is off by a bit, which
+    // can push the mantissa outside [1, 10). One correction step is always
+    // enough; there is never a second.
     if (m.abs() >= 10) {
       m /= 10;
       e += 1;
@@ -511,26 +487,26 @@ class BigDouble implements Comparable<BigDouble> {
       e -= 1;
     }
 
-    // Насичення на межі типу зберігає знак; провал під нижню межу — це нуль.
+    // Saturation at the upper limit keeps the sign; falling under the lower one
+    // is zero.
     if (e > expLimit) return (m < 0 ? -maxValue : maxValue)._styled(style);
     if (e < -expLimit) return zero._styled(style);
 
     return BigDouble._raw(m, e, style);
   }
 
-  /// Складає експоненти без затискання — межі типу застосовує [_normalized].
+  /// Adds exponents without clamping; [_normalized] applies the type limits.
   ///
-  /// `int` у Dart при переповненні ОБГОРТАЄТЬСЯ, а не кидає, тож питання
-  /// доречне. Але обидва операнди вже лежать у `±expLimit` = ±9e15, отже сума
-  /// за модулем не перевищує 1.8e16 — на три порядки менше за межу `int64`.
-  /// Затискати тут не можна: інакше провал під нижню межу перетворився б на
-  /// «найменше додатне» замість нуля.
+  /// An `int` in Dart WRAPS on overflow rather than throwing, so the question is
+  /// fair. But both operands already sit within `±expLimit` = ±9e15, so the sum
+  /// never exceeds 1.8e16 in magnitude — three orders below the `int64` limit.
+  /// Clamping here would be wrong: it would turn an underflow into "smallest
+  /// positive" instead of zero.
   static int _addExponents(int a, int b) => a + b;
 
   static double _pow10(int n) => math.pow(10.0, n).toDouble();
 }
 
-/// Перетворення звичайних чисел без церемоній: `1500.big`.
 extension NumToBigDouble on num {
   BigDouble get big => BigDouble.fromNum(this);
 }

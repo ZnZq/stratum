@@ -4,26 +4,26 @@ import 'package:test/test.dart';
 void main() {
   group('why tolerance exists at all', () {
     test('accumulating a value drifts away from computing it directly', () {
-      // Тисяча додавань по 0.001 дає 0.999999999999983, а не рівно одиницю.
+      // A thousand additions of 0.001 give 0.999999999999983, not exactly one.
       var accumulated = BigDouble.zero;
       for (var i = 0; i < 1000; i++) {
         accumulated = accumulated + BigDouble.fromNum(0.001);
       }
 
       expect(accumulated == BigDouble.one, isFalse,
-          reason: 'інакше тест нічого не доводить');
+          reason: 'otherwise this test proves nothing');
       expect(accumulated.equalsWithTolerance(BigDouble.one), isTrue);
     });
 
     test('an affordability gate lets the player buy when the numbers match', () {
-      // 15 — базова ціна бура. Ресурси прийшли шляхом, у якому було ділення
-      // (так рахується офлайн-виробництво: темп × тіки × ефективність), і осіли
-      // на один біт нижче. Строге >= сказало б гравцеві «не вистачає» при
-      // візуально однакових числах.
+      // 15 is the base drill price. The resources came down a path containing a
+      // division — offline output is rate x ticks x efficiency — and landed one
+      // bit low. A strict >= would tell the player "not enough" while the two
+      // numbers look identical.
       final cost = BigDouble.fromNum(15);
       final resources = cost / BigDouble.fromNum(9) * BigDouble.fromNum(9);
 
-      expect(resources >= cost, isFalse, reason: 'інакше тест нічого не доводить');
+      expect(resources >= cost, isFalse, reason: 'otherwise this test proves nothing');
       expect(resources.gteWithTolerance(cost), isTrue);
     });
   });
@@ -41,7 +41,7 @@ void main() {
     });
 
     test('the tolerance is relative, not absolute', () {
-      // Та сама відносна різниця має вирішуватись однаково на будь-якому масштабі.
+      // The same relative gap must be decided the same way at any scale.
       expect(
         BigDouble(1.0000000000001, 100).equalsWithTolerance(BigDouble(1, 100)),
         isTrue,

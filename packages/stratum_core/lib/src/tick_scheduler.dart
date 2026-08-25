@@ -1,38 +1,34 @@
-/// Ритм тіків: скільки логічних тіків відбувається за один проміжок часу.
+/// How many logical ticks happen per stretch of real time.
 ///
-/// [ticksPerFire] — це спосіб виразити темп, швидший за інтервал, не вкорочуючи
-/// сам інтервал. Рушій жодної нижньої межі на інтервал не має: правило «підлога
-/// тіку одна секунда, далі прокачка = дії за тік» — це обмеження конфігу балансу
-/// гри, яка просто не подасть сюди менше.
+/// [ticksPerFire] expresses a pace faster than the interval without shortening
+/// the interval itself. The engine imposes no lower bound on [interval]: the
+/// rule "one second floor, past that upgrades buy actions per tick" belongs to
+/// the game's balance config, which simply never hands a smaller value down.
 class TickRate {
   TickRate(this.interval, {this.ticksPerFire = 1}) {
     if (interval <= Duration.zero) {
       throw ArgumentError.value(
         interval,
         'interval',
-        'інтервал тіку має бути додатним',
+        'tick interval must be positive',
       );
     }
     if (ticksPerFire < 1) {
       throw ArgumentError.value(
         ticksPerFire,
         'ticksPerFire',
-        'за спрацювання має відбуватись хоча б один тік',
+        'a fire must produce at least one tick',
       );
     }
   }
 
-  /// Скільки реального часу минає між спрацюваннями.
   final Duration interval;
-
-  /// Скільки логічних тіків дає одне спрацювання.
   final int ticksPerFire;
 
   @override
-  String toString() => '$ticksPerFire тік(ів) / ${interval.inMilliseconds} мс';
+  String toString() => '$ticksPerFire tick(s) / ${interval.inMilliseconds}ms';
 }
 
-/// Результат просування часу.
 class TickBatch {
   const TickBatch({
     required this.ticks,
@@ -46,35 +42,34 @@ class TickBatch {
     overflow: Duration.zero,
   );
 
-  /// Скільки логічних тіків треба виконати.
   final int ticks;
 
-  /// Скільки реального часу ці тіки покрили.
+  /// How much real time those ticks accounted for.
   final Duration consumed;
 
-  /// Скільки реального часу викинуто капом наздоганяння.
+  /// Real time dropped by the catch-up cap; zero when the cap did not bite.
   ///
-  /// Нуль, якщо кап не спрацював. Усе, що тут є, рушій уже не відіграє — цей
-  /// час має розібрати офлайн-формула однією формулою від Δt, а не покроковою
-  /// симуляцією.
+  /// Whatever lands here the engine will never replay. It is meant for the
+  /// offline calculation, which resolves it with a single formula over the
+  /// elapsed span rather than a step-by-step simulation.
   final Duration overflow;
 
   bool get isEmpty => ticks == 0;
 
   @override
-  String toString() => 'TickBatch(ticks: $ticks, consumed: $consumed, '
-      'overflow: $overflow)';
+  String toString() =>
+      'TickBatch(ticks: $ticks, consumed: $consumed, overflow: $overflow)';
 }
 
-/// Чиста частина тік-рушія: рахує тіки, не знаючи про час і таймери.
+/// The pure half of the tick engine: counts ticks without knowing about clocks.
 ///
-/// Не має жодного асинхронного методу й жодного джерела часу — час подається
-/// ззовні. Саме тому прогін доби гри в тесті займає мілісекунди й не потребує
-/// ані емулятора, ані фейкових таймерів.
+/// Nothing here is asynchronous and there is no time source — time is handed in
+/// from outside. That is why replaying a day of play in a test costs
+/// milliseconds and needs neither an emulator nor fake timers.
 ///
-/// Тіки цей клас НЕ виконує: він повертає їхню кількість, а цикл робить
-/// викликач. Так гра зможе частину тіків згорнути аналітично замість того,
-/// щоб крутити їх по одному.
+/// It does not execute ticks. It returns how many are due and the caller runs
+/// the loop, which leaves the game free to collapse a run of ticks analytically
+/// instead of stepping through them one by one.
 class TickScheduler {
   TickScheduler({
     required TickRate rate,
@@ -84,17 +79,15 @@ class TickScheduler {
       throw ArgumentError.value(
         maxTicksPerAdvance,
         'maxTicksPerAdvance',
-        'кап наздоганяння має бути додатним',
+        'the catch-up cap must be positive',
       );
     }
     _rate = rate;
   }
 
-  /// Скільки тіків максимум відіграється за одне просування.
-  ///
-  /// Кап рахує тіки, а не секунди, бо дорога саме кількість виконаних тіків.
-  /// Без нього довга пауза породжує борг, який симуляція не може погасити, і
-  /// кожен наступний кадр стає гіршим — класичний spiral of death.
+  /// Counted in ticks rather than seconds because executed ticks are what
+  /// costs. Without a cap a long pause builds a debt the simulation can never
+  /// repay and every following frame gets worse — the classic spiral of death.
   static const int defaultMaxTicksPerAdvance = 64;
 
   final int maxTicksPerAdvance;
@@ -104,36 +97,36 @@ class TickScheduler {
 
   TickRate get rate => _rate;
 
-  /// Зміна ритму скидає акумулятор.
-  ///
-  /// Інакше можна було б банкувати час на повільному ритмі й конвертувати його
-  /// в пачку тіків, перемкнувшись на швидкий.
+  /// Changing the rate drops the accumulator, otherwise a player could bank
+  /// time on a slow rate and cash it in as a burst of ticks on a fast one.
   set rate(TickRate value) {
     _rate = value;
     _pending = Duration.zero;
   }
 
-  /// Скільки часу накопичено, але ще не відіграно.
+  /// Time accumulated but not yet played out.
   Duration get pending => _pending;
 
   void reset() => _pending = Duration.zero;
 
-  /// Просуває час і повідомляє, скільки тіків через це відбулось.
+  /// Moves time forward and reports how many ticks that caused.
   ///
-  /// Інваріант обліку: `pending_до + elapsed == consumed + overflow + pending_після`.
-  /// Жодна мілісекунда не зникає й не з'являється.
+  /// Accounting invariant:
+  /// `pending_before + elapsed == consumed + overflow + pending_after`.
+  /// No millisecond appears or disappears.
   TickBatch advance(Duration elapsed) {
     if (elapsed < Duration.zero) {
       throw ArgumentError.value(
         elapsed,
         'elapsed',
-        'час не йде назад: рушій міряє монотонним годинником',
+        'time does not run backwards: the engine measures a monotonic clock',
       );
     }
 
     _pending += elapsed;
 
-    final possibleFires = _pending.inMicroseconds ~/ _rate.interval.inMicroseconds;
+    final possibleFires =
+        _pending.inMicroseconds ~/ _rate.interval.inMicroseconds;
     if (possibleFires == 0) return TickBatch.empty;
 
     final maxFires = maxTicksPerAdvance ~/ _rate.ticksPerFire;
@@ -142,8 +135,8 @@ class TickScheduler {
     final consumed = _rate.interval * fires;
     _pending -= consumed;
 
-    // Кап спрацював лише якщо ми справді не догнали. Тоді решта накопиченого
-    // йде назовні: тримати її всередині означало б відкласти той самий борг.
+    // The cap bit only if we genuinely failed to catch up. Then the rest goes
+    // out to the caller; holding it inside would just defer the same debt.
     var overflow = Duration.zero;
     if (fires < possibleFires) {
       overflow = _pending;

@@ -32,7 +32,7 @@ void main() {
     });
 
     test('imposes no lower bound on the interval', () {
-      // Підлога тіку в одну секунду — правило балансу гри, а не рушія.
+      // The one-second floor is a game balance rule, not an engine rule.
       expect(TickRate(const Duration(milliseconds: 1)).interval.inMilliseconds, 1);
     });
   });
@@ -92,7 +92,7 @@ void main() {
         rate: TickRate(Duration(milliseconds: 755), ticksPerFire: 2),
       );
 
-      final batch = s.advance(const Duration(milliseconds: 2265)); // рівно 3 інтервали
+      final batch = s.advance(const Duration(milliseconds: 2265)); // exactly 3 intervals
 
       expect(batch.ticks, 6);
       expect(batch.consumed, const Duration(milliseconds: 2265));
@@ -112,8 +112,8 @@ void main() {
     test('rejects time running backwards', () {
       final s = TickScheduler(rate: TickRate(Duration(seconds: 4)));
 
-      // Монотонний годинник назад не йде — це помилка викликача, а не привід
-      // мовчки повернути нуль.
+      // A monotonic clock never runs backwards, so this is a caller mistake
+      // rather than a reason to quietly return zero.
       expect(() => s.advance(const Duration(seconds: -1)), throwsArgumentError);
     });
   });
@@ -131,7 +131,7 @@ void main() {
       expect(batch.consumed, const Duration(seconds: 12));
       expect(batch.overflow, const Duration(seconds: 28));
       expect(s.pending, Duration.zero,
-          reason: 'усе, що за капом, віддано назовні, а не залишено всередині');
+          reason: 'everything past the cap went out, none of it stayed inside');
     });
 
     test('an eight hour absence does not try to simulate every tick', () {
@@ -160,7 +160,7 @@ void main() {
 
       final batch = s.advance(const Duration(seconds: 100));
 
-      expect(batch.ticks, 8, reason: 'два спрацювання по 4 тіки, третє вже за капом');
+      expect(batch.ticks, 8, reason: 'two fires of 4 ticks; the third is already past the cap');
       expect(batch.consumed, const Duration(seconds: 2));
     });
 
@@ -193,7 +193,7 @@ void main() {
         expect(
           before + step,
           batch.consumed + batch.overflow + s.pending,
-          reason: 'крок $ms мс: час не зійшовся',
+          reason: 'step ${ms}ms: the time does not add up',
         );
 
         totalIn += step;
@@ -212,8 +212,8 @@ void main() {
       s.rate = TickRate(second);
 
       expect(s.pending, Duration.zero,
-          reason: 'інакше можна банкувати час на повільному ритмі '
-              'й конвертувати його в пачку тіків на швидкому');
+          reason: 'otherwise time could be banked on a slow rate and '
+              'cashed in as a burst of ticks on a fast one');
       expect(s.advance(const Duration(milliseconds: 999)).ticks, 0);
       expect(s.advance(const Duration(milliseconds: 1)).ticks, 1);
     });
@@ -240,8 +240,8 @@ void main() {
 
   group('simulating a day of play', () {
     test('runs a hundred thousand ticks in milliseconds', () {
-      // Вимога з CLAUDE.md: «симуляція N тіків за мілісекунди» має бути
-      // виконуваним тестом, а не побажанням.
+      // The CLAUDE.md requirement "N ticks in milliseconds" has to be an
+      // executable test rather than a wish.
       final s = TickScheduler(
         rate: TickRate(Duration(seconds: 4)),
         maxTicksPerAdvance: 1000000,
@@ -256,7 +256,7 @@ void main() {
 
       expect(total, 100000);
       expect(stopwatch.elapsedMilliseconds, lessThan(500),
-          reason: 'зайняло ${stopwatch.elapsedMilliseconds} мс');
+          reason: 'took ${stopwatch.elapsedMilliseconds}ms');
     });
   });
 }

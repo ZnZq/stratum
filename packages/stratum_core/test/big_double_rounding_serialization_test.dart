@@ -13,7 +13,7 @@ void main() {
     });
 
     test('leaves a value with no representable fraction untouched', () {
-      // За межею значущих цифр дробової частини просто не існує.
+      // Past the significant digits there simply is no fractional part.
       expect(BigDouble(1.5, 50).floor(), BigDouble(1.5, 50));
     });
 
@@ -51,7 +51,7 @@ void main() {
     });
 
     test('writes zero canonically', () {
-      // Мантиса — double, тож у рядку вона завжди з десятковою крапкою.
+      // The mantissa is a double, so it always prints a decimal point.
       expect(BigDouble.zero.toJson(), '0.0e0');
       expect(BigDouble.one.toJson(), '1.0e0');
     });
@@ -66,7 +66,7 @@ void main() {
         BigDouble.minPositive,
         BigDouble(9.999999999999, 12345),
       ]) {
-        expect(BigDouble.parse(n.toJson()), n, reason: 'не пережило round-trip: $n');
+        expect(BigDouble.parse(n.toJson()), n, reason: 'did not survive the round trip: $n');
       }
     });
 
@@ -84,13 +84,13 @@ void main() {
     });
 
     test('rejects garbage', () {
-      expect(() => BigDouble.parse('не число'), throwsFormatException);
+      expect(() => BigDouble.parse('not a number'), throwsFormatException);
       expect(() => BigDouble.parse(''), throwsFormatException);
       expect(() => BigDouble.parse('1.5e'), throwsFormatException);
     });
 
     test('tryParse returns null instead of throwing', () {
-      expect(BigDouble.tryParse('не число'), isNull);
+      expect(BigDouble.tryParse('not a number'), isNull);
       expect(BigDouble.tryParse('1.5e3'), BigDouble(1.5, 3));
     });
 

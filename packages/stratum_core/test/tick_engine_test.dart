@@ -2,8 +2,8 @@ import 'package:fake_async/fake_async.dart';
 import 'package:stratum_core/stratum_core.dart';
 import 'package:test/test.dart';
 
-/// Керований годинник для тестів: те саме, що робить `Stopwatch`, але час
-/// рухається лише тоді, коли ми йому скажемо.
+/// A hand-driven clock: what `Stopwatch` does, except time only moves when the
+/// test says so.
 class TestClock implements MonotonicClock {
   Duration _elapsed = Duration.zero;
 
@@ -13,8 +13,8 @@ class TestClock implements MonotonicClock {
   void advance(Duration by) => _elapsed += by;
 }
 
-/// Зводить фейковий таймер і фейковий годинник докупи: рушій дізнається про час
-/// із годинника, а спрацьовує від таймера, тож у тесті рухати треба обидва.
+/// Moves the fake timer and the fake clock together: the engine learns about
+/// time from the clock but fires from the timer, so a test must advance both.
 void elapseBoth(FakeAsync async, TestClock clock, Duration by) {
   clock.advance(by);
   async.elapse(by);
@@ -105,8 +105,8 @@ void main() {
           clock: clock,
         )..start();
 
-        // Таймер спрацьовує, але часу ще не набралось — порожні пачки назовні
-        // не віддаються, бо викликачеві нема чого з ними робити.
+        // The timer fires but no time has accumulated. Empty batches are not
+        // delivered, since the caller has nothing to do with them.
         async.elapse(const Duration(seconds: 4));
 
         expect(batches, isEmpty);
@@ -226,12 +226,12 @@ void main() {
         clock.advance(const Duration(milliseconds: 3900));
         engine.rate = TickRate(const Duration(seconds: 1));
 
-        // Накопичене згоріло разом зі старим ритмом, тож перша секунда після
-        // зміни ще нічого не дає...
+        // The accumulator burned along with the old rate, so the first second
+        // after the change still yields nothing...
         elapseBoth(async, clock, const Duration(milliseconds: 999));
         expect(batches, isEmpty);
 
-        // ...а ось на повній секунді нового ритму тік уже є.
+        // ...and at a full second of the new rate the tick is there.
         elapseBoth(async, clock, const Duration(milliseconds: 1));
         expect(batches, hasLength(1));
 
@@ -275,8 +275,8 @@ void main() {
 
   group('the default clock is monotonic', () {
     test('a real engine measures with Stopwatch, not DateTime', () {
-      // Настінний годинник стрибає: NTP підкручує, гравець міняє часовий пояс
-      // або свідомо переводить час уперед, щоб накрутити ресурси.
+      // Wall-clock time jumps: NTP corrects it, the player changes time zone or
+      // deliberately moves it forward to farm resources.
       expect(StopwatchClock(), isA<MonotonicClock>());
       final clock = StopwatchClock();
       expect(clock.elapsed, greaterThanOrEqualTo(Duration.zero));

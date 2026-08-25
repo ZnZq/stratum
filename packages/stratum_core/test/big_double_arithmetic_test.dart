@@ -3,15 +3,15 @@ import 'dart:math' as math;
 import 'package:stratum_core/stratum_core.dart';
 import 'package:test/test.dart';
 
-/// Перевіряє інваріант нормалізації: або точний нуль, або мантиса в [1, 10).
+/// Asserts the normalization invariant: exactly zero, or a mantissa in [1, 10).
 void expectNormalized(BigDouble n, String what) {
   if (n.isZero) {
-    expect(n.mantissa, 0.0, reason: '$what: нуль має канонічну мантису');
-    expect(n.exponent, 0, reason: '$what: нуль має канонічну експоненту');
+    expect(n.mantissa, 0.0, reason: '$what: zero must carry a canonical mantissa');
+    expect(n.exponent, 0, reason: '$what: zero must carry a canonical exponent');
     return;
   }
-  expect(n.mantissa.abs(), greaterThanOrEqualTo(1.0), reason: '$what: мантиса < 1');
-  expect(n.mantissa.abs(), lessThan(10.0), reason: '$what: мантиса >= 10');
+  expect(n.mantissa.abs(), greaterThanOrEqualTo(1.0), reason: '$what: mantissa below 1');
+  expect(n.mantissa.abs(), lessThan(10.0), reason: '$what: mantissa at or above 10');
 }
 
 void main() {
@@ -38,7 +38,7 @@ void main() {
     });
 
     test('a magnitude far below the other leaves it unchanged', () {
-      // У арифметиці з ~17 значущими цифрами 1e50 + 1e10 дорівнює 1e50.
+      // With ~17 significant digits, 1e50 + 1e10 equals 1e50.
       expect(BigDouble(1, 50) + BigDouble(1, 10), BigDouble(1, 50));
       expect(BigDouble(1, 10) + BigDouble(1, 50), BigDouble(1, 50));
     });
@@ -106,9 +106,9 @@ void main() {
   });
 
   group('double oracle', () {
-    // Там, де звичайний double ще не ламається, BigDouble зобов'язаний давати
-    // той самий результат. Це ловить помилки нормалізації й переносу експоненти
-    // щільніше, ніж приклади, написані руками.
+    // Where a plain double still holds, BigDouble owes the same answer. This
+    // catches normalization and exponent-carry mistakes far denser than
+    // hand-written examples do.
     test('matches plain double arithmetic across random pairs', () {
       final rng = math.Random(20260825);
 
@@ -128,7 +128,7 @@ void main() {
         ]) {
           expectNormalized(got, label);
           final relative = (got.toDouble() - want).abs() / want.abs();
-          expect(relative, lessThan(1e-12), reason: 'розбіжність на $label');
+          expect(relative, lessThan(1e-12), reason: 'diverged on $label');
         }
       }
     });

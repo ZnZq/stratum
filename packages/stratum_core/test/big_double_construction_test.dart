@@ -104,8 +104,8 @@ void main() {
     });
 
     test('guards the invariant it cannot enforce', () {
-      // Конструктор не нормалізує (інакше він не міг би бути const), тож
-      // порушення інваріанта стереже асерт.
+      // The constructor cannot normalize and stay const, so an assert guards
+      // the invariant instead.
       expect(() => BigDouble.fromMantissaExponent(15, 3), throwsA(isA<AssertionError>()));
       expect(() => BigDouble.fromMantissaExponent(0.5, 3), throwsA(isA<AssertionError>()));
       expect(() => BigDouble.fromMantissaExponent(0, 5), throwsA(isA<AssertionError>()));

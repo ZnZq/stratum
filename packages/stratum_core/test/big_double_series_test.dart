@@ -3,9 +3,10 @@ import 'dart:math' as math;
 import 'package:stratum_core/stratum_core.dart';
 import 'package:test/test.dart';
 
-/// Наївний еталон: купуємо по одному, поки вистачає ресурсів.
+/// The naive reference: buy one at a time while the resources last.
 ///
-/// Саме цей цикл серії й мають замінити — тож він і є мірилом їхньої правильності.
+/// This loop is exactly what the series formulas replace, which makes it the
+/// yardstick for whether they are right.
 int naiveAffordGeometric(double resources, double first, double growth, int owned) {
   var left = resources;
   var count = 0;
@@ -43,7 +44,7 @@ void main() {
     });
 
     test('starts from what is already owned', () {
-      // вже куплено 2, тож наступні три коштують 40 + 80 + 160
+      // two already owned, so the next three cost 40 + 80 + 160
       expect(
         BigDouble.sumGeometricSeries(big(3), big(10), big(2), big(2)),
         big(280),
@@ -65,7 +66,7 @@ void main() {
     });
 
     test('handles the growth the game actually uses', () {
-      // Ціна бура в прототипі: 15 * 1.13^n
+      // Drill price in the prototype: 15 * 1.13^n
       var expected = 0.0;
       for (var i = 0; i < 20; i++) {
         expected += 15 * math.pow(1.13, i);
@@ -74,7 +75,7 @@ void main() {
       final got = BigDouble.sumGeometricSeries(big(20), big(15), big(1.13), big(0));
 
       expect(got.equalsWithTolerance(big(expected), 1e-9), isTrue,
-          reason: 'отримано ${got.toJson()}, очікувалось $expected');
+          reason: 'got ${got.toJson()}, expected $expected');
     });
   });
 
@@ -115,7 +116,7 @@ void main() {
     });
 
     test('reaches counts a loop could not afford to compute', () {
-      // 1e300 ресурсів при рості 1.13 — тисячі покупок, і жодного циклу.
+      // 1e300 of resources at 1.13 growth: thousands of purchases, no loop.
       final count = BigDouble.affordGeometricSeries(
         BigDouble(1, 300),
         big(15),
@@ -123,9 +124,9 @@ void main() {
         big(0),
       );
 
-      expect(count > big(5000), isTrue, reason: 'отримано ${count.toJson()}');
-      // Перевірка зсередини: рівно стільки коштує не більше за наявне,
-      // а на одиницю більше — вже більше.
+      expect(count > big(5000), isTrue, reason: 'got ${count.toJson()}');
+      // Checked from the inside: that many costs no more than what is on hand,
+      // and one more already costs too much.
       final spent = BigDouble.sumGeometricSeries(count, big(15), big(1.13), big(0));
       final spentPlusOne =
           BigDouble.sumGeometricSeries(count + BigDouble.one, big(15), big(1.13), big(0));
@@ -145,7 +146,7 @@ void main() {
     });
 
     test('starts from what is already owned', () {
-      // куплено 2, тож наступні три коштують 20 + 25 + 30
+      // two already owned, so the next three cost 20 + 25 + 30
       expect(
         BigDouble.sumArithmeticSeries(big(3), big(10), big(5), big(2)),
         big(75),
@@ -186,7 +187,7 @@ void main() {
         );
 
         expect(got, big(want),
-            reason: 'ресурси=$resources перша=$first ріст=$growth куплено=$owned');
+            reason: 'resources=$resources first=$first growth=$growth owned=$owned');
       }
     });
 
@@ -208,7 +209,7 @@ void main() {
         );
 
         expect(got, big(want),
-            reason: 'ресурси=$resources перша=$first крок=$step куплено=$owned');
+            reason: 'resources=$resources first=$first step=$step owned=$owned');
       }
     });
   });

@@ -29,8 +29,9 @@ void main() {
     });
 
     test('walks the whole suffix table', () {
-      // Точним конструюванням, а не літералами: `1e24` у double — це насправді
-      // 9.99999999999999983e23, і таблиця перевірялась би не на тому числі.
+      // Built exactly rather than from literals: `1e24` as a double is really
+      // 9.99999999999999983e23, so the table would be checked against the
+      // wrong number.
       String e(int exponent) =>
           BigDouble(1, exponent).toString(NumberStyle.compact);
 
@@ -54,8 +55,8 @@ void main() {
     });
 
     test('promotes the tier when rounding pushes the mantissa to a thousand', () {
-      // 9.99999e23 у щаблі sx — це 999.999, що з двома знаками округлюється до
-      // 1000.00. Надрукувати це як «1000sx» замість «1sp» було б помилкою.
+      // 9.99999e23 in the sx tier is 999.999, which rounds to 1000.00 at two
+      // places. Printing that as "1000sx" instead of "1sp" would be wrong.
       expect(BigDouble(9.99999, 23).toString(NumberStyle.compact), '1sp');
       expect(BigDouble(9.99999, 5).toString(NumberStyle.compact), '1m');
     });
@@ -101,7 +102,7 @@ void main() {
     String f(num v) => BigDouble.fromNum(v).toString(NumberStyle.integer);
 
     test('prints whole digits without suffixes', () {
-      // Глибина в метрах має читатись метрами, а не як 1.5k.
+      // Depth in metres should read as metres, not as 1.5k.
       expect(f(1523), '1523');
       expect(f(0), '0');
       expect(f(999999), '999999');
@@ -142,7 +143,7 @@ void main() {
     test('interpolation goes through the same path', () {
       NumberStyle.global = NumberStyle.compact;
 
-      expect('видобуто ${BigDouble(1.5, 3)} руди', 'видобуто 1.5k руди');
+      expect('mined ${BigDouble(1.5, 3)} of ore', 'mined 1.5k of ore');
     });
   });
 

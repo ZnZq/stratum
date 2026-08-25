@@ -18,8 +18,8 @@ void main() {
 
   group('mode detection', () {
     test('defaults to strict wherever asserts are enabled', () {
-      // dart test проганяє код з увімкненими асертами, тобто в режимі, який ми
-      // вважаємо debug. Якщо це колись зміниться — краще дізнатись тут.
+      // dart test runs with asserts enabled, which is the mode we treat as
+      // debug. If that ever changes, better to find out here.
       expect(savedStrict, isTrue);
     });
   });
@@ -54,7 +54,7 @@ void main() {
       BigDouble.one / BigDouble.zero;
 
       expect(reported, hasLength(1));
-      expect(reported.single, contains('нуль'));
+      expect(reported.single, contains('zero'));
     });
   });
 
@@ -101,7 +101,7 @@ void main() {
 
         expect(huge.exponent, BigDouble.expLimit);
         expect(huge.isNegative, isFalse,
-            reason: 'обгортання int дало б від\'ємну експоненту');
+            reason: 'a wrapped int would give a negative exponent');
       });
 
       test('underflow collapses to zero (strictMode: $strict)', () {

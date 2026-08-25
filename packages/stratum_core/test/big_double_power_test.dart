@@ -3,12 +3,12 @@ import 'dart:math' as math;
 import 'package:stratum_core/stratum_core.dart';
 import 'package:test/test.dart';
 
-/// Порівнює з відносною похибкою — мантиса несе ~15 значущих цифр, тож точної
-/// рівності від трансцендентних функцій вимагати не можна.
+/// Compares with a relative tolerance: the mantissa carries ~15 significant
+/// digits, so exact equality cannot be demanded of transcendental functions.
 void expectClose(BigDouble got, BigDouble want, {double tolerance = 1e-12}) {
   final relative =
       (got.toDouble() - want.toDouble()).abs() / want.toDouble().abs();
-  expect(relative, lessThan(tolerance), reason: 'отримано $got, очікувалось $want');
+  expect(relative, lessThan(tolerance), reason: 'got $got, expected $want');
 }
 
 void main() {
@@ -24,8 +24,8 @@ void main() {
     });
 
     test('stays exact at the exponent limit', () {
-      // expLimit = 9e15 лежить під 2^53, тому вміщується в double без втрат —
-      // саме тому log10 може повертати звичайний double.
+      // expLimit = 9e15 sits below 2^53 and so fits a double exactly, which is
+      // why log10 is allowed to return a plain double.
       expect(BigDouble.maxValue.log10(), BigDouble.expLimit.toDouble());
     });
 
@@ -68,13 +68,13 @@ void main() {
     });
 
     test('handles the growth curves the game actually uses', () {
-      // Ціна бура в прототипі: 15 * 1.13^n
+      // Drill price in the prototype: 15 * 1.13^n
       expectClose(
         BigDouble.fromNum(1.13).pow(200),
         BigDouble.fromNum(math.pow(1.13, 200)),
         tolerance: 1e-10,
       );
-      // Щільність шару: 1.055^м
+      // Layer density: 1.055^metres
       expectClose(
         BigDouble.fromNum(1.055).pow(500),
         BigDouble.fromNum(math.pow(1.055, 500)),
@@ -83,7 +83,7 @@ void main() {
     });
 
     test('accepts fractional powers', () {
-      // Капсули квантоніуму: КВ^0.8
+      // Quantonium capsules: quantonium^0.8
       expectClose(
         BigDouble.fromNum(1000).pow(0.8),
         BigDouble.fromNum(math.pow(1000, 0.8)),

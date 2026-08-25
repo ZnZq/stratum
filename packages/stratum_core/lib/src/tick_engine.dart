@@ -2,24 +2,23 @@ import 'dart:async';
 
 import 'tick_scheduler.dart';
 
-/// Джерело монотонного часу.
+/// A source of monotonic time.
 ///
-/// Абстракція існує рівно заради одного: щоб тест міг рухати час руками. У
-/// продакшені реалізація одна — [StopwatchClock].
+/// The abstraction exists so a test can move time by hand. Production has one
+/// implementation, [StopwatchClock].
 abstract class MonotonicClock {
-  /// Скільки часу минуло від створення годинника. Ніколи не зменшується.
   Duration get elapsed;
 }
 
-/// Реалізація над `Stopwatch`.
+/// Backed by `Stopwatch` rather than `DateTime.now()`.
 ///
-/// Саме `Stopwatch`, а не `DateTime.now()`: настінний годинник стрибає — NTP
-/// підкручує, гравець міняє часовий пояс або свідомо переводить час уперед,
-/// щоб накрутити ресурси. Монотонний не стрибає ніколи.
+/// Wall-clock time jumps: NTP corrects it, the player changes time zone, or the
+/// player deliberately moves it forward to farm resources. Monotonic time never
+/// jumps.
 ///
-/// Настінний час потрібен лише офлайн-розрахунку, бо тільки він переживає
-/// вбитий процес — і саме там йому місце, разом із захистом від перекручування
-/// годинника. Тік-рушій про `DateTime` не знає.
+/// Wall-clock time is needed only by the offline calculation, since only it
+/// survives a killed process, and that is where it belongs together with the
+/// defences against a tampered clock.
 class StopwatchClock implements MonotonicClock {
   StopwatchClock() : _stopwatch = Stopwatch()..start();
 
@@ -29,11 +28,10 @@ class StopwatchClock implements MonotonicClock {
   Duration get elapsed => _stopwatch.elapsed;
 }
 
-/// Драйвер тік-рушія: годує [TickScheduler] реальним часом.
+/// Feeds a [TickScheduler] with real time.
 ///
-/// Логіки тут майже немає — уся вона в крокувальнику, який тестується
-/// синхронно. Цей клас відповідає лише за таймер, вимірювання часу й виклик
-/// колбека.
+/// Almost no logic lives here — it is all in the scheduler, which is tested
+/// synchronously. This class owns the timer, the measurement and the callback.
 class TickEngine {
   TickEngine({
     required this.scheduler,
@@ -45,7 +43,7 @@ class TickEngine {
 
   final TickScheduler scheduler;
 
-  /// Куди йдуть пачки тіків. Порожні пачки не надсилаються.
+  /// Empty batches are not delivered.
   final void Function(TickBatch batch) onBatch;
 
   final MonotonicClock _clock;
@@ -58,10 +56,10 @@ class TickEngine {
 
   TickRate get rate => scheduler.rate;
 
-  /// Змінює ритм і перезаводить таймер під новий інтервал.
+  /// Changes the rate and re-arms the timer for the new interval.
   ///
-  /// Ходити в `scheduler.rate` повз рушій не можна: період таймера лишився б
-  /// старим, і новий ритм проявився б лише через інтервал.
+  /// Going straight to `scheduler.rate` would leave the timer period stale, so
+  /// the new rate would only take effect an interval later.
   set rate(TickRate value) {
     scheduler.rate = value;
     _lastSync = _clock.elapsed;
@@ -71,7 +69,6 @@ class TickEngine {
     }
   }
 
-  /// Запускає таймер. Повторний виклик на вже запущеному рушії нічого не робить.
   void start() {
     _assertUsable();
     if (isRunning) return;
@@ -81,10 +78,10 @@ class TickEngine {
 
   void stop() => _stopTimer();
 
-  /// Негайно зводить накопичений час, не чекаючи спрацювання таймера.
+  /// Settles accumulated time immediately instead of waiting for the timer.
   ///
-  /// Потрібно там, де застосунок сам знає, що час минув — повернення з фону,
-  /// відновлення після паузи.
+  /// Needed where the app itself knows time has passed: returning from the
+  /// background, resuming after a pause.
   void syncNow() {
     _assertUsable();
 
@@ -114,7 +111,7 @@ class TickEngine {
 
   void _assertUsable() {
     if (_disposed) {
-      throw StateError('TickEngine уже звільнено');
+      throw StateError('TickEngine is already disposed');
     }
   }
 }
