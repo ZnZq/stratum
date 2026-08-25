@@ -5,4 +5,7 @@
 /// мілісекунди» можна було використовувати як інструмент перевірки балансу.
 library;
 
-// Публічні експорти додаються тут у міру появи модулів ядра.
+export 'src/big_double.dart';
+export 'src/number_style.dart';
+export 'src/tick_engine.dart';
+export 'src/tick_scheduler.dart';
