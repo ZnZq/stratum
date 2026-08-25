@@ -5,8 +5,11 @@
 /// "N ticks in milliseconds" stays a usable way to check balance curves.
 library;
 
+export 'src/balance_harness.dart';
 export 'src/big_double.dart';
 export 'src/number_style.dart';
+export 'src/random_source.dart';
 export 'src/reactive_graph.dart';
+export 'src/save_codec.dart';
 export 'src/tick_engine.dart';
 export 'src/tick_scheduler.dart';

@@ -51,6 +51,7 @@ class TickEngine {
   Timer? _timer;
   late Duration _lastSync;
   bool _disposed = false;
+  bool _syncing = false;
 
   bool get isRunning => _timer != null;
 
@@ -76,7 +77,47 @@ class TickEngine {
     _startTimer();
   }
 
-  void stop() => _stopTimer();
+  /// Banks whatever time has already accrued, then stops the timer.
+  ///
+  /// Without the sync, pausing would throw away the part of an interval already
+  /// served and the progress bar would snap back to empty on resume.
+  void stop() {
+    if (isRunning) syncNow();
+    _stopTimer();
+  }
+
+  /// How far the current interval has been served, in `[0, 1]`.
+  ///
+  /// Computed from the clock at the moment of the call, not from the
+  /// scheduler's accumulator: the accumulator only moves when the timer fires,
+  /// so a bar driven by it would sit at zero for a whole interval and then
+  /// jump. A UI reads this once per frame from its own `Ticker`.
+  ///
+  /// Clamped at full rather than wrapped: a late timer should show a bar
+  /// waiting to fire, not one that restarted without a tick having happened.
+  double get progress {
+    _assertUsable();
+    final interval = scheduler.rate.interval.inMicroseconds;
+    return (_servedMicroseconds() / interval).clamp(0.0, 1.0);
+  }
+
+  /// How much of the current interval is left to serve.
+  Duration get timeToNextTick {
+    _assertUsable();
+    final remaining =
+        scheduler.rate.interval.inMicroseconds - _servedMicroseconds();
+    return Duration(microseconds: remaining < 0 ? 0 : remaining);
+  }
+
+  /// Time already served toward the next fire.
+  ///
+  /// While stopped, only what the scheduler banked counts: a paused game must
+  /// not keep filling, and the time spent paused is discarded on resume.
+  int _servedMicroseconds() {
+    final banked = scheduler.pending.inMicroseconds;
+    if (!isRunning) return banked;
+    return banked + (_clock.elapsed - _lastSync).inMicroseconds;
+  }
 
   /// Settles accumulated time immediately instead of waiting for the timer.
   ///
@@ -85,14 +126,24 @@ class TickEngine {
   void syncNow() {
     _assertUsable();
 
-    final now = _clock.elapsed;
-    final delta = now - _lastSync;
-    _lastSync = now;
+    // A callback that stops the engine re-enters here through stop(), and by
+    // then real time has moved on, so the sync would deliver another batch and
+    // recurse without end. Stopping from inside onBatch is the ordinary way to
+    // pause a loop that has hit its cap, so the guard is not an edge case.
+    if (_syncing) return;
+    _syncing = true;
+    try {
+      final now = _clock.elapsed;
+      final delta = now - _lastSync;
+      _lastSync = now;
 
-    if (delta <= Duration.zero) return;
+      if (delta <= Duration.zero) return;
 
-    final batch = scheduler.advance(delta);
-    if (!batch.isEmpty) onBatch(batch);
+      final batch = scheduler.advance(delta);
+      if (!batch.isEmpty) onBatch(batch);
+    } finally {
+      _syncing = false;
+    }
   }
 
   void dispose() {

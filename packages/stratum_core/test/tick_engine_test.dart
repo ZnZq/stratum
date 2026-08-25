@@ -282,4 +282,332 @@ void main() {
       expect(clock.elapsed, greaterThanOrEqualTo(Duration.zero));
     });
   });
+
+  group('progress toward the next tick', () {
+    TickEngine engineOn(TestClock clock, {Duration interval = const Duration(seconds: 4), int ticksPerFire = 1}) =>
+        TickEngine(
+          scheduler: TickScheduler(rate: TickRate(interval, ticksPerFire: ticksPerFire)),
+          onBatch: (_) {},
+          clock: clock,
+        );
+
+    test('starts empty', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        final engine = engineOn(clock)..start();
+
+        expect(engine.progress, 0);
+        engine.dispose();
+      });
+    });
+
+    test('fills as the clock moves, without waiting for the timer', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        final engine = engineOn(clock)..start();
+
+        // Only the clock moves here. The scheduler learns nothing until the
+        // timer fires, so a progress bar reading its accumulator would sit at
+        // zero for the whole interval and then jump.
+        clock.advance(const Duration(seconds: 1));
+        expect(engine.progress, closeTo(0.25, 1e-9));
+
+        clock.advance(const Duration(seconds: 1));
+        expect(engine.progress, closeTo(0.5, 1e-9));
+
+        clock.advance(const Duration(milliseconds: 1900));
+        expect(engine.progress, closeTo(0.975, 1e-9));
+
+        engine.dispose();
+      });
+    });
+
+    test('empties again once the tick fires', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        final engine = engineOn(clock)..start();
+
+        elapseBoth(async, clock, const Duration(seconds: 4));
+
+        expect(engine.progress, closeTo(0, 1e-9));
+        engine.dispose();
+      });
+    });
+
+    test('clamps at full rather than wrapping around', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        final engine = engineOn(clock)..start();
+
+        // A late timer must show a full bar waiting to fire, not a bar that
+        // silently restarted without a tick having happened.
+        clock.advance(const Duration(seconds: 10));
+
+        expect(engine.progress, 1.0);
+        engine.dispose();
+      });
+    });
+
+    test('measures the interval, not a single tick within it', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        final engine = engineOn(clock,
+            interval: const Duration(seconds: 2), ticksPerFire: 4);
+
+        engine.start();
+        clock.advance(const Duration(seconds: 1));
+
+        expect(engine.progress, closeTo(0.5, 1e-9));
+        engine.dispose();
+      });
+    });
+
+    test('freezes while the engine is stopped', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        final engine = engineOn(clock)..start();
+
+        clock.advance(const Duration(seconds: 2));
+        engine.stop();
+        clock.advance(const Duration(seconds: 2));
+
+        expect(engine.progress, closeTo(0.5, 1e-9),
+            reason: 'a paused game must not keep filling the bar');
+        engine.dispose();
+      });
+    });
+
+    test('resumes from where it froze', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        final engine = engineOn(clock)..start();
+
+        clock.advance(const Duration(seconds: 3));
+        engine.stop();
+        clock.advance(const Duration(hours: 1));
+        engine.start();
+
+        expect(engine.progress, closeTo(0.75, 1e-9),
+            reason: 'time spent paused is discarded, banked progress is not');
+        engine.dispose();
+      });
+    });
+
+    test('restarts from empty when the rate changes', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        final engine = engineOn(clock)..start();
+
+        clock.advance(const Duration(milliseconds: 3900));
+        engine.rate = TickRate(const Duration(seconds: 1));
+
+        expect(engine.progress, 0);
+
+        clock.advance(const Duration(milliseconds: 500));
+        expect(engine.progress, closeTo(0.5, 1e-9));
+
+        engine.dispose();
+      });
+    });
+
+    test('reads zero before the engine ever starts', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        final engine = engineOn(clock);
+
+        clock.advance(const Duration(seconds: 2));
+
+        expect(engine.progress, 0);
+        engine.dispose();
+      });
+    });
+  });
+
+  group('time to the next tick', () {
+    test('counts down as progress fills', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        final engine = TickEngine(
+          scheduler: TickScheduler(rate: TickRate(const Duration(seconds: 4))),
+          onBatch: (_) {},
+          clock: clock,
+        )..start();
+
+        expect(engine.timeToNextTick, const Duration(seconds: 4));
+
+        clock.advance(const Duration(seconds: 1));
+        expect(engine.timeToNextTick, const Duration(seconds: 3));
+
+        clock.advance(const Duration(milliseconds: 2500));
+        expect(engine.timeToNextTick, const Duration(milliseconds: 500));
+
+        engine.dispose();
+      });
+    });
+
+    test('never goes negative', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        final engine = TickEngine(
+          scheduler: TickScheduler(rate: TickRate(const Duration(seconds: 4))),
+          onBatch: (_) {},
+          clock: clock,
+        )..start();
+
+        clock.advance(const Duration(seconds: 30));
+
+        expect(engine.timeToNextTick, Duration.zero);
+        engine.dispose();
+      });
+    });
+  });
+
+  group('reading a disposed engine', () {
+    test('is an error, so a stray animation frame surfaces the lifecycle bug', () {
+      fakeAsync((async) {
+        final engine = TickEngine(
+          scheduler: TickScheduler(rate: TickRate(const Duration(seconds: 4))),
+          onBatch: (_) {},
+          clock: TestClock(),
+        )..dispose();
+
+        expect(() => engine.progress, throwsStateError);
+        expect(() => engine.timeToNextTick, throwsStateError);
+      });
+    });
+  });
+
+  group('stopping from inside the callback', () {
+    test('does not re-enter the callback', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        var calls = 0;
+        late TickEngine engine;
+        engine = TickEngine(
+          scheduler: TickScheduler(rate: TickRate(const Duration(seconds: 4))),
+          onBatch: (_) {
+            calls++;
+            // Real time keeps passing while a callback runs, so by the moment
+            // stop() syncs, another whole interval may be owed.
+            clock.advance(const Duration(seconds: 4));
+            engine.stop();
+          },
+          clock: clock,
+        )..start();
+
+        elapseBoth(async, clock, const Duration(seconds: 4));
+
+        expect(calls, 1, reason: 'stop() inside onBatch must not recurse');
+        engine.dispose();
+      });
+    });
+
+    test('still stops', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        late TickEngine engine;
+        engine = TickEngine(
+          scheduler: TickScheduler(rate: TickRate(const Duration(seconds: 4))),
+          onBatch: (_) => engine.stop(),
+          clock: clock,
+        )..start();
+
+        elapseBoth(async, clock, const Duration(seconds: 4));
+
+        expect(engine.isRunning, isFalse);
+        engine.dispose();
+      });
+    });
+  });
+
+  group('a forcing charge on its own loop', () {
+    test('stops at the cap and resumes once the player spends', () {
+      fakeAsync((async) {
+        const cap = 5;
+        final clock = TestClock();
+        var charge = 0;
+        late TickEngine engine;
+        engine = TickEngine(
+          scheduler: TickScheduler(rate: TickRate(const Duration(minutes: 1))),
+          onBatch: (batch) {
+            charge += batch.ticks;
+            if (charge >= cap) {
+              charge = cap;
+              engine.stop();
+            }
+          },
+          clock: clock,
+        )..start();
+
+        elapseBoth(async, clock, const Duration(minutes: 10));
+
+        expect(charge, cap);
+        expect(engine.isRunning, isFalse,
+            reason: 'a full charge has nothing left to regenerate');
+
+        // Nothing accrues while the loop sleeps, however long it sleeps.
+        elapseBoth(async, clock, const Duration(hours: 3));
+        expect(charge, cap);
+
+        charge -= 3;
+        engine.start();
+        elapseBoth(async, clock, const Duration(minutes: 2));
+
+        expect(charge, 4);
+        expect(engine.isRunning, isTrue);
+        engine.dispose();
+      });
+    });
+
+    test('the progress bar freezes while the charge sits at the cap', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        late TickEngine engine;
+        engine = TickEngine(
+          scheduler: TickScheduler(rate: TickRate(const Duration(minutes: 1))),
+          onBatch: (_) => engine.stop(),
+          clock: clock,
+        )..start();
+
+        elapseBoth(async, clock, const Duration(minutes: 1));
+        final frozen = engine.progress;
+        elapseBoth(async, clock, const Duration(minutes: 30));
+
+        expect(engine.progress, frozen,
+            reason: 'a still bar tells the player they are capped');
+        engine.dispose();
+      });
+    });
+
+    test('runs at its own rhythm, independent of the drill loop', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        var drillTicks = 0;
+        var chargeTicks = 0;
+
+        final drill = TickEngine(
+          scheduler: TickScheduler(rate: TickRate(const Duration(seconds: 4))),
+          onBatch: (b) => drillTicks += b.ticks,
+          clock: clock,
+        )..start();
+        final charge = TickEngine(
+          scheduler: TickScheduler(rate: TickRate(const Duration(minutes: 1))),
+          onBatch: (b) => chargeTicks += b.ticks,
+          clock: clock,
+        )..start();
+
+        // Stepped rather than jumped: one five-minute leap would hit the
+        // catch-up cap and measure that instead of the two rhythms.
+        for (var i = 0; i < 75; i++) {
+          elapseBoth(async, clock, const Duration(seconds: 4));
+        }
+
+        expect(drillTicks, 75);
+        expect(chargeTicks, 5);
+
+        drill.dispose();
+        charge.dispose();
+      });
+    });
+  });
 }
