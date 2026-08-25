@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+body{margin:0;background:#07080b;color:#e8e9ee}
+a{color:#FFD782}a:hover{color:#EF9F27}
+::-webkit-scrollbar{width:0;height:0}
+@keyframes pk-a{0%{transform:scale(1)}35%{transform:scale(1.09)}100%{transform:scale(1)}}
+@keyframes pk-b{0%{transform:scale(1)}35%{transform:scale(1.09)}100%{transform:scale(1)}}
+@keyframes fl{0%{opacity:0;transform:translateY(10px)}15%{opacity:1}100%{opacity:0;transform:translateY(-58px)}}
+@keyframes ca{0%{opacity:0}25%{opacity:1}100%{opacity:0}}
+@keyframes cb{0%{opacity:0}25%{opacity:1}100%{opacity:0}}
+@keyframes ba{0%{opacity:0}18%{opacity:.85}100%{opacity:0}}
+@keyframes bb{0%{opacity:0}18%{opacity:.85}100%{opacity:0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.014)}}
+@keyframes gateglow{0%,100%{box-shadow:0 0 12px rgba(127,119,221,.18)}50%{box-shadow:0 0 26px rgba(127,119,221,.5)}}
+@keyframes blinkp{0%,100%{opacity:1}50%{opacity:.45}}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:12px;padding:26px 12px 40px;font-family:'Manrope',sans-serif;color:#e8e9ee;background:radial-gradient(900px 520px at 50% -120px, #10121a, #07080b)">
+<div style="font-family:'Chakra Petch','Manrope',sans-serif;font-size:12px;letter-spacing:5px;color:#8b8fa0">STRATUM <span style="color:#EF9F27">·</span> СИМУЛЯЦІЯ ВИДОБУТКУ</div>
+<div data-screen-label="Телефон" style="width:390px;height:844px;background:#0b0c10;border:10px solid #16171c;border-radius:46px;box-shadow:0 32px 90px rgba(0,0,0,.65), 0 0 0 1px #23262f;overflow:hidden;display:flex;flex-direction:column;position:relative;flex:none">
+  <div style="height:32px;display:flex;align-items:center;justify-content:space-between;padding:4px 24px 0;font-family:'Chakra Petch','Manrope',sans-serif;font-size:12px;color:#8b8fa0;flex:none">
+    <span>21:07</span>
+    <span style="display:flex;gap:7px;align-items:center;font-size:14px"><i class="ti ti-antenna-bars-4"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:#0f1117;border-bottom:1px solid #1b1e26;flex:none">
+    <div style="display:flex;gap:13px;animation:{{pulse}}">
+      <span style="display:flex;align-items:center;gap:4px;color:#d3d1c7;font-size:12.5px"><i class="ti ti-stack-2" style="font-size:15px"></i><b style="font-family:'Chakra Petch','Manrope',sans-serif">{{hudOre}}</b></span>
+      <span style="display:flex;align-items:center;gap:4px;color:#ED93B1;font-size:12.5px"><i class="ti ti-atom-2" style="font-size:15px"></i><b style="font-family:'Chakra Petch','Manrope',sans-serif">{{hudQv}}</b></span>
+      <span style="display:flex;align-items:center;gap:4px;color:#CEC7FF;font-size:12.5px"><i class="ti ti-diamond" style="font-size:15px"></i><b style="font-family:'Chakra Petch','Manrope',sans-serif">{{hudSam}}</b></span>
+      <span style="display:flex;align-items:center;gap:4px;color:#9FE1CB;font-size:12.5px"><i class="ti ti-cpu" style="font-size:15px"></i><b style="font-family:'Chakra Petch','Manrope',sans-serif">{{hudFo}}</b></span>
+    </div>
+    <span style="display:flex;align-items:center;gap:4px;color:#FFD782;font-size:12.5px;animation:{{pulse}}"><i class="ti ti-capsule" style="font-size:15px"></i><b style="font-family:'Chakra Petch','Manrope',sans-serif">{{hudCap}}</b></span>
+  </div>
+  <main style="flex:1;overflow-y:auto;overflow-x:hidden;position:relative">
+    <sc-if value="{{isBur}}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Бур" style="padding:10px 14px 12px;display:flex;flex-direction:column;gap:10px;min-height:100%">
+        <div style="text-align:center">
+          <div style="font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:#8b8fa0">глибина · симуляція {{simN}}</div>
+          <div style="font-family:'Chakra Petch','Manrope',sans-serif;font-weight:600;font-size:38px;color:#FFD782;line-height:1.12;animation:{{pulse}}">{{depthStr}}</div>
+          <sc-if value="{{boostOn}}" hint-placeholder-val="{{ false }}"><div style="margin-top:2px"><span style="font-size:10.5px;border-radius:99px;padding:3px 10px;background:#123028;color:#9FE1CB">{{boostLab}}</span></div></sc-if>
+        </div>
+        <div style="position:relative;height:336px;border-radius:18px;overflow:hidden;border:1px solid #23262f;background:#0e1014;animation:{{breatheAnim}};flex:none">
+          <div style="position:absolute;left:0;right:0;top:0;height:1px;transform:translateY({{camY}}px);transition:{{camTrans}}">
+            <sc-for list="{{layers}}" as="ly" hint-placeholder-count="4">
+              <div style="position:absolute;left:0;right:0;top:{{ly.top}}px;height:96px;background:{{ly.bg}};opacity:{{ly.op}};border-top:2px solid {{ly.bd}}">
+                <div style="display:flex;justify-content:space-between;padding:7px 10px 0">
+                  <span style="font-size:11.5px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,.75)">{{ly.name}}</span>
+                  <span style="font-family:'Chakra Petch','Manrope',sans-serif;font-size:10px;color:rgba(232,233,238,.55)">{{ly.m}}</span>
+                </div>
+                <div style="padding:2px 10px 0;font-size:10px;color:rgba(232,233,238,.62)">{{ly.den}}</div>
+                <sc-if value="{{ly.cur}}" hint-placeholder-val="{{ false }}">
+                  <sc-for list="{{cracks}}" as="c" hint-placeholder-count="0">
+                    <div style="position:absolute;left:{{c.x}}%;top:{{c.y}}%;width:{{c.len}}px;height:2px;background:linear-gradient(90deg,rgba(0,0,0,.9),rgba(0,0,0,.2));transform:rotate({{c.rot}}deg);opacity:{{c.op}};border-radius:2px"></div>
+                  </sc-for>
+                  <div style="position:absolute;left:0;bottom:0;height:4px;background:linear-gradient(90deg,#EF9F27,#FFD782);width:{{hpPct}}%;transition:width .25s"></div>
+                  <div style="position:absolute;right:10px;bottom:8px;font-family:'Chakra Petch','Manrope',sans-serif;font-size:10.5px;color:#FFD782;text-shadow:0 1px 3px rgba(0,0,0,.8)">{{cyc}}</div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <div style="position:absolute;left:calc(50% - 14px);top:0;width:28px;height:122px;background:linear-gradient(180deg,#060709 0%,#0a0b0f 60%,rgba(239,159,39,.3) 100%);box-shadow:0 0 14px rgba(0,0,0,.6)"></div>
+          <div style="position:absolute;inset:0;pointer-events:none">
+            <svg width="96" height="96" style="position:absolute;left:calc(50% - 48px);top:18px;transform:rotate(-90deg)">
+              <circle cx="48" cy="48" r="40" stroke="#23262f" stroke-width="5" fill="none"></circle>
+              <circle ref="{{arcRef}}" cx="48" cy="48" r="40" stroke="#EF9F27" stroke-width="5" fill="none" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="251"></circle>
+            </svg>
+            <i class="ti ti-settings-2" style="position:absolute;left:calc(50% - 15px);top:51px;font-size:30px;color:#FFD782;animation:{{spinAnim}};display:block"></i>
+            <div style="position:absolute;left:calc(50% + 54px);top:58px;font-family:'Chakra Petch','Manrope',sans-serif;font-size:10.5px;color:{{tickCol}}">{{tickLab}}</div>
+            <div style="position:absolute;left:calc(50% - 5px);top:104px;width:10px;height:18px;background:linear-gradient(180deg,#3a3f4d,#8b8fa0)"></div>
+            <div style="position:absolute;left:calc(50% - 11px);top:120px;width:22px;height:14px;background:linear-gradient(180deg,#FFD782,#EF9F27);clip-path:polygon(0 0,100% 0,50% 100%)"></div>
+          </div>
+          <div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 32%,rgba(239,159,39,.5),rgba(239,159,39,0) 65%);opacity:0;animation:{{critAnim}}"></div>
+          <div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(255,215,130,.5),rgba(239,159,39,.08));opacity:0;animation:{{breakAnim}}"></div>
+          <sc-for list="{{floats}}" as="f" hint-placeholder-count="0">
+            <div style="position:absolute;left:{{f.x}}px;top:{{f.y}}px;color:{{f.color}};font-size:{{f.fs}}px;font-family:'Chakra Petch','Manrope',sans-serif;font-weight:600;pointer-events:none;z-index:8;animation:fl 1.1s forwards;text-shadow:0 2px 8px rgba(0,0,0,.85);white-space:nowrap">{{f.txt}}</div>
+          </sc-for>
+          <div style="position:absolute;left:0;right:0;bottom:0;height:28px;background:rgba(8,9,12,.86);display:flex;align-items:center;justify-content:center;gap:8px;font-family:'Chakra Petch','Manrope',sans-serif;font-size:11px">
+            <span style="color:#c9ccd6">щільність {{raceDen}}</span><span style="color:#3a3f4d">·</span>
+            <span style="color:#FFD782">сила {{racePw}}</span><span style="color:#3a3f4d">·</span>
+            <span style="color:#8b8fa0">{{raceCyc}}</span>
+          </div>
+          <sc-if value="{{casOn}}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;inset:0;background:rgba(12,10,22,.6);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;z-index:9;backdrop-filter:blur(1px)">
+              <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#CEC7FF">розгін симуляції</div>
+              <div style="font-family:'Chakra Petch','Manrope',sans-serif;font-size:32px;font-weight:600;color:#CEC7FF">{{depthStr}}</div>
+              <div style="font-size:11px;color:#8b8fa0">{{casSub}}</div>
+              <div style="font-family:'Chakra Petch','Manrope',sans-serif;font-size:11px;color:#7F77DD">{{casProg}}</div>
+            </div>
+          </sc-if>
+        </div>
+        <div style="background:#171a21;border:1px solid #22252e;border-radius:14px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div>
+            <div style="font-size:12px">Бури: <b style="font-family:'Chakra Petch','Manrope',sans-serif;color:#FFD782">{{drills}}</b> <sc-if value="{{hasMs}}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px;color:#8b8fa0">· {{msNote}}</span></sc-if></div>
+            <div style="font-size:10.5px;color:#8b8fa0;margin-top:2px;font-family:'Chakra Petch','Manrope',sans-serif">{{drillPrev}}</div>
+          </div>
+          <button disabled="{{noBuyDrill}}" onClick="{{buyDrill}}" style="border:none;border-radius:10px;background:#2b2416;color:#FFD782;font-family:'Manrope';font-weight:700;font-size:12px;padding:9px 12px;cursor:pointer;white-space:nowrap;opacity:{{buyDrillOp}}" style-active="transform:scale(.96)">+бур · {{drillCostStr}} руди</button>
+        </div>
+        <div style="background:#171a21;border:1px solid #22252e;border-radius:14px;padding:10px 12px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px">
+            <span style="color:#8b8fa0">заряд форсажу</span><b style="font-family:'Chakra Petch','Manrope',sans-serif;color:#FFD782">{{charge}}</b>
+          </div>
+          <div style="height:8px;border-radius:5px;background:#0e1014;overflow:hidden"><div style="height:100%;background:linear-gradient(90deg,#EF9F27,#FFD782);width:{{chargePct}}%;transition:width .25s"></div></div>
+          <button onPointerDown="{{forceDown}}" onPointerUp="{{forceUp}}" onPointerLeave="{{forceUp}}" style="margin-top:10px;width:100%;border:none;border-radius:12px;background:{{forceBg}};color:#2b1a02;font-weight:800;font-size:13.5px;padding:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;touch-action:none;user-select:none" style-active="transform:scale(.98)"><i class="ti ti-flame"></i>{{forceLab}}</button>
+        </div>
+        <sc-if value="{{showGo}}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{openRestart}}" style="width:100%;border:none;border-radius:12px;background:#7F77DD;color:#1d1745;font-weight:800;font-size:13.5px;padding:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;opacity:{{goOp}}" style-active="transform:scale(.98)"><i class="ti ti-refresh"></i>{{goLab}}</button>
+        </sc-if>
+      </div>
+    </sc-if>
+    <sc-if value="{{isTree}}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Дерево" style="padding:14px;min-height:100%">
+        <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8b8fa0;margin-bottom:10px">дерево симуляції · граф · за Капсули · переживає перезапуск</div>
+        <div style="position:relative;height:258px;background:#12141a;border:1px solid #22252e;border-radius:16px;overflow:hidden">
+          <sc-for list="{{gEdges}}" as="e" hint-placeholder-count="6">
+            <div style="position:absolute;left:{{e.x}}px;top:{{e.y}}px;width:{{e.len}}px;height:2px;background:{{e.col}};transform:rotate({{e.rot}}deg);transform-origin:0 50%"></div>
+          </sc-for>
+          <sc-for list="{{gNodes}}" as="g" hint-placeholder-count="6">
+            <div onClick="{{g.sel}}" style="position:absolute;left:{{g.x}}px;top:{{g.y}}px;width:54px;height:54px;border-radius:50%;background:{{g.bg}};border:2px {{g.bs}} {{g.bc}};display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;box-shadow:{{g.glow}};gap:1px" style-active="transform:scale(.94)">
+              <i class="{{g.ic}}" style="font-size:16px;color:{{g.fg}}"></i>
+              <span style="font-family:'Chakra Petch','Manrope',sans-serif;font-size:8.5px;color:{{g.fg}}">{{g.lv}}</span>
+            </div>
+            <div style="position:absolute;left:{{g.lx}}px;top:{{g.ly}}px;width:80px;text-align:center;font-size:9px;color:{{g.nc}};pointer-events:none">{{g.nm}}</div>
+          </sc-for>
+        </div>
+        <div style="background:#171a21;border:1px solid #22252e;border-radius:14px;padding:12px;margin-top:10px;min-height:96px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div>
+              <b style="font-size:13px;color:{{selTitleCol}}">{{selName}}</b>
+              <div style="font-size:10.5px;color:#8b8fa0;margin-top:3px">{{selDesc}}</div>
+              <sc-if value="{{selHasPrev}}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px;color:#9FE1CB;margin-top:4px;font-family:'Chakra Petch','Manrope',sans-serif">{{selPrev}}</div></sc-if>
+              <sc-if value="{{selHasReq}}" hint-placeholder-val="{{ false }}"><div style="font-size:10px;color:#ED93B1;margin-top:4px"><i class="ti ti-lock"></i> {{selReq}}</div></sc-if>
+            </div>
+            <button disabled="{{selDis}}" onClick="{{selBuy}}" style="border:none;border-radius:10px;background:#2b2416;color:#FFD782;font-weight:700;font-size:11.5px;padding:9px 12px;cursor:pointer;white-space:nowrap;opacity:{{selBtnOp}}" style-active="transform:scale(.96)">{{selCost}}</button>
+          </div>
+        </div>
+        <div style="font-size:10px;color:#565b68;margin-top:8px;text-align:center;line-height:1.5">пунктир — вимогу батьків не виконано · «Знижка» вимагає обидві гілки одразу<br>ребро світиться, коли шлях відкрито · тапни вузол для деталей</div>
+      </div>
+    </sc-if>
+    <sc-if value="{{isPlanets}}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Планети" style="padding:14px;display:flex;flex-direction:column;gap:10px;min-height:100%">
+        <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8b8fa0">планети й сателіти</div>
+        <div style="background:#171a21;border:1px solid #33301f;border-radius:14px;padding:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight:700;font-size:13px;color:#FFD782;display:flex;align-items:center;gap:6px"><i class="ti ti-planet"></i>Планета А</span>
+            <span style="font-size:10px;border-radius:99px;padding:3px 9px;background:#2b2416;color:#FFD782">активне буріння</span>
+          </div>
+          <div style="font-size:11.5px;color:#8b8fa0;margin-top:8px">глибина <b style="color:#e8e9ee;font-family:'Chakra Petch','Manrope',sans-serif">{{depthStr}}</b> · руда за тік <b style="color:#e8e9ee;font-family:'Chakra Petch','Manrope',sans-serif">{{pRate}}</b></div>
+          <button onClick="{{goBur}}" style="margin-top:10px;width:100%;border:1px solid #3a3f4d;border-radius:10px;background:transparent;color:#e8e9ee;font-weight:600;font-size:12px;padding:9px;cursor:pointer" style-active="transform:scale(.98)">до бура · {{raceCyc}} до пробиття</button>
+        </div>
+        <sc-if value="{{satLocked}}" hint-placeholder-val="{{ false }}">
+          <div style="background:#14161c;border:1px dashed #2e3340;border-radius:14px;padding:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-weight:700;font-size:13px;color:#8b8fa0;display:flex;align-items:center;gap:6px"><i class="ti ti-lock"></i>Сателіт «Кріо»</span>
+              <span style="font-size:10.5px;color:#565b68">гейт у дереві · 60 капсул</span>
+            </div>
+            <div style="font-size:11px;color:#565b68;margin-top:6px">постачання кріоліту щотіка + лабораторія кріо-сканування</div>
+            <button onClick="{{goTree}}" style="margin-top:10px;width:100%;border:1px solid #3a3253;border-radius:10px;background:transparent;color:#CEC7FF;font-weight:600;font-size:12px;padding:9px;cursor:pointer" style-active="transform:scale(.98)">відкрити в дереві симуляції</button>
+          </div>
+        </sc-if>
+        <sc-if value="{{satOwned}}" hint-placeholder-val="{{ false }}">
+          <div style="background:#151a22;border:1px solid #1f2c3d;border-radius:14px;padding:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-weight:700;font-size:13px;color:#85b7eb;display:flex;align-items:center;gap:6px"><i class="ti ti-snowflake"></i>Сателіт «Кріо»</span>
+              <span style="font-size:10.5px;color:#8b8fa0">кріоліт <b style="color:#85b7eb;font-family:'Chakra Petch','Manrope',sans-serif">{{cryoHave}}</b> · +2/тік</span>
+            </div>
+            <div style="margin-top:10px">
+              <sc-if value="{{veinsOn}}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px;border-radius:99px;padding:4px 10px;background:#0f2b23;color:#9FE1CB">кріо-сканування активне: нові жили у пройдених стратах А · +50% руди</span></sc-if>
+              <sc-if value="{{resOn}}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px;border-radius:99px;padding:4px 10px;background:#152238;color:#85b7eb;animation:blinkp 1.4s infinite">дослідження триває… {{resLeft}}</span></sc-if>
+              <sc-if value="{{resIdle}}" hint-placeholder-val="{{ false }}">
+                <button disabled="{{noRes}}" onClick="{{startRes}}" style="width:100%;border:none;border-radius:10px;background:#12312a;color:#9FE1CB;font-weight:700;font-size:11.5px;padding:9px;cursor:pointer;opacity:{{resOp}}" style-active="transform:scale(.98)">Кріо-сканування · 30 кріоліту · 20 с → +50% руди на А</button>
+              </sc-if>
+            </div>
+          </div>
+        </sc-if>
+        <div style="background:#14161c;border:1px dashed #2e3340;border-radius:14px;padding:12px;opacity:.5">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px"><i class="ti ti-lock"></i>Сателіт «Кремній»</span>
+            <span style="font-size:10.5px;color:#565b68">гейт у дереві · пізніше</span>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{isCraft}}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Крафт" style="padding:14px;display:flex;flex-direction:column;gap:10px;min-height:100%">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8b8fa0">крафт · тікає з глобальним тіком</span>
+          <span style="font-size:10px;border-radius:99px;padding:3px 9px;background:#0f2b23;color:#9FE1CB">черги працюють офлайн</span>
+        </div>
+        <div style="background:#171a21;border:1px solid #22252e;border-radius:14px;padding:12px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="display:flex;flex-direction:column;gap:6px;flex:1">
+              <div style="background:#1e222b;border-radius:10px;padding:8px 10px;font-size:11.5px">руда <b style="color:#d3d1c7;font-family:'Chakra Petch','Manrope',sans-serif">40</b><div style="font-size:9.5px;color:#565b68">є {{oreHave}}</div></div>
+              <div style="background:#1a2230;border-radius:10px;padding:8px 10px;font-size:11.5px;color:#85b7eb">кріоліт <b style="font-family:'Chakra Petch','Manrope',sans-serif">6</b><div style="font-size:9.5px;color:#565b68">є {{cryoHave}}</div></div>
+            </div>
+            <div style="width:16px;height:58px;border-right:2px solid #2a2e39;border-top:2px solid #2a2e39;border-bottom:2px solid #2a2e39;border-radius:0 10px 10px 0;flex:none"></div>
+            <i class="ti ti-arrow-right" style="color:#3a3f4d;flex:none"></i>
+            <div style="background:#12312a;border-radius:10px;padding:12px 10px;font-size:12px;color:#9FE1CB;flex:1;text-align:center">сплав ×<b style="font-family:'Chakra Petch','Manrope',sans-serif;font-size:15px">{{crOut}}</b><div style="font-size:9.5px;color:#4e7a6c">3 тіки на одиницю</div></div>
+          </div>
+          <div style="height:8px;border-radius:5px;background:#0e1014;overflow:hidden;margin-top:10px"><div style="height:100%;background:linear-gradient(90deg,#1D9E75,#9FE1CB);width:{{crBarPct}}%;transition:width .25s"></div></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+            <span style="font-size:11px;color:#8b8fa0">у черзі <b style="color:#e8e9ee;font-family:'Chakra Petch','Manrope',sans-serif">{{crQ}}</b> · сплавів <b style="color:#9FE1CB;font-family:'Chakra Petch','Manrope',sans-serif">{{alloysStr}}</b></span>
+            <button disabled="{{noAdd}}" onClick="{{crAdd}}" style="border:none;border-radius:10px;background:#12312a;color:#9FE1CB;font-weight:700;font-size:11.5px;padding:8px 11px;cursor:pointer;opacity:{{addOp}}" style-active="transform:scale(.96)">+1 у чергу · −40 руди −6 кріо</button>
+          </div>
+        </div>
+        <div style="background:#171a21;border:1px solid #22252e;border-radius:14px;padding:12px">
+          <div style="display:flex;justify-content:space-between;font-size:12px"><span>Компресія крафтера: <b style="font-family:'Chakra Petch','Manrope',sans-serif;color:#9FE1CB">{{crLvv}}</b></span><span style="font-size:10.5px;color:#8b8fa0">вихід ×2/рів · ціна ×3/рів</span></div>
+          <div style="font-size:10.5px;color:#9FE1CB;margin-top:5px;font-family:'Chakra Petch','Manrope',sans-serif">вихід ×{{crOut}} → ×{{crNext}} · ціна {{upCostStr}} → {{upNextStr}} руди</div>
+          <button disabled="{{noUp}}" onClick="{{crUp}}" style="margin-top:9px;width:100%;border:none;border-radius:10px;background:#12312a;color:#9FE1CB;font-weight:700;font-size:12px;padding:10px;cursor:pointer;opacity:{{upOp}}" style-active="transform:scale(.98)">+1 компресія · {{upCostStr}} руди</button>
+        </div>
+        <div style="background:#171a21;border:1px solid #22252e;border-radius:14px;padding:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <span style="font-size:12px">Модуль бура: 5 сплавів → <b style="color:#FFD782">+25% сили</b> <span style="color:#8b8fa0;font-size:10.5px">(цей ран)</span></span>
+            <button disabled="{{noMod}}" onClick="{{modBuy}}" style="border:none;border-radius:10px;background:#2b2416;color:#FFD782;font-weight:700;font-size:11.5px;padding:8px 11px;cursor:pointer;white-space:nowrap;opacity:{{modOp}}" style-active="transform:scale(.96)">встановити · −5 сплавів</button>
+          </div>
+          <div style="font-size:10.5px;color:#8b8fa0;margin-top:5px">встановлено: <b style="color:#e8e9ee;font-family:'Chakra Petch','Manrope',sans-serif">{{mods}}</b> · сила зараз <b style="color:#FFD782;font-family:'Chakra Petch','Manrope',sans-serif">{{racePw}}</b></div>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{isAvatar}}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Аватар" style="padding:14px;display:flex;flex-direction:column;gap:10px;min-height:100%">
+        <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8b8fa0">аватар · переживає перезапуск</div>
+        <div style="background:#171a21;border:1px solid #22252e;border-radius:14px;padding:12px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <span style="font-family:'Chakra Petch','Manrope',sans-serif;font-weight:600;font-size:17px">Рівень <span style="color:#CEC7FF">{{avLv}}</span></span>
+            <span style="font-size:11px;color:#8b8fa0">вільні нейроочки: <b style="color:#CEC7FF;font-family:'Chakra Petch','Manrope',sans-serif">{{avPtsN}}</b></span>
+          </div>
+          <div style="height:8px;border-radius:5px;background:#0e1014;overflow:hidden;margin-top:8px"><div style="height:100%;background:linear-gradient(90deg,#7F77DD,#CEC7FF);width:{{xpPct}}%;transition:width .25s"></div></div>
+          <div style="font-size:10px;color:#565b68;margin-top:4px;font-family:'Chakra Petch','Manrope',sans-serif">{{xpLab}}</div>
+        </div>
+        <div style="background:#1b1830;border:1px solid #3a3253;border-radius:12px;padding:8px 12px;font-size:11px;color:#CEC7FF;display:flex;align-items:center;gap:7px"><i class="ti ti-refresh"></i>рескіл безкоштовний — при наступному перезапуску</div>
+        <sc-for list="{{branches}}" as="b" hint-placeholder-count="4">
+          <div style="background:#171a21;border:1px solid #22252e;border-radius:14px;padding:11px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <div>
+              <b style="font-size:12.5px">{{b.name}}</b>
+              <div style="font-size:10.5px;color:#8b8fa0;margin-top:2px">{{b.d}} · {{b.alloc}}</div>
+              <div style="font-size:10.5px;color:#9FE1CB;margin-top:3px;font-family:'Chakra Petch','Manrope',sans-serif">{{b.now}}</div>
+            </div>
+            <button disabled="{{b.dis}}" onClick="{{b.plus}}" style="border:none;border-radius:10px;background:#292345;color:#CEC7FF;font-weight:700;font-size:12px;padding:8px 14px;cursor:pointer;opacity:{{b.op}}" style-active="transform:scale(.96)">+1</button>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+  </main>
+  <div style="display:flex;background:#0f1117;border-top:1px solid #1b1e26;flex:none;padding-bottom:10px">
+    <sc-for list="{{navItems}}" as="nv" hint-placeholder-count="5">
+      <button onClick="{{nv.go}}" style="flex:1;background:none;border:none;color:{{nv.col}};padding:10px 0 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;min-height:44px">
+        <i class="{{nv.ic}}" style="font-size:20px"></i><span style="font-size:9.5px;font-family:'Manrope';font-weight:600">{{nv.lb}}</span>
+      </button>
+    </sc-for>
+  </div>
+  <sc-if value="{{restartOpen}}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Перезапуск" style="position:absolute;inset:0;background:rgba(9,8,16,.97);z-index:30;display:flex;flex-direction:column;padding:26px 18px 18px;overflow-y:auto">
+      <div style="font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:#CEC7FF">перезапуск симуляції {{simN}}</div>
+      <div style="font-family:'Chakra Petch','Manrope',sans-serif;font-weight:600;font-size:56px;color:#CEC7FF;line-height:1.05;margin:12px 0 2px">{{capsPrevStr}}</div>
+      <div style="font-size:12px;color:#8b8fa0;margin-bottom:14px">Капсул за цей перезапуск · Капсули = 2·КВ^0.8</div>
+      <div style="background:#171a21;border:1px solid #22252e;border-radius:14px;padding:12px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#8b8fa0">квантоніум</span><b style="color:#ED93B1;font-family:'Chakra Petch','Manrope',sans-serif">{{rQvStr}}</b></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-top:5px"><span style="color:#8b8fa0">поріг · тане −5%/год · он = оф</span><b ref="{{thrRef}}" style="color:#ED93B1;font-family:'Chakra Petch','Manrope',sans-serif">0</b></div>
+        <div style="height:8px;border-radius:5px;background:#0e1014;overflow:hidden;margin-top:8px"><div ref="{{thrBarRef}}" style="height:100%;background:linear-gradient(90deg,#7F77DD,#CEC7FF);width:0%"></div></div>
+      </div>
+      <div style="background:#171a21;border:1px solid #22252e;border-radius:14px;padding:4px 12px;font-size:11.5px;margin-bottom:10px">
+        <div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #22252e"><span style="color:#9FE1CB;width:92px;flex:none">зберігається</span><span>Капсули · дерево · Аватар · Зразки · ФО · сателіти</span></div>
+        <div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #22252e"><span style="color:#ED93B1;width:92px;flex:none">скидається</span><span>глибина · руда · бури · модулі · крафт · квантоніум</span></div>
+        <div style="display:flex;gap:10px;padding:8px 0"><span style="color:#CEC7FF;width:92px;flex:none">бонус</span><span>рескіл нейроочок · авто-розгін по пройдених шарах</span></div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex;justify-content:center;margin:8px 0 14px">
+        <div onPointerDown="{{holdDown}}" onPointerUp="{{holdUp}}" onPointerLeave="{{holdUp}}" style="width:122px;height:122px;border-radius:50%;background:{{holdRing}};display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:none;user-select:none;opacity:{{holdOp}}">
+          <div style="width:104px;height:104px;border-radius:50%;background:#151226;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px">
+            <i class="ti ti-refresh" style="font-size:22px;color:#CEC7FF"></i>
+            <span style="font-size:10px;color:#8b8fa0;text-align:center;max-width:84px;line-height:1.3">{{holdLab}}</span>
+          </div>
+        </div>
+      </div>
+      <button onClick="{{closeRestart}}" style="width:100%;border:1px solid #3a3f4d;border-radius:12px;background:transparent;color:#e8e9ee;font-weight:600;font-size:12.5px;padding:11px;cursor:pointer" style-active="transform:scale(.98)">назад до бура</button>
+    </div>
+  </sc-if>
+  <sc-if value="{{offOpen}}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Повернення" style="position:absolute;inset:0;background:rgba(8,10,12,.97);z-index:31;display:flex;flex-direction:column;padding:26px 18px 18px;overflow-y:auto">
+      <div style="font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:#9FE1CB">повернення до симуляції</div>
+      <div style="font-family:'Chakra Petch','Manrope',sans-serif;font-weight:600;font-size:28px;margin:10px 0 14px">Минуло 8 год 00 хв</div>
+      <div style="background:#171a21;border:1px solid #22252e;border-radius:14px;padding:12px;font-size:12.5px">
+        <div style="display:flex;justify-content:space-between"><span style="color:#8b8fa0">руда · 25% темпу</span><b style="font-family:'Chakra Petch','Manrope',sans-serif">+{{offOreStr}}</b></div>
+        <sc-if value="{{offHasCr}}" hint-placeholder-val="{{ false }}"><div style="display:flex;justify-content:space-between;margin-top:7px"><span style="color:#8b8fa0">кріоліт</span><b style="color:#85b7eb;font-family:'Chakra Petch','Manrope',sans-serif">+{{offCrStr}}</b></div></sc-if>
+        <div style="display:flex;justify-content:space-between;margin-top:7px"><span style="color:#8b8fa0">Фонові обчислення · лише офлайн</span><b style="color:#9FE1CB;font-family:'Chakra Petch','Manrope',sans-serif">+{{offFoStr}} (кап 100)</b></div>
+        <div style="display:flex;justify-content:space-between;margin-top:7px;border-top:1px solid #22252e;padding-top:7px"><span style="color:#8b8fa0">поріг розпався</span><b style="color:#ED93B1;font-family:'Chakra Petch','Manrope',sans-serif">{{offThrStr}}</b></div>
+      </div>
+      <div style="flex:1"></div>
+      <button onClick="{{offTake}}" style="width:100%;border:none;border-radius:12px;background:#1D9E75;color:#04241d;font-weight:800;font-size:13.5px;padding:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px" style-active="transform:scale(.98)"><i class="ti ti-download"></i>Забрати</button>
+      <button onClick="{{offBoost}}" style="margin-top:8px;width:100%;border:1px solid #3a3f4d;border-radius:12px;background:transparent;color:#e8e9ee;font-weight:600;font-size:12.5px;padding:11px;cursor:pointer;opacity:{{boostBtnOp}}" style-active="transform:scale(.98)">20 ФО → руда ×2 на 2 хв</button>
+    </div>
+  </sc-if>
+  <sc-if value="{{toastOn}}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;left:14px;right:14px;bottom:86px;background:#1c1f27;border:1px solid #3a3f4d;border-radius:12px;padding:10px 12px;font-size:12px;z-index:40;box-shadow:0 8px 24px rgba(0,0,0,.5)">{{toastTxt}}</div>
+  </sc-if>
+</div>
+<sc-if value="{{demoOn}}" hint-placeholder-val="{{ true }}">
+  <div style="width:390px;display:flex;gap:8px">
+    <button onClick="{{demoHour}}" style="flex:1;background:#12141a;border:1px solid #23262f;color:#8b8fa0;border-radius:10px;font-size:11px;padding:9px 6px;cursor:pointer;font-family:'Manrope'" style-active="transform:scale(.97)">+1 год розпаду</button>
+    <button onClick="{{demoQv}}" style="flex:1;background:#12141a;border:1px solid #23262f;color:#8b8fa0;border-radius:10px;font-size:11px;padding:9px 6px;cursor:pointer;font-family:'Manrope'" style-active="transform:scale(.97)">+20 квантоніуму</button>
+    <button onClick="{{demoNight}}" style="flex:1;background:#12141a;border:1px solid #23262f;color:#8b8fa0;border-radius:10px;font-size:11px;padding:9px 6px;cursor:pointer;font-family:'Manrope'" style-active="transform:scale(.97)">ніч 8 год</button>
+  </div>
+  <div style="font-size:10px;color:#565b68">демо-панель: розпад порогу та офлайн — у реальному часі</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:470,&quot;height&quot;:1030},
+&quot;showDemo&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Демо&quot;},
+&quot;fx&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;повні&quot;,&quot;options&quot;:[&quot;повні&quot;,&quot;стримані&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Ефекти&quot;}}">
+class Component extends DCLogic {
+  state = { tab:"bur", selNode:"pw", restartOpen:false, offOpen:false, off:null, holdP:0, cascade:null, toast:null };
+  STRATA = ["Реголіт","Осадові","Кристалічні","Базальт","Мантійні","Плазмові","Екзо-шар","Квантові"];
+  LCOL = [["#4a4133","#3a3327"],["#45392c","#332b22"],["#2f3d3f","#24302f"],["#3d3236","#2c2427"],["#4a3128","#33221c"],["#2c3a4a","#1f2a36"],["#3a2f4a","#282036"],["#26303e","#181f29"]];
+  CRK = [{x:16,y:20,r:62,l:52},{x:52,y:44,r:-34,l:66},{x:30,y:64,r:10,l:56},{x:68,y:14,r:78,l:44},{x:8,y:46,r:-64,l:48},{x:44,y:8,r:24,l:70},{x:78,y:56,r:-12,l:42}];
+  GRAPH = [
+    {k:"core",nm:"Ядро симуляції",ic:"ti ti-cpu",x:150,y:30,root:true,d:"стартовий вузол — джерело гілок графа"},
+    {k:"pw",nm:"Потужність",ic:"ti ti-settings-2",x:64,y:110,par:[["core",0]],d:"+15% сили бура за рівень",max:50,cost:l=>Math.ceil(3*Math.pow(1.4,l))},
+    {k:"ore",nm:"Збагачення",ic:"ti ti-stack-2",x:236,y:110,par:[["core",0]],d:"+20% руди за рівень",max:50,cost:l=>Math.ceil(4*Math.pow(1.45,l))},
+    {k:"qvr",nm:"КВ-резонанс",ic:"ti ti-atom-2",x:46,y:202,par:[["pw",5]],d:"+2 в.п. шансу квантоніуму за рівень",max:5,cost:l=>Math.ceil(5*Math.pow(1.9,l))},
+    {k:"disc",nm:"Знижка",ic:"ti ti-discount-2",x:150,y:202,par:[["pw",3],["ore",3]],d:"−4% ціни бурів за рівень — ребра зливаються: потрібні ОБИДВІ гілки",max:10,cost:l=>Math.ceil(6*Math.pow(1.8,l))},
+    {k:"cryo",nm:"Сателіт «Кріо»",ic:"ti ti-snowflake",x:254,y:202,par:[["ore",5]],gate:60,d:"one-shot гейт: постачання кріоліту щотіка + лабораторія кріо-сканування"}
+  ];
+  reqMet(n){const T=this.S.tree;return !n.par||n.par.every(([p,lv])=>p==="core"||((T[p]||0)>=lv))}
+  AV = [["crit","Шанс крита","+2% за очко (база 5%)"],["critp","Сила крита","+0.5× за очко (база ×2)"],["echo","Шанс ехо","+2% за очко (база 1%, кап 30%)"],["fon","Фон і офлайн","+10% ФО та офлайну за очко"]];
+  constructor(props){
+    super(props);
+    this.S = {runStart:Date.now(),restarts:0,ore:0,qv:0,fo:0,capsules:0,samples:new Set(),layer:0,hp:0,hpMax:0,drills:0,mods:0,alloys:0,crQ:0,crProg:0,crLv:0,charge:100,forcing:false,maxLayerEver:0,tree:{pw:0,ore:0,disc:0,qvr:0,cryo:false},sat:{cryolite:0,research:0,veins:false},av:{xp:0,lv:1,alloc:{crit:0,critp:0,echo:0,fon:0}},boostUntil:0,thrBase:60,lastTick:Date.now()};
+    this.newLayer();
+    this.floats=[]; this.fid=0; this.tk=0; this.crits=0; this.breaks=0;
+    this.arcRef=el=>{this.arcEl=el}; this.thrRef=el=>{this.thrEl=el}; this.thrBarRef=el=>{this.thrBarEl=el};
+  }
+  fmt(n){if(n<1000)return n<10&&n%1?n.toFixed(1):Math.floor(n)+"";const u=["K","M","B","T"];let i=-1;while(n>=1000&&i<3){n/=1000;i++}if(n>=1000)return n.toExponential(2).replace("+","");return (n>=100?n.toFixed(0):n.toFixed(1))+u[i]}
+  isThick(l){return (l+1)%25===0}
+  qvAmt(l){return 1+Math.floor(l/15)}
+  density(l){const base=5*Math.pow(1.055,l)*Math.pow(2.5,Math.floor(l/50));return this.isThick(l)?base*10:base}
+  msMult(d){return Math.pow(2,[10,25,50,100].filter(x=>d>=x).length)}
+  powerAt(dr){const S=this.S;return (10+dr*6)*this.msMult(dr)*Math.pow(1.15,S.tree.pw)*(1+0.25*S.mods)}
+  power(){return this.powerAt(this.S.drills)}
+  oreTick(){const S=this.S;return 1.6*Math.pow(1.03,S.layer)*Math.pow(1.2,S.tree.ore)*(S.sat.veins?1.5:1)*(Date.now()<S.boostUntil?2:1)}
+  critC(){return .05+.02*this.S.av.alloc.crit}
+  critP(){return 2+.5*this.S.av.alloc.critp}
+  echoC(){return Math.min(.30,.01+.02*this.S.av.alloc.echo)}
+  thr(){const S=this.S,h=(Date.now()-S.runStart)/36e5;return S.thrBase*Math.pow(1.6,S.restarts)*Math.pow(.95,h)}
+  caps(){return Math.floor(2*Math.pow(this.S.qv,0.8))}
+  drillCostAtDisc(d){const S=this.S;return Math.ceil(15*Math.pow(1.13,S.drills)*(1-0.04*d))}
+  drillCost(){return this.drillCostAtDisc(this.S.tree.disc)}
+  newLayer(){this.S.hpMax=this.density(this.S.layer);this.S.hp=this.S.hpMax}
+  floatNum(txt,color,x,y,fs){const f={id:this.fid++,txt,color,x,y,fs};this.floats=this.floats.concat(f);setTimeout(()=>{this.floats=this.floats.filter(o=>o.id!==f.id);this.forceUpdate()},1150);this.forceUpdate()}
+  toastMsg(t){this.setState({toast:t});clearTimeout(this._tt);this._tt=setTimeout(()=>this.setState({toast:null}),2600)}
+  doCycle(chain=0){
+    const S=this.S; S.lastTick=Date.now();
+    const crit=Math.random()<this.critC(), mult=crit?this.critP():1;
+    let dmg=this.power()*mult, gained=this.oreTick()*mult;
+    S.ore+=gained;
+    const qc=Math.min(.5,.12+S.layer*.0015+.02*(S.tree.qvr||0));
+    if(Math.random()<qc){const q=this.qvAmt(S.layer);S.qv+=q;this.floatNum("+"+q+" КВ","#ED93B1",240+Math.random()*40,118+Math.random()*20,15)}
+    let br=0;
+    while(dmg>0&&br<25){ if(dmg>=S.hp){dmg-=S.hp;this.breakLayer();br++} else {S.hp-=dmg;dmg=0} }
+    this.floatNum("+"+this.fmt(gained)+(crit?" · КРИТ":""), crit?"#FFD782":"#c9ccd6", 26+Math.random()*140, 92+Math.random()*40, crit?27:15+Math.random()*4);
+    if(crit)this.crits++;
+    if(S.crQ>0){S.crProg+=1;if(S.crProg>=3){S.crProg=0;S.crQ--;S.alloys+=Math.pow(2,S.crLv)}}
+    if(S.tree.cryo)S.sat.cryolite+=2;
+    if(S.sat.research&&Date.now()>S.sat.research){S.sat.research=0;S.sat.veins=true;this.toastMsg("Кріо-сканування завершено: у пройдених стратах А знайдено нові жили (+50% руди)")}
+    if(chain<6&&Math.random()<this.echoC()){this.floatNum("ехо · подвійний удар","#9FE1CB",104,70,14);setTimeout(()=>{this.doCycle(chain+1);this.forceUpdate()},140)}
+  }
+  breakLayer(){
+    const S=this.S, thick=this.isThick(S.layer);
+    if(thick){
+      const bonus=this.oreTick()*5, qb=this.qvAmt(S.layer)*5;
+      S.ore+=bonus; S.qv+=qb;
+      this.floatNum("ТОВСТИЙ ШАР · всі ресурси ×5","#FFD782",28,42,16);
+      this.floatNum("+"+this.fmt(bonus)+" руди · +"+qb+" КВ","#FFD782",44,66,14);
+      if(!S.samples.has("T"+S.layer)){S.samples.add("T"+S.layer);this.floatNum("+1 Зразок","#CEC7FF",130,90,15)}
+    } else S.ore+=this.oreTick()*1.5;
+    S.av.xp+=1+Math.floor(S.layer/4)+(thick?10:0); const need=()=>18*S.av.lv;
+    while(S.av.xp>=need()){S.av.xp-=need();S.av.lv++}
+    S.layer++; S.maxLayerEver=Math.max(S.maxLayerEver,S.layer); this.newLayer(); this.breaks++;
+  }
+  tick(){
+    const S=this.S;
+    if(S.forcing){S.charge-=8;if(S.charge<=0){S.charge=0;S.forcing=false}} else S.charge=Math.min(100,S.charge+0.8);
+    this.doCycle(); this.tk++; this.forceUpdate(); this.schedule();
+  }
+  schedule(){clearTimeout(this.timer);this.timer=setTimeout(()=>this.tick(),this.S.forcing?1000:4000)}
+  componentDidMount(){
+    this.schedule();
+    this.rint=setInterval(()=>this.forceUpdate(),600);
+    const loop=()=>{
+      const S=this.S,dur=S.forcing?1000:4000,el=(Date.now()-S.lastTick)%dur;
+      if(this.arcEl)this.arcEl.style.strokeDashoffset=251-(251*el/dur);
+      if(this.thrEl)this.thrEl.textContent=this.thr().toFixed(1);
+      if(this.thrBarEl)this.thrBarEl.style.width=Math.min(100,100*this.S.qv/this.thr())+"%";
+      this.raf=requestAnimationFrame(loop)};
+    this.raf=requestAnimationFrame(loop);
+  }
+  componentWillUnmount(){clearTimeout(this.timer);clearInterval(this.rint);cancelAnimationFrame(this.raf);clearInterval(this.casInt);clearInterval(this.holdInt);clearTimeout(this._tt)}
+  buyDrill(){const c=this.drillCost();if(this.S.ore>=c){this.S.ore-=c;this.S.drills++;this.forceUpdate()}}
+  buyTree(k){const n=this.GRAPH.find(x=>x.k===k);if(!n||n.gate||!this.reqMet(n))return;const T=this.S.tree,c=n.cost(T[k]||0);if(this.S.capsules>=c&&(T[k]||0)<n.max){this.S.capsules-=c;T[k]=(T[k]||0)+1;this.forceUpdate()}}
+  buyGate(){const S=this.S;if(S.capsules>=60&&!S.tree.cryo&&(S.tree.ore||0)>=5){S.capsules-=60;S.tree.cryo=true;this.toastMsg("Сателіт «Кріо» приєднано до симуляції")}}
+  startRes(){const S=this.S;if(S.sat.cryolite>=30&&!S.sat.research&&!S.sat.veins){S.sat.cryolite-=30;S.sat.research=Date.now()+20000;this.forceUpdate()}}
+  crUpF(){const c=120*Math.pow(3,this.S.crLv);if(this.S.ore>=c){this.S.ore-=c;this.S.crLv++;this.forceUpdate()}}
+  crAddF(){const S=this.S;if(S.ore>=40&&S.sat.cryolite>=6){S.ore-=40;S.sat.cryolite-=6;S.crQ++;this.forceUpdate()}}
+  modBuyF(){const S=this.S;if(S.alloys>=5){S.alloys-=5;S.mods++;this.toastMsg("Модуль встановлено: +25% сили до кінця рана")}}
+  allocAv(k){const S=this.S,spent=Object.values(S.av.alloc).reduce((a,b)=>a+b,0);if(S.av.lv-1-spent>0){S.av.alloc[k]++;this.forceUpdate()}}
+  forceDown(e){e.preventDefault();if(this.S.charge>2){this.S.forcing=true;this.schedule();this.forceUpdate()}}
+  forceUpF(){if(this.S.forcing){this.S.forcing=false;this.schedule();this.forceUpdate()}}
+  holdDown(){
+    if(this.S.qv<this.thr())return;
+    clearInterval(this.holdInt); let p=0;
+    this.holdInt=setInterval(()=>{p+=100/30;if(p>=100){clearInterval(this.holdInt);this.setState({holdP:0});this.doRestart()}else this.setState({holdP:p})},50);
+  }
+  holdUp(){clearInterval(this.holdInt);this.setState({holdP:0})}
+  doRestart(){
+    const S=this.S;
+    S.capsules+=this.caps(); S.restarts++; S.thrBase=60;
+    const catchup=Math.floor(S.maxLayerEver*0.5), autoDr=Math.floor(S.drills*0.4);
+    Object.assign(S,{ore:0,qv:0,layer:0,drills:autoDr,mods:0,alloys:0,crQ:0,crProg:0,boostUntil:0,runStart:Date.now()});
+    S.av.alloc={crit:0,critp:0,echo:0,fon:0};
+    this.newLayer();
+    this.setState({restartOpen:false,tab:"bur",cascade:catchup>0?{total:catchup,done:0,autoDr}:null});
+    if(catchup>0){
+      let i=0; clearInterval(this.casInt);
+      const step=Math.max(1,Math.ceil(catchup/40));
+      this.casInt=setInterval(()=>{
+        if(i>=catchup){clearInterval(this.casInt);this.setState({cascade:null});this.toastMsg("Розгін завершено: авто-побудовано "+autoDr+" бурів · рескіл нейроочок доступний");return}
+        const n=Math.min(step,catchup-i); i+=n;
+        S.layer+=n;this.newLayer();S.ore+=this.oreTick()*2*n;
+        this.setState({cascade:{total:catchup,done:i,autoDr}});
+      },90);
+    } else this.toastMsg("Симуляцію перезапущено · рескіл нейроочок доступний");
+  }
+  openOff(){
+    const S=this.S, ticks=8*3600/4, offEff=0.25*(1+0.1*S.av.alloc.fon);
+    const gOre=this.oreTick()*ticks*offEff, gCr=S.tree.cryo?2*ticks*offEff:0, gFo=Math.min(100-S.fo,80);
+    const thrFrom=this.thr(); S.runStart-=8*36e5; const thrTo=this.thr();
+    this.setState({offOpen:true,off:{gOre,gCr,gFo,thrFrom,thrTo}});
+  }
+  offTakeF(){
+    const o=this.state.off,S=this.S;
+    S.ore+=o.gOre; S.sat.cryolite+=o.gCr; S.fo+=o.gFo;
+    this.setState({offOpen:false});
+    this.floatNum("+"+this.fmt(o.gOre)+" руди","#c9ccd6",40,54,17);
+    if(o.gCr)this.floatNum("+"+this.fmt(o.gCr)+" кріоліту","#85b7eb",150,80,15);
+    if(o.gFo)this.floatNum("+"+o.gFo+" ФО","#9FE1CB",250,60,15);
+  }
+  offBoostF(){const S=this.S;if(S.fo>=20){S.fo-=20;S.boostUntil=Date.now()+120000;this.toastMsg("Буст руди ×2 на 2 хв (за ФО)");this.forceUpdate()}}
+  estLab(cost,capsNow){const need=cost-this.S.capsules;return capsNow>0?"недоступно · ще ~"+Math.max(1,Math.ceil(need/capsNow))+" перезапусків":"недоступно · збери квантоніум і перезапустись"}
+  renderVals(){
+    const S=this.S, fmt=n=>this.fmt(n), fxFull=(this.props.fx??"повні")==="повні";
+    const thrV=this.thr(), capsV=this.caps(), pw=this.power(), oreT=this.oreTick(), dCost=this.drillCost();
+    const tab=this.state.tab, cas=this.state.cascade, now=Date.now();
+    const pulse=this.tk===0?"none":(this.tk%2?"pk-a":"pk-b")+" .3s";
+    const layers=[]; const H=96;
+    for(let i=Math.max(0,S.layer-2);i<=S.layer+4;i++){
+      const si=Math.min(Math.floor(i/50),7), c=this.LCOL[si], th=this.isThick(i);
+      layers.push({key:i,top:i*H,
+        name:th?((i+1)+" м · ТОВСТИЙ ШАР"):((i+1)+"-й метр · "+this.STRATA[si]),
+        den:th?"гарантія: всі ресурси ×5":"щільність "+fmt(this.density(i)),m:(i+1)+" м",
+        bd:th?"#FFD782":"rgba(0,0,0,.55)",
+        bg:th?"repeating-linear-gradient(-14deg, rgba(255,215,130,.10) 0 6px, rgba(0,0,0,0) 6px 14px), linear-gradient(180deg,#4a3b1a,#2e2410)":"repeating-linear-gradient(-14deg, rgba(0,0,0,.18) 0 6px, rgba(0,0,0,0) 6px 14px), linear-gradient(180deg,"+c[0]+","+c[1]+")",
+        op:i<S.layer?0.38:(i===S.layer?1:0.74), cur:i===S.layer, past:i<S.layer});
+    }
+    const dmg=1-S.hp/S.hpMax;
+    const cracks=this.CRK.map((c,ix)=>({key:ix,x:c.x,y:c.y,rot:c.r,len:c.l,op:+Math.max(0,Math.min(1,dmg*7-ix)).toFixed(2)})).filter(c=>c.op>0.03);
+    const nxt=[10,25,50,100].find(x=>S.drills<x);
+    const T=S.tree, selK=this.state.selNode, nodeBy={}; this.GRAPH.forEach(n=>nodeBy[n.k]=n);
+    const gEdges=[];
+    this.GRAPH.forEach(n=>{(n.par||[]).forEach(([p,lv])=>{const a=nodeBy[p],dx=n.x-a.x,dy=n.y-a.y,len=Math.hypot(dx,dy);
+      gEdges.push({key:p+"-"+n.k,x:(a.x+dx/len*27).toFixed(1),y:(a.y+dy/len*27-1).toFixed(1),len:Math.max(0,len-54).toFixed(1),rot:(Math.atan2(dy,dx)*180/Math.PI).toFixed(1),
+        col:(p==="core"||(T[p]||0)>=lv)?"rgba(127,119,221,.8)":"#262a35"});})});
+    const gNodes=this.GRAPH.map(n=>{
+      const isSel=selK===n.k, unl=this.reqMet(n);
+      let bg="#171a21",bc="#3a3f4d",bs="solid",fg="#8b8fa0",glow="none",lv="";
+      if(n.root){bg="#1b1830";bc="#7F77DD";fg="#CEC7FF";lv="ядро"}
+      else if(n.gate){const own=T.cryo;lv=own?"є":n.gate+"к";
+        if(own){bc="#1D9E75";fg="#9FE1CB"}
+        else if(!unl){bs="dashed";fg="#565b68"}
+        else{bc="#7F77DD";fg="#CEC7FF";if(S.capsules>=n.gate)glow="0 0 12px rgba(127,119,221,.6)"}}
+      else{const l=T[n.k]||0,c2=n.cost(l);lv="lv "+l;
+        if(!unl){bs="dashed";fg="#565b68"}
+        else if(l>=n.max){bc="#1D9E75";fg="#9FE1CB"}
+        else if(S.capsules>=c2){bc="#EF9F27";fg="#FFD782";glow="0 0 12px rgba(239,159,39,.55)"}
+        else fg="#c9ccd6"}
+      if(isSel)bc="#FFD782";
+      return {key:n.k,x:n.x-27,y:n.y-27,lx:n.x-40,ly:n.y+31,nm:n.nm,ic:n.ic,bg,bc,bs,fg,glow,lv,nc:isSel?"#FFD782":"#8b8fa0",sel:()=>this.setState({selNode:n.k})};
+    });
+    const sn=nodeBy[selK]||nodeBy.pw, snUnl=this.reqMet(sn);
+    const reqTxt=()=>"потрібно: "+(sn.par||[]).filter(([p])=>p!=="core").map(([p,lv])=>nodeBy[p].nm+" lv"+lv).join(" та ");
+    let selName=sn.nm,selDesc=sn.d,selCost="",selDis=true,selBuy=()=>{},selHasPrev=false,selPrev="",selHasReq=false,selReq="",selTitleCol="#e8e9ee";
+    if(sn.root){selCost="активне"}
+    else if(sn.gate){selTitleCol="#CEC7FF";
+      if(T.cryo)selCost="відкрито";
+      else{selCost=sn.gate+" капсул";
+        if(!snUnl){selHasReq=true;selReq=reqTxt()}
+        else if(S.capsules<sn.gate){selHasReq=true;selReq=this.estLab(sn.gate,capsV)}
+        else{selDis=false;selBuy=()=>this.buyGate()}}}
+    else{const l=T[sn.k]||0,c2=sn.cost(l);selName=sn.nm+" · lv "+l+"/"+sn.max;
+      if(l>=sn.max)selCost="макс";
+      else{selCost=c2+" капс";
+        if(!snUnl){selHasReq=true;selReq=reqTxt()}
+        else if(S.capsules>=c2){selDis=false;selBuy=()=>this.buyTree(sn.k)}
+        else{selHasReq=true;selReq=this.estLab(c2,capsV)}
+        if(sn.k==="disc"){selPrev="ціна бура: "+fmt(dCost)+" → "+fmt(this.drillCostAtDisc(l+1));selHasPrev=true}
+        if(sn.k==="pw"){selPrev="сила: "+fmt(pw)+" → "+fmt(pw*1.15);selHasPrev=true}
+        if(sn.k==="ore"){selPrev="руда/тік: "+fmt(oreT)+" → "+fmt(oreT*1.2);selHasPrev=true}
+        if(sn.k==="qvr"){const qN=Math.min(.5,.12+S.layer*.0015+.02*l);selPrev="шанс КВ: "+Math.round(qN*100)+"% → "+Math.round(Math.min(.5,qN+.02)*100)+"%";selHasPrev=true}}}
+    const spent=Object.values(S.av.alloc).reduce((a,b)=>a+b,0), free=Math.max(0,S.av.lv-1-spent);
+    const branches=this.AV.map(([k,nm,d])=>({key:k,name:nm,d,alloc:"вкладено "+S.av.alloc[k],dis:free<1,op:free<1?.4:1,
+      now:k==="crit"?"зараз "+Math.round(this.critC()*100)+"%":k==="critp"?"зараз ×"+this.critP().toFixed(1):k==="echo"?"зараз "+Math.round(this.echoC()*100)+"%":"зараз +"+(S.av.alloc.fon*10)+"%",
+      plus:()=>this.allocAv(k)}));
+    const navItems=[["bur","ti ti-arrow-bar-down","Бур"],["tree","ti ti-binary-tree","Дерево"],["planets","ti ti-planet","Планети"],["craft","ti ti-tools","Крафт"],["avatar","ti ti-user-hexagon","Аватар"]]
+      .map(([k,ic,lb])=>({key:k,ic,lb,col:tab===k?"#FFD782":"#565b68",go:()=>this.setState({tab:k})}));
+    const ready=S.qv>=thrV, upCost=120*Math.pow(3,S.crLv), crOut=Math.pow(2,S.crLv);
+    const canRes=S.sat.cryolite>=30, off=this.state.off, boostOn=now<S.boostUntil;
+    const holdP=this.state.holdP;
+    return {
+      pulse, hudOre:fmt(S.ore), hudQv:fmt(S.qv), hudSam:""+S.samples.size, hudFo:""+Math.floor(S.fo), hudCap:""+S.capsules,
+      isBur:tab==="bur", isTree:tab==="tree", isPlanets:tab==="planets", isCraft:tab==="craft", isAvatar:tab==="avatar",
+      navItems, simN:""+(S.restarts+1), depthStr:fmt(S.layer)+" м",
+      boostOn, boostLab:"руда ×2 · "+Math.max(0,Math.ceil((S.boostUntil-now)/1000))+" с",
+      camY:120-S.layer*H, camTrans:cas?"transform .09s linear":"transform .5s cubic-bezier(.2,.8,.25,1)",
+      layers, cracks, hpPct:Math.max(0,100*S.hp/S.hpMax), cyc:"~"+Math.max(1,Math.ceil(S.hp/pw))+" циклів",
+      arcRef:this.arcRef, spinAnim:(S.forcing?"spin .6s":"spin 2.6s")+" linear infinite",
+      tickLab:"тік "+(S.forcing?"1.0":"4.0")+" с", tickCol:S.forcing?"#FFD782":"#8b8fa0",
+      breatheAnim:S.forcing&&fxFull?"breathe 1.1s ease-in-out infinite":"none",
+      critAnim:this.crits===0||!fxFull?"none":(this.crits%2?"ca":"cb")+" .5s",
+      breakAnim:this.breaks===0||!fxFull?"none":(this.breaks%2?"ba":"bb")+" .55s",
+      floats:this.floats,
+      raceDen:fmt(S.hpMax), racePw:fmt(pw), raceCyc:"~"+Math.max(1,Math.ceil(S.hp/pw))+" циклів",
+      casOn:!!cas, casSub:cas?"авто-побудовано "+cas.autoDr+" бурів":"", casProg:cas?cas.done+" / "+cas.total+" м":"",
+      drills:""+S.drills, hasMs:!!nxt, msNote:nxt?"×2 сили на "+nxt:"",
+      drillPrev:"сила "+fmt(pw)+" → "+fmt(this.powerAt(S.drills+1)),
+      drillCostStr:fmt(dCost), noBuyDrill:S.ore<dCost, buyDrillOp:S.ore<dCost?.4:1, buyDrill:()=>this.buyDrill(),
+      charge:""+Math.floor(S.charge), chargePct:S.charge,
+      forceDown:e=>this.forceDown(e), forceUp:()=>this.forceUpF(),
+      forceBg:S.forcing?"#FFD782":"#EF9F27", forceLab:S.forcing?"Форсаж активний · тік 1 с":"Форсаж (утримуй) · тік 1 с",
+      showGo:S.qv>0||S.restarts>0, goOp:ready?1:.6,
+      goLab:ready?"Перезапуск готовий → +"+capsV+" Капсул":"До перезапуску: КВ "+fmt(S.qv)+" / "+thrV.toFixed(1),
+      openRestart:()=>this.setState({restartOpen:true}), closeRestart:()=>this.setState({restartOpen:false}),
+      gEdges, gNodes, selName, selDesc, selCost, selDis, selBuy, selHasPrev, selPrev, selHasReq, selReq, selTitleCol, selBtnOp:selDis?.4:1,
+      pRate:fmt(oreT), goBur:()=>this.setState({tab:"bur"}), goTree:()=>this.setState({tab:"tree"}),
+      satLocked:!S.tree.cryo, satOwned:S.tree.cryo, cryoHave:fmt(S.sat.cryolite),
+      veinsOn:S.sat.veins, resOn:S.sat.research>0, resIdle:!S.sat.veins&&!S.sat.research,
+      resLeft:Math.max(0,Math.ceil((S.sat.research-now)/1000))+" с", noRes:!canRes, resOp:canRes?1:.4, startRes:()=>this.startRes(),
+      oreHave:fmt(S.ore), crOut:""+crOut, crNext:""+crOut*2, crLvv:""+S.crLv,
+      upCostStr:fmt(upCost), upNextStr:fmt(upCost*3), noUp:S.ore<upCost, upOp:S.ore<upCost?.4:1, crUp:()=>this.crUpF(),
+      crBarPct:S.crProg/3*100, crQ:""+S.crQ, alloysStr:fmt(S.alloys),
+      noAdd:!(S.ore>=40&&S.sat.cryolite>=6), addOp:(S.ore>=40&&S.sat.cryolite>=6)?1:.4, crAdd:()=>this.crAddF(),
+      noMod:S.alloys<5, modOp:S.alloys<5?.4:1, modBuy:()=>this.modBuyF(), mods:""+S.mods,
+      avLv:""+S.av.lv, avPtsN:""+free, xpPct:100*S.av.xp/(18*S.av.lv), xpLab:"XP "+Math.floor(S.av.xp)+" / "+(18*S.av.lv), branches,
+      restartOpen:this.state.restartOpen, capsPrevStr:"+"+capsV+" Капсул", rQvStr:fmt(S.qv),
+      thrRef:this.thrRef, thrBarRef:this.thrBarRef,
+      holdRing:"conic-gradient(#7F77DD "+holdP+"%, rgba(127,119,221,.15) 0)",
+      holdOp:ready?1:.45, holdLab:holdP>0?"тримай…":(ready?"утримуй 1.5 с":"недостатньо КВ"),
+      holdDown:()=>this.holdDown(), holdUp:()=>this.holdUp(),
+      offOpen:this.state.offOpen,
+      offOreStr:off?fmt(off.gOre):"", offHasCr:!!(off&&off.gCr), offCrStr:off?fmt(off.gCr):"",
+      offFoStr:off?""+off.gFo:"", offThrStr:off?off.thrFrom.toFixed(1)+" → "+off.thrTo.toFixed(1)+" · −33%":"",
+      offTake:()=>this.offTakeF(), offBoost:()=>this.offBoostF(), boostBtnOp:S.fo>=20?1:.4,
+      toastOn:!!this.state.toast, toastTxt:this.state.toast,
+      demoOn:this.props.showDemo??true,
+      demoHour:()=>{S.runStart-=36e5;this.forceUpdate();this.toastMsg("+1 год: поріг тепер "+this.thr().toFixed(1))},
+      demoQv:()=>{S.qv+=20;this.forceUpdate()},
+      demoNight:()=>this.openOff()
+    };
+  }
+}
+</script>
+</body>
+</html>
