@@ -1,0 +1,16 @@
+name: stratum_core
+description: >-
+  Ядро гри STRATUM: тік-рушій, стан симуляції, баланс і офлайн-розрахунок.
+  Чистий Dart без залежностей від Flutter — тестується без емулятора.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.1
+
+dependencies:
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6

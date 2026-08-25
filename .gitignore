@@ -1,0 +1,26 @@
+# Dart / Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+pubspec_overrides.yaml
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Android
+packages/stratum_app/android/.gradle/
+packages/stratum_app/android/local.properties
+packages/stratum_app/android/key.properties
+*.jks
+
+# iOS / macOS
+packages/stratum_app/ios/Pods/
+packages/stratum_app/ios/.symlinks/
+packages/stratum_app/ios/Flutter/Flutter.framework
+packages/stratum_app/ios/Flutter/Flutter.podspec
+packages/stratum_app/ios/Flutter/ephemeral/
+.DS_Store

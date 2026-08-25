@@ -1,0 +1,12 @@
+# Корінь pub-workspace: спільний резолв залежностей і єдиний pubspec.lock
+# для всіх пакетів проєкту. Сам по собі коду не містить.
+name: stratum_workspace
+description: Монорепа STRATUM — ядро симуляції та мобільний застосунок.
+publish_to: none
+
+environment:
+  sdk: ^3.13.1
+
+workspace:
+  - packages/stratum_core
+  - packages/stratum_app

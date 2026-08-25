@@ -107,6 +107,27 @@ CIFI/ISEPS/CHAD, бенчмарки ретеншну): `docs/research-report.md`
   1м-шари, товсті шари ×5, граф-дерево, весь тіковий рушій. Відкривається локально (обидва
   файли в одній теці). Референс поведінки №1: Flutter-ядро має відтворювати його числа.
 
+## Структура репозиторію (рішення від 2026-08-25)
+Монорепа на **pub workspace** (Dart 3.13 / Flutter 3.47): один `pubspec.lock` і один
+`.dart_tool/` у корені, `pub get` виконується з кореня для всіх пакетів одразу.
+
+```
+pubspec.yaml            корінь workspace (коду не містить)
+analysis_options.yaml   спільний строгий режим аналізу (strict-casts/inference/raw-types)
+packages/stratum_core/  чистий Dart: тік-рушій, стан, баланс, офлайн. Без Flutter.
+packages/stratum_app/   Flutter UI, платформи ТІЛЬКИ android + ios
+```
+
+- `stratum_app` залежить від `stratum_core` через `path: ../stratum_core`; зворотної
+  залежності не буде ніколи.
+- Заборона на Flutter у ядрі тримається структурно: у `stratum_core/pubspec.yaml` немає
+  залежності від flutter, тому `import 'package:flutter/...'` там просто не компілюється.
+- Bundle/application ID: **`ua.znz.stratum`** (Android `namespace`+`applicationId`,
+  iOS `PRODUCT_BUNDLE_IDENTIFIER`). Назва застосунку — `Stratum`.
+- Web/desktop таргети не генеруються. Якщо колись знадобиться web — це окреме рішення.
+- Команди: `flutter pub get` (з кореня), `dart analyze` (з кореня, покриває обидва пакети),
+  `dart test` (з `packages/stratum_core`), `flutter build apk --debug` (з `packages/stratum_app`).
+
 ## Ризики-запобіжники (порушення = баг)
 1. Жодних жорстких стін: мінімальний прогрес до перезапуску гарантований (крапельний КВ + розпад).
 2. Кожен перезапуск відчутний (прев'ю ≥ помітного приросту) — урок провалу CHAD.
