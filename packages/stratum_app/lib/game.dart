@@ -6,6 +6,20 @@ import 'package:stratum_core/stratum_core.dart';
 
 import 'save_store.dart';
 
+/// A transient report: something happened, said once, gone in seconds.
+enum NoticeKind { success, error, info }
+
+class Notice {
+  Notice({required this.id, required this.text, required this.kind});
+
+  final int id;
+  final String text;
+  final NoticeKind kind;
+
+  /// Set shortly before removal, so the card can fade instead of popping.
+  bool leaving = false;
+}
+
 /// A number that flew off a cycle, for the scene to animate and forget.
 class FloatingNumber {
   FloatingNumber({
@@ -104,6 +118,30 @@ class Game extends ChangeNotifier {
   bool get paused => _paused;
   bool _paused = false;
 
+  /// Background mode: the simulation runs at full speed, the presentation
+  /// does not.
+  ///
+  /// The opposite trade to pause. Pause keeps the picture and stops the game;
+  /// this keeps the game and drops the picture -- for leaving the app open
+  /// without paying for sixty frames a second of dust and flutes.
+  bool get background => _background;
+  bool _background = false;
+
+  void setBackground(bool value) {
+    if (_background == value) return;
+    _background = value;
+    if (value) {
+      // Background means "run while I am away", so a paused game resumes:
+      // holding both at once would show a dark screen claiming to mine.
+      if (_paused) resume();
+      floats.clear();
+      _backgroundAt = DateTime.now();
+    } else {
+      _backgroundAt = null;
+    }
+    notifyListeners();
+  }
+
   /// Freezes the whole heartbeat: drilling, charge, forcing.
   ///
   /// Both engines stop through [TickEngine.stop], which banks the time already
@@ -112,6 +150,7 @@ class Game extends ChangeNotifier {
   void pause() {
     if (_paused || !_ready) return;
     _paused = true;
+    _pausedAt = DateTime.now();
     _gripHeld = false;
     drill.stop();
     chargeLoop.stop();
@@ -123,6 +162,12 @@ class Game extends ChangeNotifier {
   void resume() {
     if (!_paused) return;
     _paused = false;
+    // A pause is an absence like any other: the engines held still, so the
+    // span earns at offline pace rather than being simply lost.
+    if (_pausedAt != null) {
+      _settleAbsence(DateTime.now().difference(_pausedAt!));
+      _pausedAt = null;
+    }
     drill.start();
     _syncChargeLoop();
     notifyListeners();
@@ -147,7 +192,13 @@ class Game extends ChangeNotifier {
 
   /// Reads the autosave, then starts the game either way.
   Future<void> start() async {
-    await loadFrom(SaveSlot.auto);
+    final restored = await loadFrom(SaveSlot.auto);
+    // Settled only here, never on a manual load: loading a slot restores a
+    // state, and paying interest on how long the file sat on disk would make
+    // reloading old saves a mint.
+    if (restored && _restoredAt != null) {
+      _settleAbsence(DateTime.now().difference(_restoredAt!));
+    }
     _ready = true;
     _played.start();
     drill.start();
@@ -171,6 +222,7 @@ class Game extends ChangeNotifier {
     } on Object catch (error) {
       debugPrint('save storage is unreachable: $error');
       _storageFault = '$error';
+      _announce('сховище недоступне', NoticeKind.error);
       return false;
     }
     if (held == null) return false;
@@ -182,9 +234,18 @@ class Game extends ChangeNotifier {
       if (backup == null || !_apply(backup)) {
         debugPrint('save in ${slot.key} could not be read');
         await store.quarantine(slot);
+        _announce('сейв не читається — відкладено', NoticeKind.error);
         return false;
       }
       debugPrint('save in ${slot.key} was read from its backup');
+      _announce('відновлено з резервної копії', NoticeKind.info);
+    } else {
+      _announce(
+        slot == SaveSlot.auto
+            ? 'прогрес відновлено'
+            : 'завантажено: ${slot.label}',
+        NoticeKind.success,
+      );
     }
     _applyDrillRate();
     _syncChargeLoop();
@@ -199,6 +260,11 @@ class Game extends ChangeNotifier {
       final run = document.sections['run'];
       if (run is! Map) throw const SaveFormatException('no run section');
       sim.readJson(Map<String, Object?>.from(run));
+
+      final meta = document.sections['meta'];
+      _restoredAt = meta is Map
+          ? DateTime.tryParse('${meta['savedAt']}')
+          : null;
 
       final session = document.sections['session'];
       _playedBefore = Duration(
@@ -259,11 +325,18 @@ class Game extends ChangeNotifier {
     } on Object catch (error) {
       debugPrint('save could not be written: $error');
       _storageFault = '$error';
+      _announce('збереження не вдалося', NoticeKind.error);
       notifyListeners();
       return false;
     }
     _storageFault = null;
     if (slot == SaveSlot.auto) _lastSavedAt = now;
+    // An autosave nobody can see expires unseen; skipping it while hidden
+    // would be more code for the same silence.
+    _announce(
+      slot == SaveSlot.auto ? 'автозбереження' : 'збережено: ${slot.label}',
+      slot == SaveSlot.auto ? NoticeKind.info : NoticeKind.success,
+    );
     notifyListeners();
     return true;
   }
@@ -281,9 +354,11 @@ class Game extends ChangeNotifier {
     } on Object catch (error) {
       debugPrint('save could not be deleted: $error');
       _storageFault = '$error';
+      _announce('не вдалося стерти слот', NoticeKind.error);
       notifyListeners();
       return false;
     }
+    _announce('стерто: ${slot.label}', NoticeKind.info);
     notifyListeners();
     return true;
   }
@@ -315,6 +390,76 @@ class Game extends ChangeNotifier {
 
   final List<FloatingNumber> floats = [];
   int _nextFloatId = 0;
+
+  /// The last absence worth telling the player about, or null.
+  ///
+  /// Set by [_settleAbsence] when the span crosses [offlineNoticeThreshold];
+  /// shorter gaps settle silently. The window clears it on dismissal.
+  ({OfflineGain gain, Duration away})? get offlineArrival => _offlineArrival;
+  ({OfflineGain gain, Duration away})? _offlineArrival;
+
+  /// Below this the settlement happens without a word: a minute's absence is
+  /// a distraction, not an event.
+  static const Duration offlineNoticeThreshold = Duration(minutes: 1);
+
+  void dismissOffline() {
+    _offlineArrival = null;
+    notifyListeners();
+  }
+
+  /// Pays out an absence and decides whether it deserves a window.
+  void _settleAbsence(Duration away) {
+    if (away <= Duration.zero) return;
+    final cycles = away.inMicroseconds ~/ baseRate.interval.inMicroseconds;
+    final gain = sim.claimOffline(cycles: cycles);
+    if (gain.isEmpty) return;
+    if (away >= offlineNoticeThreshold) {
+      _offlineArrival = (gain: gain, away: away);
+    }
+    notifyListeners();
+  }
+
+  /// When the save being applied was written, for the launch settlement.
+  DateTime? _restoredAt;
+
+  /// When the pause began, for the overlay's clock and the settlement.
+  DateTime? get pausedAt => _pausedAt;
+  DateTime? _pausedAt;
+
+  /// When background mode began. Display only: the engines never stopped, so
+  /// there is nothing to settle.
+  DateTime? get backgroundAt => _backgroundAt;
+  DateTime? _backgroundAt;
+
+  /// Live toasts, oldest first. The UI renders them; this side owns their
+  /// lifetime, because saves also happen with no UI in sight (autosave,
+  /// losing focus) and the report must not depend on who is looking.
+  final List<Notice> notices = [];
+  int _nextNoticeId = 0;
+
+  static const Duration _noticeLife = Duration(milliseconds: 2800);
+  static const Duration _noticeFade = Duration(milliseconds: 300);
+
+  void _announce(String text, NoticeKind kind) {
+    if (_disposed) return;
+    final notice = Notice(id: _nextNoticeId++, text: text, kind: kind);
+    notices.add(notice);
+    // A burst degrades to dropping the oldest card, never to a tower.
+    if (notices.length > 4) notices.removeAt(0);
+    notifyListeners();
+    Timer(_noticeLife, () {
+      if (_disposed || !notices.contains(notice)) return;
+      notice.leaving = true;
+      notifyListeners();
+      Timer(_noticeFade, () {
+        if (_disposed) return;
+        notices.remove(notice);
+        notifyListeners();
+      });
+    });
+  }
+
+  bool _disposed = false;
 
   /// Whether the window is not being drawn at all.
   bool _hidden = false;
@@ -376,9 +521,9 @@ class Game extends ChangeNotifier {
   }
 
   void _reportCycle(CycleOutcome outcome) {
-    // No frames, no audience: recording effects while hidden only builds the
-    // backlog that would all play at once on refocus.
-    if (_hidden) return;
+    // No frames, no audience: recording effects while hidden or in background
+    // mode only builds the backlog that would all play at once on return.
+    if (_hidden || _background) return;
     final gained = outcome.oreGained.toString(NumberStyle.compact);
     _addFloat(
       text: outcome.critical ? '+$gained · КРИТ' : '+$gained',
@@ -493,6 +638,7 @@ class Game extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _played.stop();
     _autosave?.cancel();
     _lifecycle.dispose();

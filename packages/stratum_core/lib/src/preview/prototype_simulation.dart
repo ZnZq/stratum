@@ -34,6 +34,33 @@ class CycleOutcome {
   final int echoes;
 }
 
+/// What an absence paid out.
+class OfflineGain {
+  const OfflineGain({
+    required this.cycles,
+    required this.efficiency,
+    required this.ore,
+    required this.crystals,
+    required this.quantonium,
+  });
+
+  static const OfflineGain none = OfflineGain(
+    cycles: 0,
+    efficiency: 0,
+    ore: BigDouble.zero,
+    crystals: BigDouble.zero,
+    quantonium: BigDouble.zero,
+  );
+
+  final int cycles;
+  final double efficiency;
+  final BigDouble ore;
+  final BigDouble crystals;
+  final BigDouble quantonium;
+
+  bool get isEmpty => cycles <= 0;
+}
+
 /// A provisional model of the drilling loop, carrying the prototype's numbers.
 ///
 /// PROVISIONAL. The balance reference is still undecided — the prototype's
@@ -232,6 +259,43 @@ class PrototypeSimulation {
   double get quantoniumChance {
     final chance = 0.12 + layer.value * 0.0015 + 0.02 * quantoniumLevel.value;
     return chance > 0.5 ? 0.5 : chance;
+  }
+
+  /// The offline throttle: absence produces at a quarter of live pace.
+  static const double offlineEfficiency = 0.25;
+
+  /// Settles an absence as one formula over the whole span -- never a step
+  /// replay.
+  ///
+  /// Chance drops arrive at their expected value instead of being rolled:
+  /// thousands of draws would drain the substreams and shift every roll that
+  /// follows a comeback, turning parity tests red. Depth does not move --
+  /// drilling is the online game; what the store earns while away is ore and
+  /// minerals at the current face.
+  OfflineGain claimOffline({
+    required int cycles,
+    double efficiency = offlineEfficiency,
+  }) {
+    if (cycles <= 0) return OfflineGain.none;
+    final scale = BigDouble.fromNum(cycles) * BigDouble.fromNum(efficiency);
+    final ore = orePerCycle.value * scale;
+    final crystals =
+        crystalDropAt(layer.value) * BigDouble.fromNum(crystalChance) * scale;
+    final quantonium =
+        BigDouble.fromNum(quantoniumDropAt(layer.value) * quantoniumChance) *
+        scale;
+    batch(() {
+      stock.add(ResourceId.ore, ore);
+      stock.add(ResourceId.crystals, crystals);
+      stock.add(ResourceId.quantonium, quantonium);
+    });
+    return OfflineGain(
+      cycles: cycles,
+      efficiency: efficiency,
+      ore: ore,
+      crystals: crystals,
+      quantonium: quantonium,
+    );
   }
 
   /// Runs one drilling cycle, including any echo cycles it triggers.

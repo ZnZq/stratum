@@ -27,6 +27,7 @@ abstract final class Ti {
   static const IconData flask2 = IconData(0xef60, fontFamily: 'TablerIcons');
   static const IconData check = IconData(0xea5e, fontFamily: 'TablerIcons');
   static const IconData pick = IconData(0xfafc, fontFamily: 'TablerIcons');
+  static const IconData moon = IconData(0xeaf8, fontFamily: 'TablerIcons');
   static const IconData playerPause = IconData(
     0xed45,
     fontFamily: 'TablerIcons',

@@ -11,9 +11,22 @@ import 'tokens.dart';
 /// you go, do one thing, and come back from -- so they get room to say what
 /// they are rather than a row of chips to squint at.
 class ConsoleMenu extends StatelessWidget {
-  const ConsoleMenu({required this.onPick, required this.onClose, super.key});
+  const ConsoleMenu({
+    required this.onPick,
+    required this.onPause,
+    required this.onBackground,
+    required this.onClose,
+    super.key,
+  });
 
   final ValueChanged<GameScreen> onPick;
+
+  /// Whole-game switches live here too: they are one-tap acts, not places,
+  /// but the console is the game's service hatch and this is where a player
+  /// looks for them.
+  final VoidCallback onPause;
+  final VoidCallback onBackground;
+
   final VoidCallback onClose;
 
   @override
@@ -92,10 +105,30 @@ class ConsoleMenu extends StatelessWidget {
                             SizedBox(
                               width: card,
                               child: _Card(
-                                screen: screen,
+                                icon: screen.icon,
+                                label: screen.label,
+                                note: screen.note,
                                 onTap: () => onPick(screen),
                               ),
                             ),
+                          SizedBox(
+                            width: card,
+                            child: _Card(
+                              icon: Ti.playerPause,
+                              label: 'Пауза',
+                              note: 'усе завмирає до повернення',
+                              onTap: onPause,
+                            ),
+                          ),
+                          SizedBox(
+                            width: card,
+                            child: _Card(
+                              icon: Ti.moon,
+                              label: 'Фоновий режим',
+                              note: 'гра працює, рендер вимкнено',
+                              onTap: onBackground,
+                            ),
+                          ),
                         ],
                       );
                     },
@@ -111,9 +144,16 @@ class ConsoleMenu extends StatelessWidget {
 }
 
 class _Card extends StatelessWidget {
-  const _Card({required this.screen, required this.onTap});
+  const _Card({
+    required this.icon,
+    required this.label,
+    required this.note,
+    required this.onTap,
+  });
 
-  final GameScreen screen;
+  final IconData icon;
+  final String label;
+  final String note;
   final VoidCallback onTap;
 
   @override
@@ -143,12 +183,12 @@ class _Card extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Palette.line),
                   ),
-                  child: Icon(screen.icon, size: 14, color: Palette.tech),
+                  child: Icon(icon, size: 14, color: Palette.tech),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    screen.label,
+                    label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppText.body(
@@ -162,7 +202,7 @@ class _Card extends StatelessWidget {
             ),
             const SizedBox(height: 7),
             Text(
-              screen.note,
+              note,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: AppText.body(9.5, color: Palette.textMuted),

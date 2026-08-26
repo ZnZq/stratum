@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../game.dart';
 import 'console_menu.dart';
 import 'drill_screen.dart';
 import 'navigation.dart';
+import 'notices.dart';
+import 'offline_window.dart';
 import 'save_menu.dart';
 import 'shell_backdrop.dart';
 import 'upgrades_screen.dart';
@@ -126,89 +130,127 @@ class _GameShellState extends State<GameShell> {
                   // instead of being hidden behind a wall.
                   // The screen runs edge to edge and the chrome floats over it,
                   // so the borehole is never boxed inside a panel.
-                  builder: (context, _) => TickerMode(
-                    enabled: !_game.paused,
-                    child: Stack(
-                      children: [
-                        // The shell itself, still to be designed. Screens are
-                        // islands laid on it, so whatever ends up here shows
-                        // around their edges instead of being covered.
-                        const Positioned.fill(child: ShellBackdrop()),
-                        if (_screen case final screen?)
-                          Positioned.fill(
-                            child: _Island(
-                              child: switch (screen) {
-                                GameScreen.drill => DrillScreen(game: _game),
-                                GameScreen.upgrades => UpgradesScreen(
-                                  game: _game,
+                  builder: (context, _) => Stack(
+                    children: [
+                      Positioned.fill(
+                        child: TickerMode(
+                          enabled: !_game.paused && !_game.background,
+                          child: Stack(
+                            children: [
+                              // The shell itself, still to be designed. Screens are
+                              // islands laid on it, so whatever ends up here shows
+                              // around their edges instead of being covered.
+                              const Positioned.fill(child: ShellBackdrop()),
+                              if (_screen case final screen?)
+                                Positioned.fill(
+                                  child: _Island(
+                                    child: switch (screen) {
+                                      GameScreen.drill => DrillScreen(
+                                        game: _game,
+                                      ),
+                                      GameScreen.upgrades => UpgradesScreen(
+                                        game: _game,
+                                      ),
+                                      _ => _Placeholder(screen: screen),
+                                    },
+                                  ),
                                 ),
-                                _ => _Placeholder(screen: screen),
-                              },
-                            ),
+                              // Positioned.fill, not a bare child: the sheet is a
+                              // Stack of positioned children, which under the loose
+                              // constraints a non-positioned Stack child gets would
+                              // size itself to nothing.
+                              Positioned.fill(
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 180),
+                                  child: switch ((
+                                    _warehouse,
+                                    _saves,
+                                    _console,
+                                  )) {
+                                    (true, _, _) => WarehouseSheet(
+                                      game: _game,
+                                      onClose: () =>
+                                          setState(() => _warehouse = false),
+                                    ),
+                                    (_, true, _) => SaveMenu(
+                                      game: _game,
+                                      onClose: () =>
+                                          setState(() => _saves = false),
+                                    ),
+                                    (_, _, true) => ConsoleMenu(
+                                      onPick: _pickScreen,
+                                      onPause: () {
+                                        setState(() => _console = false);
+                                        _game.pause();
+                                      },
+                                      onBackground: () {
+                                        setState(() => _console = false);
+                                        _game.setBackground(true);
+                                      },
+                                      onClose: () =>
+                                          setState(() => _console = false),
+                                    ),
+                                    _ => const SizedBox.shrink(),
+                                  },
+                                ),
+                              ),
+                              if (_game.paused)
+                                Positioned.fill(
+                                  child: _PauseOverlay(
+                                    since: _game.pausedAt ?? DateTime.now(),
+                                    onResume: _game.resume,
+                                  ),
+                                ),
+                              Positioned(
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                child: _ResourceBar(
+                                  game: _game,
+                                  open: _warehouse,
+                                  onTap: () => setState(() {
+                                    _warehouse = !_warehouse;
+                                    _saves = false;
+                                    _console = false;
+                                  }),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                child: _NavBar(
+                                  game: _game,
+                                  screen: _screen,
+                                  console: _console,
+                                  onSection: _pickSection,
+                                  onScreen: _pickScreen,
+                                ),
+                              ),
+                            ],
                           ),
-                        // Positioned.fill, not a bare child: the sheet is a
-                        // Stack of positioned children, which under the loose
-                        // constraints a non-positioned Stack child gets would
-                        // size itself to nothing.
+                        ),
+                      ),
+                      if (_game.offlineArrival case final arrival?)
                         Positioned.fill(
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 180),
-                            child: switch ((_warehouse, _saves, _console)) {
-                              (true, _, _) => WarehouseSheet(
-                                game: _game,
-                                onClose: () =>
-                                    setState(() => _warehouse = false),
-                              ),
-                              (_, true, _) => SaveMenu(
-                                game: _game,
-                                onClose: () => setState(() => _saves = false),
-                              ),
-                              (_, _, true) => ConsoleMenu(
-                                onPick: _pickScreen,
-                                onClose: () => setState(() => _console = false),
-                              ),
-                              _ => const SizedBox.shrink(),
-                            },
+                          child: OfflineWindow(
+                            gain: arrival.gain,
+                            away: arrival.away,
+                            onClose: _game.dismissOffline,
                           ),
                         ),
-                        if (_game.paused)
-                          Positioned.fill(
-                            child: _PauseOverlay(onResume: _game.resume),
-                          ),
-                        Positioned(
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          child: _ResourceBar(
+                      if (_game.background)
+                        Positioned.fill(
+                          child: _BackgroundOverlay(
                             game: _game,
-                            open: _warehouse,
-                            onTap: () => setState(() {
-                              _warehouse = !_warehouse;
-                              _saves = false;
-                              _console = false;
-                            }),
-                            onSaves: () => setState(() {
-                              _saves = !_saves;
-                              _warehouse = false;
-                              _console = false;
-                            }),
-                            onPause: _game.pause,
+                            onExit: () => _game.setBackground(false),
                           ),
                         ),
-                        Positioned(
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          child: _NavBar(
-                            game: _game,
-                            screen: _screen,
-                            console: _console,
-                            onSection: _pickSection,
-                            onScreen: _pickScreen,
-                          ),
-                        ),
-                      ],
-                    ),
+                      // Above the pause glass and outside its TickerMode: a
+                      // save fired by the pause itself still gets its card,
+                      // animated, while everything underneath stands still.
+                      NoticeLayer(game: _game),
+                    ],
                   ),
                 ),
               ),
@@ -269,15 +311,11 @@ class _ResourceBar extends StatelessWidget {
     required this.game,
     required this.open,
     required this.onTap,
-    required this.onSaves,
-    required this.onPause,
   });
 
   final Game game;
   final bool open;
   final VoidCallback onTap;
-  final VoidCallback onSaves;
-  final VoidCallback onPause;
 
   @override
   Widget build(BuildContext context) {
@@ -342,28 +380,172 @@ class _ResourceBar extends StatelessWidget {
                 color: Palette.textFaint,
               ),
             ),
-            // Its own gesture inside the strip's: children are hit-tested
-            // first, so the gear opens the saves and everything around it
-            // still opens the warehouse.
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onSaves,
-              child: const Padding(
-                padding: EdgeInsets.only(left: 10, top: 4, bottom: 4),
-                child: Icon(Ti.settings2, size: 15, color: Palette.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// How long a mode has been held, ticking once a second.
+///
+/// Driven by a plain [Timer], not a Ticker: both overlays live where
+/// TickerMode is off or the scene is meant to be still, and a frame-rate
+/// clock for a once-a-second digit would be waste anyway.
+class _SinceClock extends StatefulWidget {
+  const _SinceClock({
+    required this.since,
+    required this.prefix,
+    required this.color,
+  });
+
+  final DateTime since;
+  final String prefix;
+  final Color color;
+
+  @override
+  State<_SinceClock> createState() => _SinceClockState();
+}
+
+class _SinceClockState extends State<_SinceClock> {
+  Timer? _beat;
+
+  @override
+  void initState() {
+    super.initState();
+    _beat = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _beat?.cancel();
+    super.dispose();
+  }
+
+  static String _clock(Duration span) {
+    String two(int value) => value.toString().padLeft(2, '0');
+    if (span.inHours > 0) {
+      return '${span.inHours}:${two(span.inMinutes % 60)}:'
+          '${two(span.inSeconds % 60)}';
+    }
+    return '${two(span.inMinutes)}:${two(span.inSeconds % 60)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final held = DateTime.now().difference(widget.since);
+    return Text(
+      '${widget.prefix} ${_clock(held < Duration.zero ? Duration.zero : held)}',
+      style: AppText.display(
+        13,
+        weight: FontWeight.w600,
+        color: widget.color,
+        shadows: true,
+      ),
+    );
+  }
+}
+
+/// The dark room the game keeps mining in.
+///
+/// Near-black on purpose -- dark pixels are what an OLED pays nothing for --
+/// with a handful of live numbers, redrawn only when a tick lands. No ticker
+/// runs anywhere on screen; the per-second cost is the text below.
+class _BackgroundOverlay extends StatelessWidget {
+  const _BackgroundOverlay({required this.game, required this.onExit});
+
+  final Game game;
+  final VoidCallback onExit;
+
+  @override
+  Widget build(BuildContext context) {
+    final sim = game.sim;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onExit,
+      child: ColoredBox(
+        color: const Color(0xFF03050A),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Ti.moon, size: 26, color: Color(0x597FD9C4)),
+            const SizedBox(height: 14),
+            Text(
+              'ФОНОВИЙ РЕЖИМ',
+              style: AppText.body(
+                11,
+                weight: FontWeight.w800,
+                color: const Color(0x8CA0ADC1),
+                letterSpacing: 4,
               ),
             ),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onPause,
-              child: const Padding(
-                padding: EdgeInsets.only(left: 8, top: 4, bottom: 4),
-                child: Icon(Ti.playerPause, size: 15, color: Palette.textMuted),
+            const SizedBox(height: 22),
+            Text(
+              '${sim.layer.value + 1} м',
+              style: AppText.display(
+                34,
+                weight: FontWeight.w700,
+                color: const Color(0xB3FFD782),
               ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _DimStat(icon: Ti.stack2, value: '${sim.ore.value}'),
+                const SizedBox(width: 18),
+                _DimStat(icon: Ti.diamond, value: '${sim.crystals.value}'),
+                const SizedBox(width: 18),
+                _DimStat(icon: Ti.atom2, value: '${sim.quantonium.value}'),
+              ],
+            ),
+            const SizedBox(height: 18),
+            _SinceClock(
+              since: game.backgroundAt ?? DateTime.now(),
+              prefix: 'у фоні',
+              color: const Color(0x8CA0ADC1),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'симуляція працює · рендер вимкнено',
+              style: AppText.body(9.5, color: const Color(0x667C8A9C)),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'торкнись, щоб повернутись',
+              style: AppText.body(9.5, color: const Color(0x667C8A9C)),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DimStat extends StatelessWidget {
+  const _DimStat({required this.icon, required this.value});
+
+  final IconData icon;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: const Color(0x66A0ADC1)),
+        const SizedBox(width: 5),
+        Text(
+          value,
+          style: AppText.display(
+            13,
+            weight: FontWeight.w600,
+            color: const Color(0x99D6DDE9),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -374,8 +556,9 @@ class _ResourceBar extends StatelessWidget {
 /// the scene, so the stillness underneath IS the message and deserves to be
 /// seen. The tint only says "input goes to me now".
 class _PauseOverlay extends StatelessWidget {
-  const _PauseOverlay({required this.onResume});
+  const _PauseOverlay({required this.since, required this.onResume});
 
+  final DateTime since;
   final VoidCallback onResume;
 
   @override
@@ -410,7 +593,13 @@ class _PauseOverlay extends StatelessWidget {
                 shadows: true,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
+            _SinceClock(
+              since: since,
+              prefix: 'на паузі',
+              color: Palette.textDim,
+            ),
+            const SizedBox(height: 8),
             Text(
               'симуляція завмерла · торкнись, щоб продовжити',
               style: AppText.body(10.5, color: Palette.textDim, shadows: true),
@@ -509,9 +698,11 @@ class _NavBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               for (final section in NavSection.values)
-                // Both rows divide the same full width, so a section sits
-                // under the chips rather than beside them.
-                Expanded(
+                // A centred cluster: the seated well is 46 wide, and a fixed
+                // 78 per tab keeps the four together in the middle instead of
+                // scattering them across the full width.
+                SizedBox(
+                  width: 78,
                   child: _SectionTab(
                     section: section,
                     current: section == screen?.section,

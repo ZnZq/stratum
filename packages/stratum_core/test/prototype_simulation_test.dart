@@ -86,6 +86,54 @@ void main() {
     });
   });
 
+  group('an absence', () {
+    test('pays expected value at offline pace and leaves depth alone', () {
+      final sim = _played(30);
+      final layerBefore = sim.layer.value;
+      final oreBefore = sim.ore.value;
+      final expectedOre =
+          sim.orePerCycle.value *
+          BigDouble.fromNum(100) *
+          BigDouble.fromNum(PrototypeSimulation.offlineEfficiency);
+
+      final gain = sim.claimOffline(cycles: 100);
+
+      expect(gain.cycles, 100);
+      expect('${gain.ore}', '$expectedOre');
+      expect('${sim.ore.value}', '${oreBefore + expectedOre}');
+      expect(
+        sim.layer.value,
+        layerBefore,
+        reason: 'drilling is the online game; the store earns, the bit waits',
+      );
+    });
+
+    test('does not touch the roll streams', () {
+      final mirror = _played(20);
+      final away = _played(20)..claimOffline(cycles: 5000);
+
+      final expected = [for (var i = 0; i < 8; i++) mirror.tick().critical];
+      final actual = [for (var i = 0; i < 8; i++) away.tick().critical];
+
+      expect(
+        actual,
+        expected,
+        reason:
+            'expected value instead of rolls is what keeps an absence '
+            'from shifting every crit that follows the comeback',
+      );
+    });
+
+    test('zero or negative cycles pay nothing', () {
+      final sim = _played(10);
+      final before = '${sim.ore.value}';
+
+      expect(sim.claimOffline(cycles: 0).isEmpty, isTrue);
+      expect(sim.claimOffline(cycles: -3).isEmpty, isTrue);
+      expect('${sim.ore.value}', before);
+    });
+  });
+
   group('the save document', () {
     test('a run survives the codec, not just the map', () {
       final codec = SaveCodec(currentVersion: 1);
