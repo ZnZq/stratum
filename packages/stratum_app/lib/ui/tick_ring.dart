@@ -13,15 +13,9 @@ import 'tokens.dart';
 /// of the same duration would drift the moment the rate changes for forcing or
 /// the app comes back from the background.
 class TickRing extends StatefulWidget {
-  const TickRing({
-    required this.engine,
-    required this.spinning,
-    this.diameter = 96,
-    super.key,
-  });
+  const TickRing({required this.engine, this.diameter = 96, super.key});
 
   final TickEngine engine;
-  final bool spinning;
   final double diameter;
 
   @override
@@ -47,10 +41,8 @@ class _TickRingState extends State<TickRing>
 
     _progress.value = widget.engine.progress;
 
-    // The gear turns once every 2.6s normally and every 0.6s under forcing,
-    // matching the prototype's two spin speeds.
-    final period = widget.spinning ? 0.6 : 2.6;
-    _spin.value = (_spin.value + delta.inMicroseconds / 1e6 / period) % 1.0;
+    // The gear turns once every 2.6s, the prototype's resting spin.
+    _spin.value = (_spin.value + delta.inMicroseconds / 1e6 / 2.6) % 1.0;
   }
 
   @override

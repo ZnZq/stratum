@@ -36,6 +36,9 @@ abstract final class Palette {
   static const Color compute = Color(0xFF9FE1CB);
   static const Color ore = Color(0xFFD3D1C7);
   static const Color crystal = Color(0xFF9FD8FF);
+  static const Color cuprite = Color(0xFFE8A06A);
+  static const Color ferrite = Color(0xFFAABBD0);
+  static const Color silicite = Color(0xFFEDE2C8);
 
   /// Instrument accent: rulers, tick marks, technical captions.
   static const Color tech = Color(0xFF7FD9C4);

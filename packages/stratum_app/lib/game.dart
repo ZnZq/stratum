@@ -42,24 +42,19 @@ class FloatingNumber {
 /// Owns the simulation and the loops that drive it.
 ///
 /// Two engines, not one. The drill beats every four seconds and does the
-/// mining; the forcing charge regenerates on its own slower loop that stops
-/// itself once the charge is full and resumes when the player spends some.
-/// Stopping the drill loop for a full charge would freeze the mining too.
+/// mining; energy regenerates on its own slower loop that stops itself once
+/// the gauge is full and resumes when the player spends some. Stopping the
+/// drill loop for a full gauge would freeze the mining too.
 class Game extends ChangeNotifier {
   Game({SaveStore? store}) : store = store ?? SaveStore() {
     drill = TickEngine(
       scheduler: TickScheduler(rate: baseRate),
       onBatch: _onDrillBatch,
     );
-    chargeLoop = TickEngine(
-      scheduler: TickScheduler(rate: chargeRate),
-      onBatch: _onChargeBatch,
+    energyLoop = TickEngine(
+      scheduler: TickScheduler(rate: energyRate),
+      onBatch: _onEnergyBatch,
     );
-
-    // The simulation owns whether forcing is on, and it can switch it off by
-    // itself when the charge runs out. Subscribing means the drill rate always
-    // follows that one flag instead of being set alongside it and drifting.
-    _forcingWatch = sim.forcing.listen(_applyDrillRate);
 
     // The timer is the floor, not the plan: what actually protects a run is
     // saving the moment the player stops looking at it. Desktop windows close
@@ -95,7 +90,47 @@ class Game extends ChangeNotifier {
   /// Bumped whenever the shape of a save changes, with a migration to match.
   /// A gap in the chain is an error rather than a silent skip -- see
   /// [SaveCodec].
-  static final SaveCodec codec = SaveCodec(currentVersion: 1);
+  static final SaveCodec codec = SaveCodec(
+    currentVersion: 3,
+    migrations: [
+      // v2 -> v3: forcing is gone; its charge gauge became energy.
+      SaveMigration(
+        fromVersion: 2,
+        apply: (sections) {
+          final run = sections['run'];
+          if (run is! Map) return sections;
+          final out = Map<String, Object?>.from(run);
+          if (out.containsKey('charge')) {
+            out['energy'] = out.remove('charge');
+          }
+          return {...sections, 'run': out};
+        },
+      ),
+      // v1 -> v2: the always-drop stopped being "ore" and became regolith,
+      // with the chance ores taking the ore name for themselves.
+      SaveMigration(
+        fromVersion: 1,
+        apply: (sections) {
+          Map<String, Object?>? renamed(Object? holder) {
+            if (holder is! Map) return null;
+            final stock = holder['stock'];
+            if (stock is! Map) return null;
+            final out = Map<String, Object?>.from(stock);
+            if (out.containsKey('ore')) {
+              out['regolith'] = out.remove('ore');
+            }
+            return {...Map<String, Object?>.from(holder), 'stock': out};
+          }
+
+          return {
+            ...sections,
+            'run': ?renamed(sections['run']),
+            'meta': ?renamed(sections['meta']),
+          };
+        },
+      ),
+    ],
+  );
 
   /// Housekeeping on wall-clock, not a game rhythm: a missed save must be
   /// forgotten rather than repaid, so this is a plain timer and not a
@@ -142,7 +177,7 @@ class Game extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Freezes the whole heartbeat: drilling, charge, forcing.
+  /// Freezes the whole heartbeat: drilling and energy.
   ///
   /// Both engines stop through [TickEngine.stop], which banks the time already
   /// served -- so the cycle ring and the charge sweep freeze mid-fill and
@@ -151,9 +186,8 @@ class Game extends ChangeNotifier {
     if (_paused || !_ready) return;
     _paused = true;
     _pausedAt = DateTime.now();
-    _gripHeld = false;
     drill.stop();
-    chargeLoop.stop();
+    energyLoop.stop();
     // A pause is a natural walking-away point, so bank the run while at it.
     unawaited(saveTo(SaveSlot.auto));
     notifyListeners();
@@ -169,7 +203,7 @@ class Game extends ChangeNotifier {
       _pausedAt = null;
     }
     drill.start();
-    _syncChargeLoop();
+    _syncEnergyLoop();
     notifyListeners();
   }
 
@@ -202,7 +236,7 @@ class Game extends ChangeNotifier {
     _ready = true;
     _played.start();
     drill.start();
-    _syncChargeLoop();
+    _syncEnergyLoop();
     _autosave = Timer.periodic(
       autosaveEvery,
       (_) => unawaited(saveTo(SaveSlot.auto)),
@@ -247,8 +281,7 @@ class Game extends ChangeNotifier {
         NoticeKind.success,
       );
     }
-    _applyDrillRate();
-    _syncChargeLoop();
+    _syncEnergyLoop();
     notifyListeners();
     return true;
   }
@@ -365,28 +398,15 @@ class Game extends ChangeNotifier {
 
   static final TickRate baseRate = TickRate(const Duration(seconds: 4));
 
-  /// Forcing halves the heartbeat rather than pinning it to a fixed length,
-  /// so anything that shortens the base tick later carries through by itself.
-  static final TickRate forcingRate = TickRate(
-    Duration(microseconds: baseRate.interval.inMicroseconds ~/ 2),
-  );
-
   /// One point of charge every two seconds, on its own loop rather than
   /// borrowing the drill's heartbeat. The meter above the readout is driven
   /// by this engine, so what the player watches filling is the real interval.
-  static final TickRate chargeRate = TickRate(const Duration(seconds: 2));
+  static final TickRate energyRate = TickRate(const Duration(seconds: 2));
 
   final PrototypeSimulation sim = PrototypeSimulation();
 
   late final TickEngine drill;
-  late final TickEngine chargeLoop;
-  late final Unsubscribe _forcingWatch;
-
-  void _applyDrillRate() {
-    final wanted = sim.forcing.value ? forcingRate : baseRate;
-    if (identical(drill.rate, wanted)) return;
-    drill.rate = wanted;
-  }
+  late final TickEngine energyLoop;
 
   final List<FloatingNumber> floats = [];
   int _nextFloatId = 0;
@@ -475,13 +495,15 @@ class Game extends ChangeNotifier {
   final ValueNotifier<int> criticalFlashes = ValueNotifier(0);
   final ValueNotifier<int> breakFlashes = ValueNotifier(0);
 
-  bool get isForcing => sim.forcing.value;
+  /// Bumped for every blow the face takes -- manual or the drill's own -- so
+  /// the current layer can shudder under it.
+  final ValueNotifier<int> hitShakes = ValueNotifier(0);
 
-  /// The heartbeat as it currently stands, forcing included.
+  /// The heartbeat as it currently stands.
   String get tickInterval => secondsLabel(drill.rate.interval);
 
-  /// How long one point of charge takes, for the gauge to say so out loud.
-  static String get chargeInterval => secondsLabel(chargeRate.interval);
+  /// How long one point of energy takes, for the gauge to say so out loud.
+  static String get energyInterval => secondsLabel(energyRate.interval);
 
   static String secondsLabel(Duration interval) =>
       '${(interval.inMilliseconds / 1000).toStringAsFixed(1)} с';
@@ -489,34 +511,30 @@ class Game extends ChangeNotifier {
   void _onDrillBatch(TickBatch batch) {
     for (var i = 0; i < batch.ticks; i++) {
       final outcome = sim.tick();
+      // The drill's tick is a strike of its own: mine, then hit the face.
+      hitShakes.value = hitShakes.value + 1;
       _reportCycle(outcome);
-      // The forced cycle is over. Another one only starts if the player is
-      // still pressing and the gauge can pay for it up front.
-      if (sim.forcing.value && !(_gripHeld && sim.renewForcing())) {
-        sim.endForcing();
-      }
     }
-    _syncChargeLoop();
+    _syncEnergyLoop();
     notifyListeners();
   }
 
-  void _onChargeBatch(TickBatch batch) {
+  void _onEnergyBatch(TickBatch batch) {
     for (var i = 0; i < batch.ticks; i++) {
-      sim.regenerateCharge();
+      sim.regenerateEnergy();
     }
-    if (sim.chargeFull) chargeLoop.stop();
-    if (_gripHeld) _engageForcing();
+    if (sim.energyFull) energyLoop.stop();
     notifyListeners();
   }
 
-  /// The charge loop sleeps while the gauge is full, so spending has to wake it.
-  void _syncChargeLoop() {
+  /// The energy loop sleeps while the gauge is full, so spending has to wake it.
+  void _syncEnergyLoop() {
     // Nothing wakes while paused; resume() reruns this itself.
     if (_paused) return;
-    if (sim.chargeFull) {
-      if (chargeLoop.isRunning) chargeLoop.stop();
-    } else if (!chargeLoop.isRunning) {
-      chargeLoop.start();
+    if (sim.energyFull) {
+      if (energyLoop.isRunning) energyLoop.stop();
+    } else if (!energyLoop.isRunning) {
+      energyLoop.start();
     }
   }
 
@@ -524,7 +542,7 @@ class Game extends ChangeNotifier {
     // No frames, no audience: recording effects while hidden or in background
     // mode only builds the backlog that would all play at once on return.
     if (_hidden || _background) return;
-    final gained = outcome.oreGained.toString(NumberStyle.compact);
+    final gained = outcome.regolithGained.toString(NumberStyle.compact);
     _addFloat(
       text: outcome.critical ? '+$gained · КРИТ' : '+$gained',
       color: outcome.critical ? 0xFFFFD782 : 0xFFC9CCD6,
@@ -601,28 +619,28 @@ class Game extends ChangeNotifier {
     floats.removeWhere((f) => f.id == id);
   }
 
-  /// Whether the player is still pressing the rock.
+  /// One manual blow at the face.
   ///
-  /// Kept apart from [PrototypeSimulation.forcing], which the simulation
-  /// clears on its own when the gauge runs dry. The press outlives that, so
-  /// forcing resumes by itself as soon as a point is back instead of asking
-  /// the player to lift and press again.
-  bool _gripHeld = false;
-
-  void startForcing() {
-    if (_paused) return;
-    _gripHeld = true;
-    _engageForcing();
-  }
-
-  /// Lets go of the grip. The cycle already paid for runs on to its end.
-  void stopForcing() {
-    _gripHeld = false;
-  }
-
-  void _engageForcing() {
-    if (sim.forcing.value || !sim.beginForcing()) return;
-    _syncChargeLoop();
+  /// The strike lands between ticks by design: it is the player's own damage,
+  /// not a nudge to the engine.
+  void strike() {
+    if (!_ready || _paused) return;
+    final outcome = sim.strike();
+    if (!outcome.landed) return;
+    hitShakes.value = hitShakes.value + 1;
+    if (outcome.layersBroken > 0) {
+      breakFlashes.value = breakFlashes.value + 1;
+    }
+    if (!_hidden && !_background) {
+      _addFloat(
+        text: '+${outcome.regolithGained.toString(NumberStyle.compact)}',
+        color: 0xFFB8C4D4,
+        left: 120 + (hitShakes.value * 29 % 130).toDouble(),
+        top: 150 + (hitShakes.value * 13 % 40).toDouble(),
+        size: 12,
+      );
+    }
+    _syncEnergyLoop();
     notifyListeners();
   }
 
@@ -636,17 +654,33 @@ class Game extends ChangeNotifier {
     notifyListeners();
   }
 
+  void buyStrikeUpgrade() {
+    sim.buyStrikeUpgrade();
+    notifyListeners();
+  }
+
+  void buyEnergyCapUpgrade() {
+    sim.buyEnergyCapUpgrade();
+    _syncEnergyLoop();
+    notifyListeners();
+  }
+
+  void buyEnergyRegenUpgrade() {
+    sim.buyEnergyRegenUpgrade();
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _disposed = true;
     _played.stop();
     _autosave?.cancel();
     _lifecycle.dispose();
-    _forcingWatch();
     drill.dispose();
-    chargeLoop.dispose();
+    energyLoop.dispose();
     criticalFlashes.dispose();
     breakFlashes.dispose();
+    hitShakes.dispose();
     super.dispose();
   }
 }

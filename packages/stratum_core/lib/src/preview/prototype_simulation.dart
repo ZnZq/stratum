@@ -3,10 +3,34 @@ import '../random_source.dart';
 import '../reactive_graph.dart';
 import '../stockpile.dart';
 
+/// What one manual strike did.
+class StrikeOutcome {
+  const StrikeOutcome({
+    required this.spent,
+    required this.layersBroken,
+    required this.thickLayersBroken,
+    required this.regolithGained,
+  });
+
+  static const StrikeOutcome none = StrikeOutcome(
+    spent: 0,
+    layersBroken: 0,
+    thickLayersBroken: 0,
+    regolithGained: BigDouble.zero,
+  );
+
+  final int spent;
+  final int layersBroken;
+  final int thickLayersBroken;
+  final BigDouble regolithGained;
+
+  bool get landed => spent > 0;
+}
+
 /// What one drilling cycle produced, for the UI to turn into feedback.
 class CycleOutcome {
   const CycleOutcome({
-    required this.oreGained,
+    required this.regolithGained,
     required this.crystalsGained,
     required this.quantoniumGained,
     required this.critical,
@@ -16,7 +40,7 @@ class CycleOutcome {
   });
 
   static const CycleOutcome none = CycleOutcome(
-    oreGained: BigDouble.zero,
+    regolithGained: BigDouble.zero,
     crystalsGained: BigDouble.zero,
     quantoniumGained: 0,
     critical: false,
@@ -25,7 +49,7 @@ class CycleOutcome {
     echoes: 0,
   );
 
-  final BigDouble oreGained;
+  final BigDouble regolithGained;
   final BigDouble crystalsGained;
   final int quantoniumGained;
   final bool critical;
@@ -42,6 +66,7 @@ class OfflineGain {
     required this.ore,
     required this.crystals,
     required this.quantonium,
+    required this.ores,
   });
 
   static const OfflineGain none = OfflineGain(
@@ -50,6 +75,7 @@ class OfflineGain {
     ore: BigDouble.zero,
     crystals: BigDouble.zero,
     quantonium: BigDouble.zero,
+    ores: {},
   );
 
   final int cycles;
@@ -57,6 +83,9 @@ class OfflineGain {
   final BigDouble ore;
   final BigDouble crystals;
   final BigDouble quantonium;
+
+  /// The chance ores that were unlocked over the absence.
+  final Map<ResourceId, BigDouble> ores;
 
   bool get isEmpty => cycles <= 0;
 }
@@ -93,7 +122,7 @@ class PrototypeSimulation {
               .ceil(),
       name: 'power upgrade cost',
     );
-    orePerCycle = Computed(
+    regolithPerCycle = Computed(
       () =>
           BigDouble.fromNum(1.6) *
           BigDouble.fromNum(1.03).pow(layer.value.toDouble()) *
@@ -108,13 +137,13 @@ class PrototypeSimulation {
               .ceil(),
       name: 'drill cost',
     );
-    cyclesToBreak = Computed(() {
+    hitsToBreak = Computed(() {
       final remaining = layerHp.value;
       final perCycle = power.value;
       if (perCycle.isZero) return 1;
       final estimate = (remaining / perCycle).ceil().toDouble();
       return estimate < 1 ? 1 : estimate.toInt();
-    }, name: 'cycles to break');
+    }, name: 'hits to break');
 
     _resetLayer();
   }
@@ -130,7 +159,7 @@ class PrototypeSimulation {
   /// it, so a readout can watch one resource without hearing about the rest.
   final Stockpile stock = Stockpile();
 
-  Signal<BigDouble> get ore => stock.signal(ResourceId.ore);
+  Signal<BigDouble> get regolith => stock.signal(ResourceId.regolith);
   Signal<BigDouble> get crystals => stock.signal(ResourceId.crystals);
   Signal<BigDouble> get quantonium => stock.signal(ResourceId.quantonium);
   Signal<BigDouble> get samples => stock.signal(ResourceId.samples);
@@ -146,8 +175,12 @@ class PrototypeSimulation {
   final Signal<int> drillPowerLevel = Signal(0, name: 'drill power level');
   final Signal<int> modules = Signal(0, name: 'modules');
   final Signal<int> restarts = Signal(0, name: 'restarts');
-  final Signal<int> charge = Signal(chargeCap, name: 'forcing charge');
-  final Signal<bool> forcing = Signal(false, name: 'forcing');
+  final Signal<int> energy = Signal(energyCapBase, name: 'energy');
+
+  /// Regolith-bought upgrades to the manual lane.
+  final Signal<int> strikeLevel = Signal(0, name: 'strike level');
+  final Signal<int> energyCapLevel = Signal(0, name: 'energy cap level');
+  final Signal<int> energyRegenLevel = Signal(0, name: 'energy regen level');
 
   /// Tree levels. Purchasing is not wired up yet; they exist so the formulas
   /// read the way the prototype's do.
@@ -167,18 +200,22 @@ class PrototypeSimulation {
   late final Computed<BigDouble> power;
   late final Computed<BigDouble> perDrillPower;
   late final Computed<BigDouble> powerUpgradeCost;
-  late final Computed<BigDouble> orePerCycle;
+  late final Computed<BigDouble> regolithPerCycle;
   late final Computed<BigDouble> drillCost;
-  late final Computed<int> cyclesToBreak;
+  late final Computed<int> hitsToBreak;
 
-  static const int chargeCap = 100;
+  static const int energyCapBase = 100;
 
-  /// What one forced cycle costs, paid IN ADVANCE.
-  ///
-  /// Charging on completion instead would hand the acceleration out free: a
-  /// player tapping forcing on and off between ticks would shorten the
-  /// interval and never reach the moment the gauge is read.
-  static const int forcingCost = 4;
+  /// Each capacity level adds this many points to the gauge.
+  static const int energyPerCapLevel = 25;
+
+  int get energyCap => energyCapBase + energyPerCapLevel * energyCapLevel.value;
+
+  /// How much one regen tick pours in.
+  int get energyPerRegen => 1 + energyRegenLevel.value;
+
+  /// Each strike level multiplies the blow by this.
+  static const double strikeGrowth = 1.35;
 
   /// What one unupgraded drill delivers per cycle.
   static const double basePerDrillPower = 10;
@@ -235,6 +272,30 @@ class PrototypeSimulation {
   static BigDouble crystalDropAt(int layer) =>
       BigDouble.fromNum(1.02).pow(layer.toDouble());
 
+  /// The chance ores, each opened by a stratum boundary.
+  ///
+  /// PROVISIONAL numbers, like everything in this class. What is meant to
+  /// last is the shape: a new ore is a row here with its own roll stream,
+  /// and nothing else -- the cycle walks this table instead of naming ores.
+  static const List<
+    ({ResourceId id, String stream, int unlockAt, double chance})
+  >
+  oreTable = [
+    (id: ResourceId.cuprite, stream: 'cuprite', unlockAt: 0, chance: 0.22),
+    (id: ResourceId.ferrite, stream: 'ferrite', unlockAt: 50, chance: 0.15),
+    (id: ResourceId.silicite, stream: 'silicite', unlockAt: 100, chance: 0.12),
+  ];
+
+  /// How much of an ore one successful roll yields at [layer].
+  static BigDouble oreDropAt(int layer) => BigDouble.fromNum(1 + layer * 0.03);
+
+  bool oreUnlocked(ResourceId id) {
+    for (final row in oreTable) {
+      if (row.id == id) return layer.value >= row.unlockAt;
+    }
+    return false;
+  }
+
   static double _milestoneMultiplier(int owned) {
     var multiplier = 1.0;
     for (final threshold in const [10, 25, 50, 100]) {
@@ -278,16 +339,25 @@ class PrototypeSimulation {
   }) {
     if (cycles <= 0) return OfflineGain.none;
     final scale = BigDouble.fromNum(cycles) * BigDouble.fromNum(efficiency);
-    final ore = orePerCycle.value * scale;
+    final ore = regolithPerCycle.value * scale;
     final crystals =
         crystalDropAt(layer.value) * BigDouble.fromNum(crystalChance) * scale;
     final quantonium =
         BigDouble.fromNum(quantoniumDropAt(layer.value) * quantoniumChance) *
         scale;
+    final ores = <ResourceId, BigDouble>{
+      for (final row in oreTable)
+        if (layer.value >= row.unlockAt)
+          row.id:
+              oreDropAt(layer.value) * BigDouble.fromNum(row.chance) * scale,
+    };
     batch(() {
-      stock.add(ResourceId.ore, ore);
+      stock.add(ResourceId.regolith, ore);
       stock.add(ResourceId.crystals, crystals);
       stock.add(ResourceId.quantonium, quantonium);
+      for (final entry in ores.entries) {
+        stock.add(entry.key, entry.value);
+      }
     });
     return OfflineGain(
       cycles: cycles,
@@ -295,6 +365,7 @@ class PrototypeSimulation {
       ore: ore,
       crystals: crystals,
       quantonium: quantonium,
+      ores: ores,
     );
   }
 
@@ -304,36 +375,108 @@ class PrototypeSimulation {
   /// once per field touched.
   CycleOutcome tick() => batch(() => _cycle(0));
 
-  /// Turns forcing on, paying for the cycle it is about to accelerate.
+  /// What one manual strike costs.
+  static const int strikeCost = 1;
+
+  /// The floor a strike never falls under, so the game opens playable with no
+  /// rig at all.
+  static const double baseStrikePower = 8;
+
+  /// A strike scales with the rig: a flat hit would be noise by the second
+  /// stratum and the active lane would quietly die.
+  static const double strikeShareOfRig = 0.35;
+
+  BigDouble get strikePower => strikePowerAt(strikeLevel.value);
+
+  BigDouble strikePowerAt(int level) {
+    final scaled = power.value * BigDouble.fromNum(strikeShareOfRig);
+    final floor = BigDouble.fromNum(baseStrikePower);
+    final resting = scaled > floor ? scaled : floor;
+    return resting * BigDouble.fromNum(strikeGrowth).pow(level.toDouble());
+  }
+
+  BigDouble get strikeUpgradeCost =>
+      (BigDouble.fromNum(120) *
+              BigDouble.fromNum(2.1).pow(strikeLevel.value.toDouble()))
+          .ceil();
+
+  BigDouble get energyCapUpgradeCost =>
+      (BigDouble.fromNum(150) *
+              BigDouble.fromNum(2.0).pow(energyCapLevel.value.toDouble()))
+          .ceil();
+
+  BigDouble get energyRegenUpgradeCost =>
+      (BigDouble.fromNum(200) *
+              BigDouble.fromNum(2.4).pow(energyRegenLevel.value.toDouble()))
+          .ceil();
+
+  bool get canBuyStrikeUpgrade =>
+      stock.has(ResourceId.regolith, strikeUpgradeCost);
+
+  bool get canBuyEnergyCapUpgrade =>
+      stock.has(ResourceId.regolith, energyCapUpgradeCost);
+
+  bool get canBuyEnergyRegenUpgrade =>
+      stock.has(ResourceId.regolith, energyRegenUpgradeCost);
+
+  void buyStrikeUpgrade() {
+    batch(() {
+      if (!stock.spend(ResourceId.regolith, strikeUpgradeCost)) return;
+      strikeLevel.value = strikeLevel.value + 1;
+    });
+  }
+
+  void buyEnergyCapUpgrade() {
+    batch(() {
+      if (!stock.spend(ResourceId.regolith, energyCapUpgradeCost)) return;
+      energyCapLevel.value = energyCapLevel.value + 1;
+    });
+  }
+
+  void buyEnergyRegenUpgrade() {
+    batch(() {
+      if (!stock.spend(ResourceId.regolith, energyRegenUpgradeCost)) return;
+      energyRegenLevel.value = energyRegenLevel.value + 1;
+    });
+  }
+
+  /// One manual blow at the face: spends energy, deals [strikePower], and
+  /// mines.
   ///
-  /// Returns whether the gauge could cover it.
-  bool beginForcing() {
-    if (forcing.value) return true;
-    if (!_payForForcing()) return false;
-    forcing.value = true;
-    return true;
-  }
+  /// A strike and a drill tick are the same event at different powers: hit
+  /// the rock, take out what the hit is worth. The yield is the cycle's,
+  /// scaled by the power ratio, so the two lanes stay on one economy instead
+  /// of being balanced against each other. Ores roll at the same scaled
+  /// expectation on their own `strike.*` streams; crystals and quantonium
+  /// stay cycle-only (the anti-brick drip belongs to the heartbeat), and
+  /// there is no crit roll -- crits are the drill's drama.
+  StrikeOutcome strike() => batch(() {
+    if (energy.value < strikeCost) return StrikeOutcome.none;
+    energy.value = energy.value - strikeCost;
 
-  /// Pays for one more forced cycle. Clears forcing when the gauge cannot.
-  ///
-  /// Whether to renew is the caller's to decide, because it is the caller that
-  /// knows if the player is still asking for it. The cycle already paid for is
-  /// never taken back: letting go mid-cycle stops the NEXT one, not the one in
-  /// hand -- otherwise a tap would spend the charge and deliver nothing.
-  bool renewForcing() {
-    if (!forcing.value) return false;
-    if (_payForForcing()) return true;
-    forcing.value = false;
-    return false;
-  }
+    final share = strikePower / power.value;
+    final regolith = regolithPerCycle.value * share;
+    stock.add(ResourceId.regolith, regolith);
 
-  void endForcing() => forcing.value = false;
+    final fraction = share.toDouble();
+    for (final row in oreTable) {
+      if (layer.value < row.unlockAt) continue;
+      final chance = row.chance * fraction;
+      if (random
+          .stream('strike.${row.stream}')
+          .chance(chance > 1 ? 1 : chance)) {
+        stock.add(row.id, oreDropAt(layer.value));
+      }
+    }
 
-  bool _payForForcing() {
-    if (charge.value < forcingCost) return false;
-    charge.value = charge.value - forcingCost;
-    return true;
-  }
+    final result = _applyDamage(strikePower);
+    return StrikeOutcome(
+      spent: strikeCost,
+      layersBroken: result.broken,
+      thickLayersBroken: result.thickBroken,
+      regolithGained: regolith,
+    );
+  });
 
   CycleOutcome _cycle(int chain) {
     final critical = random.stream('crit').chance(criticalChance);
@@ -341,8 +484,8 @@ class PrototypeSimulation {
         ? BigDouble.fromNum(criticalMultiplier)
         : BigDouble.one;
 
-    final gained = orePerCycle.value * multiplier;
-    stock.add(ResourceId.ore, gained);
+    final gained = regolithPerCycle.value * multiplier;
+    stock.add(ResourceId.regolith, gained);
 
     // Its own substream: adding a roll to the cycle must not shift every roll
     // that follows it and turn the parity tests red.
@@ -352,25 +495,22 @@ class PrototypeSimulation {
       stock.add(ResourceId.crystals, crystalsGained);
     }
 
+    for (final row in oreTable) {
+      if (layer.value < row.unlockAt) continue;
+      if (random.stream(row.stream).chance(row.chance)) {
+        stock.add(row.id, oreDropAt(layer.value) * multiplier);
+      }
+    }
+
     var quantoniumGained = 0;
     if (random.stream('quantonium').chance(quantoniumChance)) {
       quantoniumGained = quantoniumDropAt(layer.value);
       stock.add(ResourceId.quantonium, quantoniumGained.big);
     }
 
-    var damage = power.value * multiplier;
-    var broken = 0;
-    var thickBroken = 0;
-    while (damage > BigDouble.zero && broken < maxLayersPerCycle) {
-      if (damage >= layerHp.value) {
-        damage -= layerHp.value;
-        if (_breakLayer()) thickBroken++;
-        broken++;
-      } else {
-        layerHp.value = layerHp.value - damage;
-        damage = BigDouble.zero;
-      }
-    }
+    final struck = _applyDamage(power.value * multiplier);
+    final broken = struck.broken;
+    final thickBroken = struck.thickBroken;
 
     var echoes = 0;
     if (chain < 6 && random.stream('echo').chance(echoChance)) {
@@ -378,7 +518,7 @@ class PrototypeSimulation {
     }
 
     return CycleOutcome(
-      oreGained: gained,
+      regolithGained: gained,
       crystalsGained: crystalsGained,
       quantoniumGained: quantoniumGained,
       critical: critical,
@@ -388,20 +528,45 @@ class PrototypeSimulation {
     );
   }
 
+  /// Drives [damage] into the face, carrying overflow into deeper layers.
+  ({int broken, int thickBroken}) _applyDamage(BigDouble damage) {
+    var remaining = damage;
+    var broken = 0;
+    var thickBroken = 0;
+    while (remaining > BigDouble.zero && broken < maxLayersPerCycle) {
+      if (remaining >= layerHp.value) {
+        remaining -= layerHp.value;
+        if (_breakLayer()) thickBroken++;
+        broken++;
+      } else {
+        layerHp.value = layerHp.value - remaining;
+        remaining = BigDouble.zero;
+      }
+    }
+    return (broken: broken, thickBroken: thickBroken);
+  }
+
   /// Returns whether the broken layer was a thick one.
   bool _breakLayer() {
     final thick = isThick(layer.value);
     if (thick) {
       final bonus = BigDouble.fromNum(thickSpan);
-      stock.add(ResourceId.ore, orePerCycle.value * bonus);
+      stock.add(ResourceId.regolith, regolithPerCycle.value * bonus);
       stock.add(ResourceId.crystals, crystalDropAt(layer.value) * bonus);
+      for (final row in oreTable) {
+        if (layer.value < row.unlockAt) continue;
+        stock.add(row.id, oreDropAt(layer.value) * bonus);
+      }
       stock.add(
         ResourceId.quantonium,
         (quantoniumDropAt(layer.value) * thickSpan).big,
       );
       stock.add(ResourceId.samples, BigDouble.one);
     } else {
-      stock.add(ResourceId.ore, orePerCycle.value * BigDouble.fromNum(1.5));
+      stock.add(
+        ResourceId.regolith,
+        regolithPerCycle.value * BigDouble.fromNum(1.5),
+      );
     }
 
     layer.value = nextLayer(layer.value);
@@ -415,30 +580,31 @@ class PrototypeSimulation {
     layerHp.value = density;
   }
 
-  /// Regenerates one point of forcing charge. Driven by its own loop, which
-  /// stops once the charge is full.
-  void regenerateCharge() {
-    if (charge.value >= chargeCap) return;
-    charge.value = charge.value + 1;
+  /// Regenerates one point of energy. Driven by its own loop, which stops
+  /// once the gauge is full.
+  void regenerateEnergy() {
+    if (energy.value >= energyCap) return;
+    final next = energy.value + energyPerRegen;
+    energy.value = next > energyCap ? energyCap : next;
   }
 
-  bool get chargeFull => charge.value >= chargeCap;
+  bool get energyFull => energy.value >= energyCap;
 
-  bool get canBuyDrill => stock.has(ResourceId.ore, drillCost.value);
+  bool get canBuyDrill => stock.has(ResourceId.regolith, drillCost.value);
 
   void buyDrill() {
     batch(() {
-      if (!stock.spend(ResourceId.ore, drillCost.value)) return;
+      if (!stock.spend(ResourceId.regolith, drillCost.value)) return;
       drills.value = drills.value + 1;
     });
   }
 
   bool get canBuyPowerUpgrade =>
-      stock.has(ResourceId.ore, powerUpgradeCost.value);
+      stock.has(ResourceId.regolith, powerUpgradeCost.value);
 
   void buyPowerUpgrade() {
     batch(() {
-      if (!stock.spend(ResourceId.ore, powerUpgradeCost.value)) return;
+      if (!stock.spend(ResourceId.regolith, powerUpgradeCost.value)) return;
       drillPowerLevel.value = drillPowerLevel.value + 1;
     });
   }
@@ -447,8 +613,7 @@ class PrototypeSimulation {
   ///
   /// Derived values are left out and recomputed on the way back in: writing
   /// `layerHpMax` would let a save disagree with the density formula, and the
-  /// formula has to win. Forcing is not written either -- it is a held button,
-  /// and a save cannot hold one.
+  /// formula has to win.
   Map<String, Object?> toJson() => {
     'layer': layer.value,
     'layerHp': layerHp.value.toJson(),
@@ -456,7 +621,12 @@ class PrototypeSimulation {
     'drillPower': drillPowerLevel.value,
     'modules': modules.value,
     'restarts': restarts.value,
-    'charge': charge.value,
+    'energy': energy.value,
+    'strikes': {
+      'power': strikeLevel.value,
+      'cap': energyCapLevel.value,
+      'regen': energyRegenLevel.value,
+    },
     'tree': {
       'power': powerLevel.value,
       'enrichment': enrichmentLevel.value,
@@ -479,8 +649,17 @@ class PrototypeSimulation {
     drillPowerLevel.value = _readInt(json['drillPower'], 0);
     modules.value = _readInt(json['modules'], 0);
     restarts.value = _readInt(json['restarts'], 0);
-    charge.value = _readInt(json['charge'], chargeCap).clamp(0, chargeCap);
-    forcing.value = false;
+    final strikes = json['strikes'];
+    if (strikes is Map) {
+      strikeLevel.value = _readInt(strikes['power'], 0);
+      energyCapLevel.value = _readInt(strikes['cap'], 0);
+      energyRegenLevel.value = _readInt(strikes['regen'], 0);
+    } else {
+      strikeLevel.value = 0;
+      energyCapLevel.value = 0;
+      energyRegenLevel.value = 0;
+    }
+    energy.value = _readInt(json['energy'], energyCap).clamp(0, energyCap);
 
     final tree = json['tree'];
     if (tree is Map) {

@@ -641,7 +641,7 @@ void main() {
     });
   });
 
-  group('a forcing charge on its own loop', () {
+  group('an energy gauge on its own loop', () {
     test('stops at the cap and resumes once the player spends', () {
       fakeAsync((async) {
         const cap = 5;
@@ -683,7 +683,7 @@ void main() {
       });
     });
 
-    test('the progress bar freezes while the charge sits at the cap', () {
+    test('the progress bar freezes while the gauge sits at the cap', () {
       fakeAsync((async) {
         final clock = TestClock();
         late TickEngine engine;

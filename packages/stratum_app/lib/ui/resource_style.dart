@@ -33,11 +33,32 @@ typedef ResourceStyle = ({
 });
 
 const Map<ResourceId, ResourceStyle> resourceStyles = {
-  ResourceId.ore: (
-    label: 'Руда',
-    note: 'кожен цикл',
-    icon: Ti.stack2,
+  ResourceId.regolith: (
+    label: 'Реголіт',
+    note: 'перемелена порода · кожен цикл',
+    icon: Ti.grain,
     colour: Palette.ore,
+    shelf: ResourceShelf.extracted,
+  ),
+  ResourceId.cuprite: (
+    label: 'Куприт',
+    note: 'мідна руда · шанс за цикл',
+    icon: Ti.circles,
+    colour: Palette.cuprite,
+    shelf: ResourceShelf.extracted,
+  ),
+  ResourceId.ferrite: (
+    label: 'Ферит',
+    note: 'залізна руда · з 50 м',
+    icon: Ti.magnet,
+    colour: Palette.ferrite,
+    shelf: ResourceShelf.extracted,
+  ),
+  ResourceId.silicite: (
+    label: 'Силіцит',
+    note: 'кремнієвий мінерал · зі 100 м',
+    icon: Ti.prism,
+    colour: Palette.silicite,
     shelf: ResourceShelf.extracted,
   ),
   ResourceId.crystals: (

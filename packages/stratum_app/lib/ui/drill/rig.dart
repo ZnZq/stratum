@@ -2,6 +2,8 @@
 /// forces them.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
@@ -26,8 +28,7 @@ class DrillString extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sim = game.sim;
-    final forcing = game.isForcing;
-    final charge = sim.charge.value / PrototypeSimulation.chargeCap;
+    final charge = sim.energy.value / sim.energyCap;
 
     return IgnorePointer(
       child: Stack(
@@ -44,14 +45,14 @@ class DrillString extends StatelessWidget {
               children: [
                 DepthReadout(game: game),
                 const Spacer(),
-                ChargePlate(game: game),
+                EnergyPlate(game: game),
                 const SizedBox(width: 16),
                 HeadStat(
                   // "Tick" is the engine's word. What the player sees is one
                   // pass of the drill, and the deck already counts those.
                   label: 'цикл',
                   value: game.tickInterval,
-                  colour: forcing ? Palette.gold : Palette.textDim,
+                  colour: Palette.textDim,
                 ),
               ],
             ),
@@ -71,16 +72,8 @@ class DrillString extends StatelessWidget {
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      DrillPipe(
-                        charge: charge,
-                        forcing: forcing,
-                        phase: i * 0.13,
-                      ),
-                      DrillBit(
-                        engine: game.drill,
-                        forcing: forcing,
-                        phase: i * 0.13,
-                      ),
+                      DrillPipe(charge: charge, phase: i * 0.13),
+                      DrillBit(engine: game.drill, phase: i * 0.13),
                     ],
                   ),
               ],
@@ -93,11 +86,7 @@ class DrillString extends StatelessWidget {
             alignment: Alignment.topCenter,
             child: Padding(
               padding: const EdgeInsets.only(top: headTop),
-              child: TickRing(
-                engine: game.drill,
-                spinning: forcing,
-                diameter: stringLength,
-              ),
+              child: TickRing(engine: game.drill, diameter: stringLength),
             ),
           ),
         ],
@@ -161,8 +150,8 @@ class HeadStat extends StatelessWidget {
 /// The number says where the gauge stands and the bar says the same thing in
 /// one glance; the pale sliver at the bar's edge is the point currently being
 /// earned, so the rhythm the label states in words is also visible.
-class ChargePlate extends StatelessWidget {
-  const ChargePlate({required this.game, super.key});
+class EnergyPlate extends StatelessWidget {
+  const EnergyPlate({required this.game, super.key});
 
   final Game game;
 
@@ -171,8 +160,7 @@ class ChargePlate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sim = game.sim;
-    final forcing = game.isForcing;
-    final spent = sim.charge.value < PrototypeSimulation.forcingCost;
+    final spent = sim.energy.value < PrototypeSimulation.strikeCost;
 
     return SizedBox(
       width: _width,
@@ -185,16 +173,14 @@ class ChargePlate extends StatelessWidget {
             decoration: BoxDecoration(
               color: Palette.well,
               borderRadius: BorderRadius.circular(9),
-              border: Border.all(
-                color: forcing ? Palette.amber : Palette.lineBar,
-              ),
+              border: Border.all(color: Palette.lineBar),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
                 Text(
-                  'ЗАРЯД',
+                  'ЕНЕРГІЯ',
                   style: AppText.body(
                     8.5,
                     weight: FontWeight.w700,
@@ -204,39 +190,37 @@ class ChargePlate extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  '${sim.charge.value}',
+                  '${sim.energy.value}',
                   style: AppText.display(
                     16,
                     weight: FontWeight.w700,
-                    color: forcing ? Palette.gold : Palette.textDim,
+                    color: spent ? Palette.textFaint : Palette.textDim,
                   ),
                 ),
                 Text(
-                  ' / ${PrototypeSimulation.chargeCap}',
+                  ' / ${sim.energyCap}',
                   style: AppText.display(10.5, color: Palette.textFaint),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 4),
-          ChargeMeter(engine: game.chargeLoop, full: sim.chargeFull),
+          EnergyMeter(engine: game.energyLoop, full: sim.energyFull),
           const SizedBox(height: 4),
           Text(
             spent
-                ? 'форсаж · нема заряду'
-                : (forcing
-                      ? 'форсаж · ×2 темп'
-                      : 'форсаж · утримуй · +1/${Game.chargeInterval}'),
+                ? 'енергія відновлюється · '
+                      '+${sim.energyPerRegen}/${Game.energyInterval}'
+                : 'тап по породі — удар · '
+                      '+${sim.energyPerRegen}/${Game.energyInterval}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.right,
             style: AppText.body(
               8.5,
-              weight: forcing ? FontWeight.w800 : FontWeight.w600,
+              weight: FontWeight.w600,
               letterSpacing: 0.6,
-              color: spent
-                  ? Palette.textFaint
-                  : (forcing ? Palette.gold : Palette.tech),
+              color: spent ? Palette.textFaint : Palette.tech,
               shadows: true,
             ),
           ),
@@ -251,17 +235,17 @@ class ChargePlate extends StatelessWidget {
 /// It asks the charge engine how far the current interval has been served,
 /// once per frame, rather than running its own animation of the same length --
 /// so it cannot drift away from the moment the point actually lands.
-class ChargeMeter extends StatefulWidget {
-  const ChargeMeter({required this.engine, required this.full, super.key});
+class EnergyMeter extends StatefulWidget {
+  const EnergyMeter({required this.engine, required this.full, super.key});
 
   final TickEngine engine;
   final bool full;
 
   @override
-  State<ChargeMeter> createState() => ChargeMeterState();
+  State<EnergyMeter> createState() => EnergyMeterState();
 }
 
-class ChargeMeterState extends State<ChargeMeter>
+class EnergyMeterState extends State<EnergyMeter>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
   final ValueNotifier<double> _progress = ValueNotifier(0);
@@ -289,15 +273,15 @@ class ChargeMeterState extends State<ChargeMeter>
       child: SizedBox(
         height: 3,
         child: CustomPaint(
-          painter: ChargeMeterPainter(_progress, full: widget.full),
+          painter: EnergyMeterPainter(_progress, full: widget.full),
         ),
       ),
     );
   }
 }
 
-class ChargeMeterPainter extends CustomPainter {
-  ChargeMeterPainter(this.progress, {required this.full})
+class EnergyMeterPainter extends CustomPainter {
+  EnergyMeterPainter(this.progress, {required this.full})
     : super(repaint: progress);
 
   /// How far the current interval has been served, in `[0, 1]`.
@@ -331,7 +315,7 @@ class ChargeMeterPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(ChargeMeterPainter oldDelegate) =>
+  bool shouldRepaint(EnergyMeterPainter oldDelegate) =>
       oldDelegate.full != full;
 }
 
@@ -341,15 +325,9 @@ class ChargeMeterPainter extends CustomPainter {
 /// that is itself the gauge: the rig then reads as machinery whatever the
 /// charge happens to be, and an empty gauge does not make the drill vanish.
 class DrillPipe extends StatefulWidget {
-  const DrillPipe({
-    required this.charge,
-    required this.forcing,
-    this.phase = 0,
-    super.key,
-  });
+  const DrillPipe({required this.charge, this.phase = 0, super.key});
 
   final double charge;
-  final bool forcing;
 
   /// Where this drill's flutes start, so neighbours do not turn in lockstep.
   final double phase;
@@ -374,9 +352,7 @@ class DrillPipeState extends State<DrillPipe>
     final delta = clampFrameDelta(elapsed - _lastFrame);
     _lastFrame = elapsed;
     _flutes.value =
-        (_flutes.value +
-            delta.inMicroseconds / 1e6 / rigFlutePeriod(widget.forcing)) %
-        1.0;
+        (_flutes.value + delta.inMicroseconds / 1e6 / rigFlutePeriod) % 1.0;
   }
 
   @override
@@ -391,28 +367,20 @@ class DrillPipeState extends State<DrillPipe>
     return RepaintBoundary(
       child: CustomPaint(
         size: const Size(pipeWidth, stringLength),
-        painter: PipePainter(
-          flutes: _flutes,
-          charge: widget.charge,
-          forcing: widget.forcing,
-        ),
+        painter: PipePainter(flutes: _flutes, charge: widget.charge),
       ),
     );
   }
 }
 
-double rigFlutePeriod(bool forcing) => forcing ? 0.16 : 0.4;
+const double rigFlutePeriod = 0.4;
 
 class PipePainter extends CustomPainter {
-  PipePainter({
-    required this.flutes,
-    required this.charge,
-    required this.forcing,
-  }) : super(repaint: flutes);
+  PipePainter({required this.flutes, required this.charge})
+    : super(repaint: flutes);
 
   final ValueListenable<double> flutes;
   final double charge;
-  final bool forcing;
 
   static const double _fluteSpacing = 13;
   static const double _collarSpacing = 34;
@@ -480,8 +448,8 @@ class PipePainter extends CustomPainter {
       canvas.drawRect(
         core,
         Paint()
-          ..color = forcing ? const Color(0xFFFFF0C8) : Palette.gold
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, forcing ? 6.5 : 3.5),
+          ..color = Palette.gold
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5),
       );
       canvas.drawRect(
         core,
@@ -535,8 +503,7 @@ class PipePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(PipePainter oldDelegate) =>
-      oldDelegate.charge != charge || oldDelegate.forcing != forcing;
+  bool shouldRepaint(PipePainter oldDelegate) => oldDelegate.charge != charge;
 }
 
 /// The bit, cutting.
@@ -546,15 +513,9 @@ class PipePainter extends CustomPainter {
 /// lands. The heat is read from the engine rather than animated on a timer of
 /// its own, so the flare peaks exactly when the layer takes the damage.
 class DrillBit extends StatefulWidget {
-  const DrillBit({
-    required this.engine,
-    required this.forcing,
-    this.phase = 0,
-    super.key,
-  });
+  const DrillBit({required this.engine, this.phase = 0, super.key});
 
   final TickEngine engine;
-  final bool forcing;
 
   /// Where this bit's flutes start, matched to its own pipe.
   final double phase;
@@ -580,9 +541,7 @@ class DrillBitState extends State<DrillBit>
     final delta = clampFrameDelta(elapsed - _lastFrame);
     _lastFrame = elapsed;
     _flutes.value =
-        (_flutes.value +
-            delta.inMicroseconds / 1e6 / rigFlutePeriod(widget.forcing)) %
-        1.0;
+        (_flutes.value + delta.inMicroseconds / 1e6 / rigFlutePeriod) % 1.0;
     _bite.value = widget.engine.progress;
   }
 
@@ -727,24 +686,50 @@ class BitPainter extends CustomPainter {
   bool shouldRepaint(BitPainter oldDelegate) => false;
 }
 
-/// The rock face is the forcing handle.
+/// The rock face takes the blows.
 ///
-/// Holding anywhere on the borehole burns the charge, so the gesture is the
-/// whole scene rather than a target the player has to aim at. It draws
-/// nothing: what the press does is written under the charge gauge it spends.
-class ForcingGrip extends StatelessWidget {
-  const ForcingGrip({required this.game, super.key});
+/// A tap anywhere on the borehole is one strike; holding repeats them -- a
+/// courtesy to the finger, not a separate mechanic. It draws nothing: the
+/// result shows in the rock and on the energy plate.
+class StrikeZone extends StatefulWidget {
+  const StrikeZone({required this.game, super.key});
 
   final Game game;
+
+  @override
+  State<StrikeZone> createState() => StrikeZoneState();
+}
+
+class StrikeZoneState extends State<StrikeZone> {
+  Timer? _repeat;
+
+  static const Duration _repeatEvery = Duration(milliseconds: 160);
+
+  void _down() {
+    widget.game.strike();
+    _repeat?.cancel();
+    _repeat = Timer.periodic(_repeatEvery, (_) => widget.game.strike());
+  }
+
+  void _up() {
+    _repeat?.cancel();
+    _repeat = null;
+  }
+
+  @override
+  void dispose() {
+    _repeat?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
       child: Listener(
         behavior: HitTestBehavior.opaque,
-        onPointerDown: (_) => game.startForcing(),
-        onPointerUp: (_) => game.stopForcing(),
-        onPointerCancel: (_) => game.stopForcing(),
+        onPointerDown: (_) => _down(),
+        onPointerUp: (_) => _up(),
+        onPointerCancel: (_) => _up(),
         child: const SizedBox.expand(),
       ),
     );

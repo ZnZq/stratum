@@ -9,6 +9,7 @@ import 'navigation.dart';
 import 'notices.dart';
 import 'offline_window.dart';
 import 'save_menu.dart';
+import 'strikes_screen.dart';
 import 'shell_backdrop.dart';
 import 'upgrades_screen.dart';
 import 'tabler_icons.dart';
@@ -151,6 +152,9 @@ class _GameShellState extends State<GameShell> {
                                       GameScreen.upgrades => UpgradesScreen(
                                         game: _game,
                                       ),
+                                      GameScreen.strikes => StrikesScreen(
+                                        game: _game,
+                                      ),
                                       _ => _Placeholder(screen: screen),
                                     },
                                   ),
@@ -284,10 +288,9 @@ class _Island extends StatelessWidget {
         8,
         AppMetrics.navTotal + 4,
       ),
-      child: DecoratedBox(
+      child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(_radius),
-          border: Border.all(color: Palette.line),
           boxShadow: const [
             BoxShadow(
               color: Color(0x8C000000),
@@ -296,7 +299,13 @@ class _Island extends StatelessWidget {
             ),
           ],
         ),
-        // A hair inside the border, so the clip never eats it.
+        // The border rides in the foreground: an opaque screen fills the clip
+        // right to its edge, and a border painted underneath it -- as plain
+        // DecoratedBox does -- only ever showed on see-through placeholders.
+        foregroundDecoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(_radius),
+          border: Border.all(color: Palette.line),
+        ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(_radius - 1),
           child: child,
@@ -340,9 +349,9 @@ class _ResourceBar extends StatelessWidget {
               child: Row(
                 children: [
                   _Resource(
-                    icon: Ti.stack2,
+                    icon: Ti.grain,
                     colour: Palette.ore,
-                    value: '${sim.ore.value}',
+                    value: '${sim.regolith.value}',
                   ),
                   const SizedBox(width: 13),
                   _Resource(
@@ -494,7 +503,7 @@ class _BackgroundOverlay extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _DimStat(icon: Ti.stack2, value: '${sim.ore.value}'),
+                _DimStat(icon: Ti.grain, value: '${sim.regolith.value}'),
                 const SizedBox(width: 18),
                 _DimStat(icon: Ti.diamond, value: '${sim.crystals.value}'),
                 const SizedBox(width: 18),

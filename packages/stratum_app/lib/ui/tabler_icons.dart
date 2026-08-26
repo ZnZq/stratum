@@ -28,6 +28,11 @@ abstract final class Ti {
   static const IconData check = IconData(0xea5e, fontFamily: 'TablerIcons');
   static const IconData pick = IconData(0xfafc, fontFamily: 'TablerIcons');
   static const IconData moon = IconData(0xeaf8, fontFamily: 'TablerIcons');
+  static const IconData grain = IconData(0xee92, fontFamily: 'TablerIcons');
+  static const IconData handClick = IconData(0xef4f, fontFamily: 'TablerIcons');
+  static const IconData magnet = IconData(0xeae3, fontFamily: 'TablerIcons');
+  static const IconData circles = IconData(0xece5, fontFamily: 'TablerIcons');
+  static const IconData prism = IconData(0xfab1, fontFamily: 'TablerIcons');
   static const IconData playerPause = IconData(
     0xed45,
     fontFamily: 'TablerIcons',

@@ -15,10 +15,7 @@ import '../tokens.dart';
 ///
 /// Everything moves upward, because the rig is going down.
 class ShaftBackdrop extends StatefulWidget {
-  const ShaftBackdrop({required this.forcing, super.key});
-
-  /// Forcing doubles the pace, so the dust reacts to it too.
-  final bool forcing;
+  const ShaftBackdrop({super.key});
 
   @override
   State<ShaftBackdrop> createState() => _ShaftBackdropState();
@@ -38,7 +35,7 @@ class _ShaftBackdropState extends State<ShaftBackdrop>
   void _onFrame(Duration elapsed) {
     final delta = clampFrameDelta(elapsed - _lastFrame);
     _lastFrame = elapsed;
-    _time.value += delta.inMicroseconds / 1e6 * (widget.forcing ? 2.4 : 1);
+    _time.value += delta.inMicroseconds / 1e6;
   }
 
   Duration _lastFrame = Duration.zero;

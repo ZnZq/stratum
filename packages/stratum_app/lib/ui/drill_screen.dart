@@ -24,9 +24,9 @@ class DrillScreen extends StatelessWidget {
       color: Palette.scene,
       child: Stack(
         children: [
-          Positioned.fill(child: ShaftBackdrop(forcing: game.isForcing)),
+          const Positioned.fill(child: ShaftBackdrop()),
           Positioned.fill(child: Rock(game: game)),
-          ForcingGrip(game: game),
+          StrikeZone(game: game),
           Positioned.fill(child: DrillString(game: game)),
           Positioned.fill(child: FloatLayer(game: game)),
           Flash(

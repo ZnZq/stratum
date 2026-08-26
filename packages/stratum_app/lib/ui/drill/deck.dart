@@ -67,7 +67,7 @@ class DeckState extends State<Deck> {
                   const Spacer(),
                   Stat(
                     label: 'до пробиття',
-                    value: '${sim.cyclesToBreak.value} циклів',
+                    value: '${sim.hitsToBreak.value} ударів',
                     colour: Palette.textDim,
                     alignEnd: true,
                   ),
@@ -89,8 +89,8 @@ class DeckState extends State<Deck> {
                           Row(
                             children: [
                               Stat(
-                                label: 'руда / цикл',
-                                value: '${sim.orePerCycle.value}',
+                                label: 'реголіт / цикл',
+                                value: '${sim.regolithPerCycle.value}',
                                 colour: Palette.ore,
                               ),
                               const SizedBox(width: 16),

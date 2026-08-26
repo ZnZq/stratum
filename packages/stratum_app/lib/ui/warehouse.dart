@@ -154,7 +154,11 @@ class _Row extends StatelessWidget {
   /// Only the two that the drill produces have a rate worth quoting; the rest
   /// arrive on events, and their note already says which.
   String? get _income => switch (id) {
-    ResourceId.ore => '+${sim.orePerCycle.value} / цикл',
+    ResourceId.regolith => '+${sim.regolithPerCycle.value} / цикл',
+    ResourceId.cuprite || ResourceId.ferrite || ResourceId.silicite =>
+      sim.oreUnlocked(id)
+          ? '+${PrototypeSimulation.oreDropAt(sim.layer.value)} за успіх'
+          : 'глибше',
     ResourceId.crystals =>
       '${(sim.crystalChance * 100).round()}% · '
           '+${PrototypeSimulation.crystalDropAt(sim.layer.value)}',

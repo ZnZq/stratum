@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:stratum_core/stratum_core.dart';
 import 'package:test/test.dart';
+
+String _json(Object? value) => jsonEncode(value);
 
 PrototypeSimulation _played(int cycles) {
   final sim = PrototypeSimulation();
@@ -18,7 +22,7 @@ void main() {
 
       expect(restored.layer.value, sim.layer.value);
       expect(restored.drills.value, sim.drills.value);
-      expect('${restored.ore.value}', '${sim.ore.value}');
+      expect('${restored.regolith.value}', '${sim.regolith.value}');
       expect(
         '${restored.stock.amount(ResourceId.crystals)}',
         '${sim.stock.amount(ResourceId.crystals)}',
@@ -71,18 +75,83 @@ void main() {
 
       expect(sim.layer.value, 0);
       expect(sim.drills.value, 1);
-      expect(sim.charge.value, PrototypeSimulation.chargeCap);
-      expect(sim.stock.amount(ResourceId.ore).isZero, isTrue);
+      expect(sim.energy.value, PrototypeSimulation.energyCapBase);
+      expect(sim.stock.amount(ResourceId.regolith).isZero, isTrue);
     });
 
-    test('forcing is never restored: it is a held button', () {
-      final sim = _played(5);
-      sim.beginForcing();
-      expect(sim.forcing.value, isTrue);
+    test('a strike spends energy and lands the strike power', () {
+      final sim = PrototypeSimulation();
+      final hpBefore = sim.layerHp.value;
 
-      final restored = PrototypeSimulation()..readJson(sim.toJson());
+      final outcome = sim.strike();
 
-      expect(restored.forcing.value, isFalse);
+      expect(outcome.landed, isTrue);
+      expect(sim.energy.value, sim.energyCap - 1);
+      // The opening layer is softer than a base strike, so the blow breaks
+      // through and the leftover carries into the next layer.
+      expect(outcome.layersBroken, greaterThan(0));
+      expect(
+        sim.layerHp.value < sim.layerHpMax.value,
+        isTrue,
+        reason: 'the carried remainder lands on the newly exposed layer',
+      );
+      expect('$hpBefore', '${BigDouble.fromNum(5)}');
+    });
+
+    test('a strike mines the cycle yield scaled by its power share', () {
+      final sim = PrototypeSimulation();
+      final before = sim.regolith.value;
+      final expected =
+          sim.regolithPerCycle.value * (sim.strikePower / sim.power.value);
+
+      final outcome = sim.strike();
+
+      expect('${outcome.regolithGained}', '$expected');
+      expect(
+        sim.regolith.value >= before + expected,
+        isTrue,
+        reason:
+            'the strike yield lands in the store on top of any break '
+            'bonus the blow also earned',
+      );
+    });
+
+    test('a strike with no energy does nothing', () {
+      final sim = PrototypeSimulation();
+      while (sim.energy.value > 0) {
+        sim.strike();
+      }
+      final hpBefore = '${sim.layerHp.value}';
+
+      expect(sim.strike().landed, isFalse);
+      expect('${sim.layerHp.value}', hpBefore);
+    });
+
+    test('strike power floors at the base with no rig to lean on', () {
+      final sim = PrototypeSimulation();
+      // One starting drill: 35% of its output is under the floor.
+      expect(
+        '${sim.strikePower}',
+        '${BigDouble.fromNum(PrototypeSimulation.baseStrikePower)}',
+      );
+    });
+
+    test('breaking a layer by hand pays the break bonus', () {
+      final sim = PrototypeSimulation();
+      final before = sim.regolith.value;
+      var broken = 0;
+      while (broken == 0 && sim.energy.value > 0) {
+        broken += sim.strike().layersBroken;
+      }
+
+      expect(broken, greaterThan(0));
+      expect(
+        sim.regolith.value > before,
+        isTrue,
+        reason:
+            'broken rock is the reward for striking: the early loop is '
+            'break, collect, sell',
+      );
     });
   });
 
@@ -90,9 +159,9 @@ void main() {
     test('pays expected value at offline pace and leaves depth alone', () {
       final sim = _played(30);
       final layerBefore = sim.layer.value;
-      final oreBefore = sim.ore.value;
+      final oreBefore = sim.regolith.value;
       final expectedOre =
-          sim.orePerCycle.value *
+          sim.regolithPerCycle.value *
           BigDouble.fromNum(100) *
           BigDouble.fromNum(PrototypeSimulation.offlineEfficiency);
 
@@ -100,7 +169,7 @@ void main() {
 
       expect(gain.cycles, 100);
       expect('${gain.ore}', '$expectedOre');
-      expect('${sim.ore.value}', '${oreBefore + expectedOre}');
+      expect('${sim.regolith.value}', '${oreBefore + expectedOre}');
       expect(
         sim.layer.value,
         layerBefore,
@@ -126,11 +195,43 @@ void main() {
 
     test('zero or negative cycles pay nothing', () {
       final sim = _played(10);
-      final before = '${sim.ore.value}';
+      final before = '${sim.regolith.value}';
 
       expect(sim.claimOffline(cycles: 0).isEmpty, isTrue);
       expect(sim.claimOffline(cycles: -3).isEmpty, isTrue);
-      expect('${sim.ore.value}', before);
+      expect('${sim.regolith.value}', before);
+    });
+  });
+
+  group('the migration chain', () {
+    test('a v1 save with "ore" loads as regolith', () {
+      final codec = SaveCodec(
+        currentVersion: 2,
+        migrations: [
+          SaveMigration(
+            fromVersion: 1,
+            apply: (sections) {
+              final run = Map<String, Object?>.from(sections['run']! as Map);
+              final stock = Map<String, Object?>.from(run['stock']! as Map);
+              stock['regolith'] = stock.remove('ore');
+              run['stock'] = stock;
+              return {...sections, 'run': run};
+            },
+          ),
+        ],
+      );
+
+      final aged = _played(15);
+      final v1Run = Map<String, Object?>.from(aged.toJson());
+      final v1Stock = Map<String, Object?>.from(v1Run['stock']! as Map);
+      v1Stock['ore'] = v1Stock.remove('regolith');
+      v1Run['stock'] = v1Stock;
+      final wire = '{"version": 1, "sections": {"run": ${_json(v1Run)}}}';
+
+      final back = codec.decode(wire).sections['run']! as Map<String, Object?>;
+      final restored = PrototypeSimulation()..readJson(back);
+
+      expect('${restored.regolith.value}', '${aged.regolith.value}');
     });
   });
 
@@ -146,7 +247,7 @@ void main() {
       final restored = PrototypeSimulation()..readJson(back);
 
       expect(restored.layer.value, sim.layer.value);
-      expect('${restored.ore.value}', '${sim.ore.value}');
+      expect('${restored.regolith.value}', '${sim.regolith.value}');
     });
   });
 }

@@ -7,10 +7,19 @@ import 'reactive_graph.dart';
 /// walking the values, so a satellite material added later is one more entry
 /// instead of a new signal wired into every place that shows a total.
 enum ResourceId {
-  /// Bulk output of every cycle, and what the rig is bought with.
-  ore,
+  /// Ground rock: what a drill actually leaves behind. Every cycle, always.
+  regolith,
 
-  /// Rare mineral. Drops by chance, and the deeper the shaft the more of it
+  /// Copper-bearing ore. The first chance drop.
+  cuprite,
+
+  /// Iron-bearing ore, from the second stratum down.
+  ferrite,
+
+  /// Silicon-bearing mineral, from the third stratum down.
+  silicite,
+
+  /// The gem tier. Drops by chance, and the deeper the shaft the more of it
   /// comes up at once.
   crystals,
 

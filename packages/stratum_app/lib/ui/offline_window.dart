@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
+import 'resource_style.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
 
@@ -73,11 +74,18 @@ class OfflineWindow extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 _GainRow(
-                  icon: Ti.stack2,
+                  icon: Ti.grain,
                   colour: Palette.ore,
-                  label: 'Руда',
+                  label: 'Реголіт',
                   value: gain.ore,
                 ),
+                for (final entry in gain.ores.entries)
+                  _GainRow(
+                    icon: resourceStyles[entry.key]!.icon,
+                    colour: resourceStyles[entry.key]!.colour,
+                    label: resourceStyles[entry.key]!.label,
+                    value: entry.value,
+                  ),
                 _GainRow(
                   icon: Ti.diamond,
                   colour: Palette.crystal,

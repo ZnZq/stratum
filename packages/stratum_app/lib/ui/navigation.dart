@@ -36,8 +36,14 @@ enum NavSection {
 /// One list rather than a table per section: the order here is the order the
 /// bar shows, and a screen cannot end up in two places or in none.
 enum GameScreen {
-  drill(NavSection.extraction, 'Бур', Ti.arrowBarDown),
-  upgrades(NavSection.extraction, 'Покращення', Ti.adjustments),
+  /// The mine itself: dig by hand, watch the rigs work.
+  drill(NavSection.extraction, 'Шахта', Ti.arrowBarDown),
+
+  /// Every drill the player owns, and where they are upgraded.
+  upgrades(NavSection.extraction, 'Бури', Ti.adjustments),
+
+  /// The manual lane's levers: strike power, energy cap, regen.
+  strikes(NavSection.extraction, 'Удари', Ti.handClick),
   planets(NavSection.extraction, 'Планети', Ti.planet),
 
   craft(NavSection.production, 'Крафт', Ti.tools),
@@ -105,6 +111,10 @@ enum GameScreen {
 /// else.
 bool screenNeedsAttention(GameScreen screen, Game game) => switch (screen) {
   GameScreen.upgrades => game.sim.canBuyDrill || game.sim.canBuyPowerUpgrade,
+  GameScreen.strikes =>
+    game.sim.canBuyStrikeUpgrade ||
+        game.sim.canBuyEnergyCapUpgrade ||
+        game.sim.canBuyEnergyRegenUpgrade,
   _ => false,
 };
 

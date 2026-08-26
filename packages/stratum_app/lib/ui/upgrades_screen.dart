@@ -1,13 +1,17 @@
 import 'package:flutter/widgets.dart';
+import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
+import 'resource_style.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
 
-/// Where the rig is bought.
+/// Every drill the player owns, and where they are upgraded.
 ///
-/// Off the drill screen on purpose: the borehole is for watching, and a
-/// shopping list sitting under it competes with the thing it pays for.
+/// Off the mine screen on purpose: the borehole is for watching, and a
+/// shopping list sitting under it competes with the thing it pays for. One
+/// card per drill type; the locked cards below are the ladder the restart
+/// tree will open.
 class UpgradesScreen extends StatelessWidget {
   const UpgradesScreen({required this.game, super.key});
 
@@ -26,7 +30,7 @@ class UpgradesScreen extends StatelessWidget {
           _Total(game: game),
           const SizedBox(height: 14),
           Text(
-            'БУР',
+            'ВАШІ БУРИ',
             style: AppText.body(
               8.5,
               weight: FontWeight.w700,
@@ -35,31 +39,191 @@ class UpgradesScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          // Two levers that multiply into one number. Each row previews only
-          // its own lever; their product is the total above, so the same
-          // figure is not printed three times.
-          UpgradeRow(
-            label: 'бурів',
-            value: '${sim.drills.value}',
-            note: milestone == null ? null : '×2 на $milestone',
-            preview: '${sim.drills.value} → ${sim.drills.value + 1}',
-            cost: '${sim.drillCost.value}',
-            affordable: sim.canBuyDrill,
-            onBuy: game.buyDrill,
+          _DrillCard(
+            icon: Ti.grain,
+            colour: Palette.ore,
+            name: 'Реголітовий бур',
+            note: 'базовий · добуває реголіт щоциклу',
+            children: [
+              // Two levers that multiply into one number. Each row previews only
+              // its own lever; their product is the total above, so the same
+              // figure is not printed three times.
+              UpgradeRow(
+                label: 'бурів',
+                value: '${sim.drills.value}',
+                note: milestone == null ? null : '×2 на $milestone',
+                preview: '${sim.drills.value} → ${sim.drills.value + 1}',
+                cost: '${sim.drillCost.value}',
+                affordable: sim.canBuyDrill,
+                onBuy: game.buyDrill,
+              ),
+              const SizedBox(height: 9),
+              UpgradeRow(
+                label: 'потужність бура',
+                value: '${sim.perDrillPower.value}',
+                note: 'рівень ${sim.drillPowerLevel.value}',
+                preview:
+                    '${sim.perDrillPower.value} → '
+                    '${sim.perDrillPowerWith(sim.drillPowerLevel.value + 1)}',
+                cost: '${sim.powerUpgradeCost.value}',
+                affordable: sim.canBuyPowerUpgrade,
+                onBuy: game.buyPowerUpgrade,
+              ),
+            ],
           ),
-          const SizedBox(height: 9),
-          UpgradeRow(
-            label: 'потужність бура',
-            value: '${sim.perDrillPower.value}',
-            note: 'рівень ${sim.drillPowerLevel.value}',
-            preview:
-                '${sim.perDrillPower.value} → '
-                '${sim.perDrillPowerWith(sim.drillPowerLevel.value + 1)}',
-            cost: '${sim.powerUpgradeCost.value}',
-            affordable: sim.canBuyPowerUpgrade,
-            onBuy: game.buyPowerUpgrade,
+          const SizedBox(height: 14),
+          Text(
+            'МАЙБУТНІ БУРИ',
+            style: AppText.body(
+              8.5,
+              weight: FontWeight.w700,
+              color: Palette.textFaint,
+              letterSpacing: 1.8,
+            ),
           ),
+          const SizedBox(height: 8),
+          for (final locked in const [
+            (ResourceId.cuprite, 'Купритовий бур'),
+            (ResourceId.ferrite, 'Феритовий бур'),
+            (ResourceId.silicite, 'Силіцитовий бур'),
+            (ResourceId.crystals, 'Кристалічний бур'),
+          ])
+            _LockedDrill(id: locked.$1, name: locked.$2),
         ],
+      ),
+    );
+  }
+}
+
+/// One owned drill type: its face, and the levers that grow it.
+class _DrillCard extends StatelessWidget {
+  const _DrillCard({
+    required this.icon,
+    required this.colour,
+    required this.name,
+    required this.note,
+    required this.children,
+  });
+
+  final IconData icon;
+  final Color colour;
+  final String name;
+  final String note;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+      decoration: BoxDecoration(
+        color: Palette.well,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Palette.lineBar),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Palette.bar,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: Palette.line),
+                ),
+                child: Icon(icon, size: 15, color: colour),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      style: AppText.body(
+                        12,
+                        weight: FontWeight.w700,
+                        color: Palette.text,
+                      ),
+                    ),
+                    Text(
+                      note,
+                      style: AppText.body(9.5, color: Palette.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+/// A drill the restart tree has not opened yet.
+class _LockedDrill extends StatelessWidget {
+  const _LockedDrill({required this.id, required this.name});
+
+  final ResourceId id;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = resourceStyles[id]!;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: Palette.well,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Palette.lineBar),
+      ),
+      child: Opacity(
+        opacity: 0.5,
+        child: Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Palette.bar,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: Palette.lineBar),
+              ),
+              child: Icon(style.icon, size: 15, color: style.colour),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    name,
+                    style: AppText.body(
+                      12,
+                      weight: FontWeight.w700,
+                      color: Palette.textDim,
+                    ),
+                  ),
+                  Text(
+                    'добуватиме ${style.label.toLowerCase()} · '
+                    'відкривається деревом перезапуску',
+                    style: AppText.body(9.5, color: Palette.textFaint),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
