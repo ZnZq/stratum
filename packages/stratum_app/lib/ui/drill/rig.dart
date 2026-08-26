@@ -688,8 +688,9 @@ class BitPainter extends CustomPainter {
 
 /// The rock face takes the blows.
 ///
-/// A tap anywhere on the borehole is one strike; holding repeats them -- a
-/// courtesy to the finger, not a separate mechanic. It draws nothing: the
+/// A tap anywhere on the borehole is one strike; holding repeats them, and
+/// the repeats wind up -- a held finger digs faster the longer it stays down,
+/// so committing to a dig feels like leaning into it. It draws nothing: the
 /// result shows in the rock and on the energy plate.
 class StrikeZone extends StatefulWidget {
   const StrikeZone({required this.game, super.key});
@@ -703,17 +704,36 @@ class StrikeZone extends StatefulWidget {
 class StrikeZoneState extends State<StrikeZone> {
   Timer? _repeat;
 
-  static const Duration _repeatEvery = Duration(milliseconds: 160);
+  /// The wind-up: the first repeat lands after [_startMs], every following
+  /// one comes [_stepMs] sooner, down to [_floorMs]. Release resets it.
+  static const int _startMs = 200;
+  static const int _floorMs = 100;
+  static const int _stepMs = 10;
+
+  int _intervalMs = _startMs;
 
   void _down() {
     widget.game.strike();
+    _intervalMs = _startMs;
+    _schedule();
+  }
+
+  void _schedule() {
     _repeat?.cancel();
-    _repeat = Timer.periodic(_repeatEvery, (_) => widget.game.strike());
+    _repeat = Timer(Duration(milliseconds: _intervalMs), () {
+      widget.game.strike();
+      if (_intervalMs > _floorMs) {
+        _intervalMs -= _stepMs;
+        if (_intervalMs < _floorMs) _intervalMs = _floorMs;
+      }
+      _schedule();
+    });
   }
 
   void _up() {
     _repeat?.cancel();
     _repeat = null;
+    _intervalMs = _startMs;
   }
 
   @override

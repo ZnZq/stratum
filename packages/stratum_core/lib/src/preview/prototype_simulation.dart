@@ -10,6 +10,7 @@ class StrikeOutcome {
     required this.layersBroken,
     required this.thickLayersBroken,
     required this.regolithGained,
+    required this.oresGained,
   });
 
   static const StrikeOutcome none = StrikeOutcome(
@@ -17,12 +18,16 @@ class StrikeOutcome {
     layersBroken: 0,
     thickLayersBroken: 0,
     regolithGained: BigDouble.zero,
+    oresGained: {},
   );
 
   final int spent;
   final int layersBroken;
   final int thickLayersBroken;
   final BigDouble regolithGained;
+
+  /// The chance ores this blow happened to shake loose.
+  final Map<ResourceId, BigDouble> oresGained;
 
   bool get landed => spent > 0;
 }
@@ -459,13 +464,16 @@ class PrototypeSimulation {
     stock.add(ResourceId.regolith, regolith);
 
     final fraction = share.toDouble();
+    final ores = <ResourceId, BigDouble>{};
     for (final row in oreTable) {
       if (layer.value < row.unlockAt) continue;
       final chance = row.chance * fraction;
       if (random
           .stream('strike.${row.stream}')
           .chance(chance > 1 ? 1 : chance)) {
-        stock.add(row.id, oreDropAt(layer.value));
+        final drop = oreDropAt(layer.value);
+        stock.add(row.id, drop);
+        ores[row.id] = drop;
       }
     }
 
@@ -475,6 +483,7 @@ class PrototypeSimulation {
       layersBroken: result.broken,
       thickLayersBroken: result.thickBroken,
       regolithGained: regolith,
+      oresGained: ores,
     );
   });
 

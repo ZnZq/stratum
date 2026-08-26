@@ -7,17 +7,36 @@ import 'package:stratum_core/stratum_core.dart';
 import 'save_store.dart';
 
 /// A transient report: something happened, said once, gone in seconds.
-enum NoticeKind { success, error, info }
+enum NoticeKind { success, error, info, gain }
 
 class Notice {
-  Notice({required this.id, required this.text, required this.kind});
+  Notice({
+    required this.id,
+    required this.text,
+    required this.kind,
+    this.key,
+    this.resource,
+  });
 
   final int id;
-  final String text;
+
+  /// Mutable on purpose: a keyed notice is updated in place while its kin
+  /// keep arriving, instead of stacking a card per event.
+  String text;
+
   final NoticeKind kind;
+
+  /// Coalescing identity: a new report with the same key refreshes this card
+  /// and its lifetime rather than adding another.
+  final String? key;
+
+  /// For [NoticeKind.gain]: which resource the card is about.
+  final ResourceId? resource;
 
   /// Set shortly before removal, so the card can fade instead of popping.
   bool leaving = false;
+
+  Timer? life;
 }
 
 /// A number that flew off a cycle, for the scene to animate and forget.
@@ -55,6 +74,16 @@ class Game extends ChangeNotifier {
       scheduler: TickScheduler(rate: energyRate),
       onBatch: _onEnergyBatch,
     );
+
+    // Every income, whatever produced it -- a tick, a strike, a break
+    // bonus, a thick layer, a mechanic not written yet -- lands in the
+    // stockpile, so the stockpile is the one honest place to report income
+    // from. Signals fire once per batch, so a cycle's many additions arrive
+    // as one delta.
+    for (final id in ResourceId.values) {
+      _seenStock[id] = sim.stock.amount(id);
+      _stockWatches.add(sim.stock.signal(id).listen(() => _onStockChange(id)));
+    }
 
     // The timer is the floor, not the plan: what actually protects a run is
     // saving the moment the player stops looking at it. Desktop windows close
@@ -261,6 +290,7 @@ class Game extends ChangeNotifier {
     }
     if (held == null) return false;
 
+    _muteGains = true;
     if (!_apply(held.contents)) {
       // The live file is unreadable. One generation back is kept exactly for
       // this, so try it before telling the player the slot is gone.
@@ -269,6 +299,7 @@ class Game extends ChangeNotifier {
         debugPrint('save in ${slot.key} could not be read');
         await store.quarantine(slot);
         _announce('сейв не читається — відкладено', NoticeKind.error);
+        _muteGains = false;
         return false;
       }
       debugPrint('save in ${slot.key} was read from its backup');
@@ -281,6 +312,7 @@ class Game extends ChangeNotifier {
         NoticeKind.success,
       );
     }
+    _muteGains = false;
     _syncEnergyLoop();
     notifyListeners();
     return true;
@@ -431,7 +463,9 @@ class Game extends ChangeNotifier {
   void _settleAbsence(Duration away) {
     if (away <= Duration.zero) return;
     final cycles = away.inMicroseconds ~/ baseRate.interval.inMicroseconds;
+    _muteGains = true;
     final gain = sim.claimOffline(cycles: cycles);
+    _muteGains = false;
     if (gain.isEmpty) return;
     if (away >= offlineNoticeThreshold) {
       _offlineArrival = (gain: gain, away: away);
@@ -460,23 +494,96 @@ class Game extends ChangeNotifier {
   static const Duration _noticeLife = Duration(milliseconds: 2800);
   static const Duration _noticeFade = Duration(milliseconds: 300);
 
-  void _announce(String text, NoticeKind kind) {
+  void _announce(
+    String text,
+    NoticeKind kind, {
+    String? key,
+    ResourceId? resource,
+  }) {
     if (_disposed) return;
-    final notice = Notice(id: _nextNoticeId++, text: text, kind: kind);
+
+    if (key != null) {
+      for (final live in notices) {
+        if (live.key == key && !live.leaving) {
+          live.text = text;
+          _armLife(live);
+          notifyListeners();
+          return;
+        }
+      }
+    }
+
+    final notice = Notice(
+      id: _nextNoticeId++,
+      text: text,
+      kind: kind,
+      key: key,
+      resource: resource,
+    );
     notices.add(notice);
     // A burst degrades to dropping the oldest card, never to a tower.
-    if (notices.length > 4) notices.removeAt(0);
+    if (notices.length > 6) _drop(notices.first);
+    _armLife(notice);
     notifyListeners();
-    Timer(_noticeLife, () {
+  }
+
+  void _armLife(Notice notice) {
+    notice.life?.cancel();
+    notice.life = Timer(_noticeLife, () {
       if (_disposed || !notices.contains(notice)) return;
       notice.leaving = true;
       notifyListeners();
-      Timer(_noticeFade, () {
+      notice.life = Timer(_noticeFade, () {
         if (_disposed) return;
-        notices.remove(notice);
+        _drop(notice);
         notifyListeners();
       });
     });
+  }
+
+  void _drop(Notice notice) {
+    notice.life?.cancel();
+    notices.remove(notice);
+    if (notice.key != null) _gainStreak.remove(notice.key);
+  }
+
+  final Map<ResourceId, BigDouble> _seenStock = {};
+  final List<Unsubscribe> _stockWatches = [];
+
+  /// Announcements go quiet while a save is being applied or an absence is
+  /// being settled: those deltas are not mining, and the offline window
+  /// already reports the settlement itself.
+  bool _muteGains = false;
+
+  void _onStockChange(ResourceId id) {
+    final now = sim.stock.amount(id);
+    final before = _seenStock[id] ?? BigDouble.zero;
+    _seenStock[id] = now;
+    if (_muteGains || _hidden || _background || !_ready) return;
+    final delta = now - before;
+    if (!(delta > BigDouble.zero)) return;
+    _announceGain(id, delta);
+  }
+
+  /// What each live gain card has accumulated, keyed like its notice.
+  ///
+  /// The card shows the run of the current digging spree, not one blow: while
+  /// the player holds to dig, the same card keeps counting up and quoting the
+  /// stockpile total beside it.
+  final Map<String, BigDouble> _gainStreak = {};
+
+  void _announceGain(ResourceId id, BigDouble amount) {
+    if (amount.isZero) return;
+    final key = 'gain.${id.name}';
+    final streak = (_gainStreak[key] ?? BigDouble.zero) + amount;
+    _gainStreak[key] = streak;
+    _announce(
+      '+${streak.toString(NumberStyle.compact)}'
+      '\n${sim.stock.amount(id).toString(NumberStyle.compact)}',
+      NoticeKind.gain,
+      key: key,
+      resource: id,
+    );
   }
 
   bool _disposed = false;
@@ -542,34 +649,17 @@ class Game extends ChangeNotifier {
     // No frames, no audience: recording effects while hidden or in background
     // mode only builds the backlog that would all play at once on return.
     if (_hidden || _background) return;
-    final gained = outcome.regolithGained.toString(NumberStyle.compact);
-    _addFloat(
-      text: outcome.critical ? '+$gained · КРИТ' : '+$gained',
-      color: outcome.critical ? 0xFFFFD782 : 0xFFC9CCD6,
-      left: 26 + (outcome.layersBroken * 17 % 120).toDouble(),
-      top: 92 + (outcome.quantoniumGained * 11 % 30).toDouble(),
-      size: outcome.critical ? 27 : 16,
-    );
 
+    // Income reporting belongs to the stockpile watcher and its cards; the
+    // floats keep only the drama.
     if (outcome.critical) {
       criticalFlashes.value = criticalFlashes.value + 1;
-    }
-    if (!outcome.crystalsGained.isZero) {
       _addFloat(
-        text: '+${outcome.crystalsGained.toString(NumberStyle.compact)}',
-        color: 0xFF9FD8FF,
-        left: 44,
-        top: 138,
-        size: 15,
-      );
-    }
-    if (outcome.quantoniumGained > 0) {
-      _addFloat(
-        text: '+${outcome.quantoniumGained} КВ',
-        color: 0xFFED93B1,
-        left: 240,
-        top: 118,
-        size: 15,
+        text: 'КРИТ ×${sim.criticalMultiplier.round()}',
+        color: 0xFFFFD782,
+        left: 26 + (outcome.layersBroken * 17 % 120).toDouble(),
+        top: 92 + (outcome.quantoniumGained * 11 % 30).toDouble(),
+        size: 24,
       );
     }
     if (outcome.thickLayersBroken > 0) {
@@ -632,13 +722,10 @@ class Game extends ChangeNotifier {
       breakFlashes.value = breakFlashes.value + 1;
     }
     if (!_hidden && !_background) {
-      _addFloat(
-        text: '+${outcome.regolithGained.toString(NumberStyle.compact)}',
-        color: 0xFFB8C4D4,
-        left: 120 + (hitShakes.value * 29 % 130).toDouble(),
-        top: 150 + (hitShakes.value * 13 % 40).toDouble(),
-        size: 12,
-      );
+      _announceGain(ResourceId.regolith, outcome.regolithGained);
+      for (final entry in outcome.oresGained.entries) {
+        _announceGain(entry.key, entry.value);
+      }
     }
     _syncEnergyLoop();
     notifyListeners();
@@ -673,6 +760,12 @@ class Game extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    for (final unsubscribe in _stockWatches) {
+      unsubscribe();
+    }
+    for (final notice in notices) {
+      notice.life?.cancel();
+    }
     _played.stop();
     _autosave?.cancel();
     _lifecycle.dispose();

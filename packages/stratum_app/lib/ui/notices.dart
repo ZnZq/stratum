@@ -1,11 +1,13 @@
 import 'package:flutter/widgets.dart';
 
 import '../game.dart';
+import 'resource_style.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
 
-/// Transient reports -- a save that landed, a load that failed -- stacked
-/// under the resource strip and gone in seconds.
+/// Transient reports -- resources coming in, a save that landed, a load that
+/// failed -- flush against the left edge, vertically centred, gone seconds
+/// after their last update.
 ///
 /// Never interactive: the layer ignores pointers, so a card can overlap a
 /// control without stealing a tap from it.
@@ -17,15 +19,19 @@ class NoticeLayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      top: AppMetrics.resourceBar + 6,
-      right: 10,
+      left: 0,
+      top: AppMetrics.resourceBar,
+      bottom: AppMetrics.navTotal,
       child: IgnorePointer(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            for (final notice in game.notices)
-              _NoticeCard(key: ValueKey(notice.id), notice: notice),
-          ],
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final notice in game.notices)
+                _NoticeCard(key: ValueKey(notice.id), notice: notice),
+            ],
+          ),
         ),
       ),
     );
@@ -37,11 +43,17 @@ class _NoticeCard extends StatelessWidget {
 
   final Notice notice;
 
-  (IconData, Color) get _face => switch (notice.kind) {
-    NoticeKind.success => (Ti.check, Palette.tech),
-    NoticeKind.error => (Ti.alertTriangle, Palette.quantonium),
-    NoticeKind.info => (Ti.deviceFloppy, Palette.textMuted),
-  };
+  (IconData, Color) get _face {
+    if (notice.kind == NoticeKind.gain) {
+      final style = resourceStyles[notice.resource]!;
+      return (style.icon, style.colour);
+    }
+    return switch (notice.kind) {
+      NoticeKind.success => (Ti.check, Palette.tech),
+      NoticeKind.error => (Ti.alertTriangle, Palette.quantonium),
+      _ => (Ti.deviceFloppy, Palette.textMuted),
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,36 +63,74 @@ class _NoticeCard extends StatelessWidget {
       duration: const Duration(milliseconds: 300),
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0, end: 1),
-        duration: const Duration(milliseconds: 220),
+        duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
         builder: (context, t, child) => Transform.translate(
-          offset: Offset((1 - t) * 46, 0),
+          offset: Offset((t - 1) * 34, 0),
           child: Opacity(opacity: t, child: child),
         ),
+        // Flush with the edge it slides out of: square on the left, rounded
+        // where it meets the scene.
         child: Container(
-          margin: const EdgeInsets.only(bottom: 6),
-          padding: const EdgeInsets.fromLTRB(10, 7, 12, 7),
+          margin: const EdgeInsets.only(bottom: 4),
+          padding: const EdgeInsets.fromLTRB(7, 3, 9, 3),
           decoration: BoxDecoration(
             color: Palette.bar,
-            borderRadius: BorderRadius.circular(9),
-            border: Border.all(color: colour.withValues(alpha: 0.45)),
+            borderRadius: const BorderRadius.only(
+              topRight: Radius.circular(8),
+              bottomRight: Radius.circular(8),
+            ),
+            border: Border(
+              top: BorderSide(color: colour.withValues(alpha: 0.4)),
+              right: BorderSide(color: colour.withValues(alpha: 0.4)),
+              bottom: BorderSide(color: colour.withValues(alpha: 0.4)),
+            ),
             boxShadow: const [
-              BoxShadow(color: Color(0x66000000), blurRadius: 12),
+              BoxShadow(color: Color(0x59000000), blurRadius: 8),
             ],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 13, color: colour),
-              const SizedBox(width: 7),
-              Text(
-                notice.text,
-                style: AppText.body(
-                  10.5,
-                  weight: FontWeight.w600,
-                  color: Palette.textDim,
+              Icon(icon, size: 11, color: colour),
+              const SizedBox(width: 6),
+              if (notice.text.contains('\n'))
+                // A gain card: the streak loud, the stockpile total under it
+                // in a smaller, quieter line. Tight line heights keep the two
+                // rows barely taller than one.
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      notice.text.split('\n').first,
+                      style: AppText.display(
+                        10,
+                        weight: FontWeight.w700,
+                        color: colour,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      notice.text.split('\n').last,
+                      style: AppText.display(
+                        7,
+                        color: Palette.textMuted,
+                        height: 1,
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Text(
+                  notice.text,
+                  style: AppText.display(
+                    10.5,
+                    weight: FontWeight.w600,
+                    color: Palette.textDim,
+                  ),
                 ),
-              ),
             ],
           ),
         ),
