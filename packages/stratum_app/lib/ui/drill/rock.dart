@@ -516,59 +516,44 @@ class CrackPainter extends CustomPainter {
 
     final cracks = <({List<Offset> points, double width})>[];
 
-    // Seven generations of fracture: the first crosses the layer, every next
-    // one grows out of the previous generation's own vertices, shorter and
-    // finer each time. Revealed in that order by damage, the layer splits,
-    // then the pieces split, then THEIR pieces -- crumbling to gravel by the
-    // end rather than collecting a few long scars.
-    const generations = 7;
-    var parents = <List<Offset>>[];
-    for (var gen = 0; gen < generations; gen++) {
-      final width = 1.7 * math.pow(0.83, gen).toDouble();
-      final step = size.width * 0.032 * math.pow(0.78, gen).toDouble();
-      final segments = gen == 0 ? 5 : (gen < 3 ? 3 : 2);
-      final children = <List<Offset>>[];
+    // Seven waves over a jittered grid. The grid keeps every wave spread
+    // evenly across the whole face -- no corner shatters while another sits
+    // untouched -- and each wave lays finer, shorter cracks than the last.
+    // Within a wave the cells come in a shuffled order, so a part-broken
+    // layer is evenly peppered rather than filling like a progress bar; by
+    // the last wave the face is crazed everywhere.
+    const waves = 7;
+    final cols = math.max(4, (size.width / 52).round());
+    final rows = math.max(2, (size.height / 20).round());
+    final cellWidth = size.width / cols;
+    final cellHeight = size.height / rows;
+    final cellCount = cols * rows;
 
-      if (gen == 0) {
-        final primaries = 4 + (seed.next() * 2).floor();
-        for (var i = 0; i < primaries; i++) {
-          final from = Offset(
-            (0.05 + seed.next() * 0.9) * size.width,
-            (0.1 + seed.next() * 0.7) * size.height,
-          );
-          final points = walk(
+    for (var wave = 0; wave < waves && cracks.length < 84; wave++) {
+      final width = 1.7 * math.pow(0.85, wave).toDouble();
+      final step = size.width * 0.030 * math.pow(0.8, wave).toDouble();
+      final segments = wave < 2 ? 4 : (wave < 5 ? 3 : 2);
+
+      final keys = List<double>.generate(cellCount, (_) => seed.next());
+      final order = List<int>.generate(cellCount, (i) => i)
+        ..sort((a, b) => keys[a].compareTo(keys[b]));
+
+      for (final cell in order) {
+        if (cracks.length >= 84) break;
+        final from = Offset(
+          (cell % cols + 0.15 + seed.next() * 0.7) * cellWidth,
+          (cell ~/ cols + 0.15 + seed.next() * 0.7) * cellHeight,
+        );
+        cracks.add((
+          points: walk(
             from,
-            (seed.next() - 0.5) * 2.6,
+            seed.next() * math.pi * 2,
             segments,
             step * (0.8 + seed.next() * 0.5),
-          );
-          children.add(points);
-          cracks.add((points: points, width: width));
-        }
-      } else {
-        // Later generations sprout more sparsely, so the count grows but
-        // never explodes: the cap keeps the whole network paintable.
-        final sprout = gen < 3 ? 0.95 : 0.7;
-        for (final parent in parents) {
-          if (cracks.length >= 70) break;
-          if (seed.next() > sprout) continue;
-          final buds = gen < 3 ? 1 + (seed.next() * 1.8).floor() : 1;
-          for (var b = 0; b < buds; b++) {
-            final at = parent[1 + (seed.next() * (parent.length - 1)).floor()];
-            final points = walk(
-              at,
-              seed.next() * math.pi * 2,
-              segments,
-              step * (0.8 + seed.next() * 0.5),
-            );
-            children.add(points);
-            cracks.add((points: points, width: width));
-          }
-        }
+          ),
+          width: width,
+        ));
       }
-
-      if (children.isEmpty) break;
-      parents = children;
     }
 
     final split = Paint()
