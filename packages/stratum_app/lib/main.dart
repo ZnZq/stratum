@@ -1,23 +1,29 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:stratum_core/stratum_core.dart';
+
+import 'ui/game_shell.dart';
+import 'ui/tokens.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Every number in the interface goes through this unless a widget asks for
+  // something else, so the suffix table is set once here.
+  NumberStyle.global = NumberStyle.compact;
+
   runApp(const StratumApp());
 }
 
-/// Тимчасова заглушка. Екран Бура (сцена страт, тік-пульс, форсаж) з'явиться
-/// після того, як `stratum_core` отримає тік-рушій — див. план порту в CLAUDE.md.
 class StratumApp extends StatelessWidget {
   const StratumApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return WidgetsApp(
       title: 'STRATUM',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(useMaterial3: true),
-      home: const Scaffold(
-        body: Center(child: Text('STRATUM', style: TextStyle(letterSpacing: 6))),
-      ),
+      color: Palette.page,
+      builder: (context, _) => const GameShell(),
+      textStyle: AppText.body(14),
     );
   }
 }
