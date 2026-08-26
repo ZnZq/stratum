@@ -39,11 +39,11 @@ enum GameScreen {
   /// The mine itself: dig by hand, watch the rigs work.
   drill(NavSection.extraction, 'Шахта', Ti.arrowBarDown),
 
-  /// Every drill the player owns, and where they are upgraded.
-  upgrades(NavSection.extraction, 'Бури', Ti.adjustments),
-
   /// The manual lane's levers: strike power, energy cap, regen.
   strikes(NavSection.extraction, 'Удари', Ti.handClick),
+
+  /// Every drill the player owns, and where they are upgraded.
+  upgrades(NavSection.extraction, 'Бури', Ti.adjustments),
   planets(NavSection.extraction, 'Планети', Ti.planet),
 
   craft(NavSection.production, 'Крафт', Ti.tools),

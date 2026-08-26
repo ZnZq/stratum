@@ -68,6 +68,12 @@ class _GameShellState extends State<GameShell> {
       }
       _screen = _lastIn[section] ?? section.landing;
     });
+    _syncGainAudience();
+  }
+
+  /// Income cards belong to the mine; any other screen mutes them.
+  void _syncGainAudience() {
+    _game.setGainsVisible(_screen == GameScreen.drill);
   }
 
   void _pickScreen(GameScreen screen) {
@@ -80,6 +86,7 @@ class _GameShellState extends State<GameShell> {
       _screen = screen;
       _lastIn[screen.section] = screen;
     });
+    _syncGainAudience();
   }
 
   void _openOverlay(GameScreen screen) {

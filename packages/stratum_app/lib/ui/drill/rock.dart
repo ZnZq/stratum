@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../../game.dart';
+import '../resource_style.dart';
 import '../tokens.dart';
 import 'metrics.dart';
 
@@ -193,7 +194,7 @@ class LayerTile extends StatelessWidget {
             ),
             if (isCurrent)
               Positioned.fill(
-                child: CustomPaint(painter: CrackPainter(damage)),
+                child: CustomPaint(painter: CrackPainter(damage, layer: layer)),
               ),
             // The depth rail: a tick at every metre, a longer one with a
             // reading every fifth. An instrument scale rather than a caption
@@ -336,6 +337,88 @@ class StonePainter extends CustomPainter {
       canvas.drawPath(path, seam);
     }
 
+    // The ore that layer actually carries, as coloured specks: each
+    // obtainable resource seeds flecks in proportion to its drop chance, so
+    // a glance at the rock says what digging here pays before the loot table
+    // is ever opened.
+    void stones(
+      Color colour, {
+      required double radius,
+      required double saturation,
+      required int count,
+    }) {
+      final fill = Paint()..color = colour.withValues(alpha: saturation);
+      final rim = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8
+        ..color = const Color(0x40000000);
+      final glint = Paint()
+        ..color = Color.fromRGBO(255, 255, 255, 0.35 * saturation);
+
+      final inset = radius + 3;
+      for (var i = 0; i < count; i++) {
+        final centre = Offset(
+          inset + noise.next() * (size.width - inset * 2),
+          inset + noise.next() * (size.height - inset * 2),
+        );
+
+        // The same irregular-polygon cut as the barren clasts, so the ore
+        // stones look embedded in the rock rather than stickered onto it.
+        final path = Path();
+        const sides = 5;
+        for (var v = 0; v < sides; v++) {
+          final angle = v / sides * math.pi * 2 + noise.next() * 0.7;
+          final reach = radius * (0.6 + noise.next() * 0.5);
+          final point =
+              centre +
+              Offset(math.cos(angle) * reach, math.sin(angle) * reach * 0.7);
+          if (v == 0) {
+            path.moveTo(point.dx, point.dy);
+          } else {
+            path.lineTo(point.dx, point.dy);
+          }
+        }
+        path.close();
+
+        canvas.drawPath(path, fill);
+        canvas.drawPath(path, rim);
+        canvas.drawCircle(
+          centre + Offset(-radius * 0.25, -radius * 0.3),
+          radius * 0.22,
+          glint,
+        );
+      }
+    }
+
+    if (thick) {
+      // A thick layer's break pays every resource, guaranteed and tripled,
+      // so its stones ignore the odds: each resource sits in it as a few
+      // large rich pieces. A few -- the promise reads from a handful, and a
+      // tile solid with stones would just be noise.
+      // Per resource, and denser than any ordinary layer's best odds: the
+      // ceiling of the chance-driven look is ~6 stones, so the guaranteed
+      // triple payout starts above it and reads unmistakably richer.
+      final count = (size.width * size.height / 5000).round().clamp(7, 14);
+      for (final (colour, _) in _speckTable(layer)) {
+        stones(colour, radius: 4.2, saturation: 0.85, count: count);
+      }
+    } else {
+      // Richer odds read as richer rock: a likelier resource sits in the
+      // layer as bigger, brighter and more numerous stones, a long shot as
+      // a few faint pebbles.
+      for (final (colour, chance) in _speckTable(layer)) {
+        stones(
+          colour,
+          radius: 2.0 + chance * 6.5,
+          saturation: (0.35 + chance * 1.2).clamp(0.0, 0.9).toDouble(),
+          count: (size.width * size.height / 2000 * chance * 2.2).round().clamp(
+            1,
+            40,
+          ),
+        );
+      }
+    }
+
     // Grain.
     final light = Paint()..color = const Color(0x22FFFFFF);
     final dark = Paint()..color = const Color(0x26000000);
@@ -360,6 +443,23 @@ class StonePainter extends CustomPainter {
     }
   }
 
+  /// Which resources speck this layer, and how thickly.
+  ///
+  /// Chances come straight from the loot table, so the rock never advertises
+  /// odds the strike would not honour.
+  static List<(Color, double)> _speckTable(int layer) => [
+    for (final row in PrototypeSimulation.oreTable)
+      if (layer >= row.unlockAt) (resourceStyles[row.id]!.colour, row.chance),
+    (
+      resourceStyles[ResourceId.crystals]!.colour,
+      PrototypeSimulation.crystalChanceAt(layer),
+    ),
+    (
+      resourceStyles[ResourceId.quantonium]!.colour,
+      PrototypeSimulation.strikeQuantoniumChance,
+    ),
+  ];
+
   @override
   bool shouldRepaint(StonePainter oldDelegate) =>
       oldDelegate.layer != layer || oldDelegate.thick != thick;
@@ -382,60 +482,120 @@ class Noise {
 /// Everything is a fraction: position of the layer, length of its width. The
 /// prototype stated these in pixels against a 96px layer, which stopped working
 /// the moment layers got thinner -- a rotated 70px line simply left the tile.
-const List<({double x, double y, double turn, double length})> cracks = [
-  (x: 0.16, y: 0.20, turn: 62, length: 0.133),
-  (x: 0.52, y: 0.44, turn: -34, length: 0.169),
-  (x: 0.30, y: 0.64, turn: 10, length: 0.144),
-  (x: 0.68, y: 0.14, turn: 78, length: 0.113),
-  (x: 0.08, y: 0.46, turn: -64, length: 0.123),
-  (x: 0.44, y: 0.08, turn: 24, length: 0.179),
-  (x: 0.78, y: 0.56, turn: -12, length: 0.108),
-];
 
 class CrackPainter extends CustomPainter {
-  const CrackPainter(this.damage);
+  const CrackPainter(this.damage, {required this.layer});
 
   final double damage;
 
+  /// Seeds this layer's own fracture pattern: every metre breaks its own way
+  /// instead of replaying one memorised set of cracks.
+  final int layer;
+
   @override
   void paint(Canvas canvas, Size size) {
-    // A crack wanders and forks; a straight line reads as a scratch. The walk
-    // is squashed vertically because a layer is far wider than it is tall, and
-    // clipped rather than clamped so a fissure ends at the layer edge instead
-    // of being pushed back inside it.
     canvas.clipRect(Offset.zero & size);
+
+    // A fracture NETWORK, not a handful of lines: a few long primaries cross
+    // the layer first, branches split the pieces they made, and short twigs
+    // crumble the pieces further. Revealed in that order by damage, the layer
+    // visibly falls apart into fragments rather than just collecting scars.
+    final seed = Noise(layer * 977 + 41);
+
+    List<Offset> walk(Offset from, double angle, int segments, double step) {
+      final points = [from];
+      var at = from;
+      var heading = angle;
+      for (var i = 0; i < segments; i++) {
+        heading += (seed.next() - 0.5) * 1.2;
+        at += Offset(math.cos(heading) * step, math.sin(heading) * step * 0.55);
+        points.add(at);
+      }
+      return points;
+    }
+
+    final cracks = <({List<Offset> points, double width})>[];
+
+    // Seven generations of fracture: the first crosses the layer, every next
+    // one grows out of the previous generation's own vertices, shorter and
+    // finer each time. Revealed in that order by damage, the layer splits,
+    // then the pieces split, then THEIR pieces -- crumbling to gravel by the
+    // end rather than collecting a few long scars.
+    const generations = 7;
+    var parents = <List<Offset>>[];
+    for (var gen = 0; gen < generations; gen++) {
+      final width = 1.7 * math.pow(0.83, gen).toDouble();
+      final step = size.width * 0.032 * math.pow(0.78, gen).toDouble();
+      final segments = gen == 0 ? 5 : (gen < 3 ? 3 : 2);
+      final children = <List<Offset>>[];
+
+      if (gen == 0) {
+        final primaries = 4 + (seed.next() * 2).floor();
+        for (var i = 0; i < primaries; i++) {
+          final from = Offset(
+            (0.05 + seed.next() * 0.9) * size.width,
+            (0.1 + seed.next() * 0.7) * size.height,
+          );
+          final points = walk(
+            from,
+            (seed.next() - 0.5) * 2.6,
+            segments,
+            step * (0.8 + seed.next() * 0.5),
+          );
+          children.add(points);
+          cracks.add((points: points, width: width));
+        }
+      } else {
+        // Later generations sprout more sparsely, so the count grows but
+        // never explodes: the cap keeps the whole network paintable.
+        final sprout = gen < 3 ? 0.95 : 0.7;
+        for (final parent in parents) {
+          if (cracks.length >= 70) break;
+          if (seed.next() > sprout) continue;
+          final buds = gen < 3 ? 1 + (seed.next() * 1.8).floor() : 1;
+          for (var b = 0; b < buds; b++) {
+            final at = parent[1 + (seed.next() * (parent.length - 1)).floor()];
+            final points = walk(
+              at,
+              seed.next() * math.pi * 2,
+              segments,
+              step * (0.8 + seed.next() * 0.5),
+            );
+            children.add(points);
+            cracks.add((points: points, width: width));
+          }
+        }
+      }
+
+      if (children.isEmpty) break;
+      parents = children;
+    }
 
     final split = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     final lip = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.8
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
     for (var i = 0; i < cracks.length; i++) {
-      final opacity = (damage * 7 - i).clamp(0.0, 1.0);
+      final opacity = (damage * cracks.length - i).clamp(0.0, 1.0);
       if (opacity <= 0.03) continue;
 
-      final spec = cracks[i];
-      final noise = Noise(i * 7919 + 13);
-      final step = spec.length * size.width / 4;
-      var angle = spec.turn * math.pi / 180;
-      var point = Offset(spec.x * size.width, spec.y * size.height);
-      final path = Path()..moveTo(point.dx, point.dy);
-      for (var segment = 0; segment < 4; segment++) {
-        angle += (noise.next() - 0.5) * 1.1;
-        point += Offset(math.cos(angle) * step, math.sin(angle) * step * 0.5);
+      final crack = cracks[i];
+      final path = Path()..moveTo(crack.points.first.dx, crack.points.first.dy);
+      for (final point in crack.points.skip(1)) {
         path.lineTo(point.dx, point.dy);
       }
 
-      lip.color = Color.fromRGBO(255, 255, 255, opacity * 0.2);
+      split.strokeWidth = crack.width;
+      lip.strokeWidth = crack.width * 0.55;
+      lip.color = Color.fromRGBO(255, 255, 255, opacity * 0.18);
       split.color = Color.fromRGBO(0, 0, 0, opacity * 0.6);
       canvas.save();
-      canvas.translate(0.9, 1);
+      canvas.translate(0.8, 0.9);
       canvas.drawPath(path, lip);
       canvas.restore();
       canvas.drawPath(path, split);
@@ -443,5 +603,6 @@ class CrackPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(CrackPainter oldDelegate) => oldDelegate.damage != damage;
+  bool shouldRepaint(CrackPainter oldDelegate) =>
+      oldDelegate.damage != damage || oldDelegate.layer != layer;
 }

@@ -572,7 +572,29 @@ class Game extends ChangeNotifier {
   /// stockpile total beside it.
   final Map<String, BigDouble> _gainStreak = {};
 
+  /// Whether income cards have an audience.
+  ///
+  /// The shell keeps this pointed at the mine screen: income belongs to the
+  /// scene where it visibly happens, and on any other screen the cards were
+  /// noise laid over unrelated reading. Saves and errors are not gated --
+  /// those matter wherever the player is.
+  bool _gainsVisible = true;
+
+  void setGainsVisible(bool visible) {
+    if (_gainsVisible == visible) return;
+    _gainsVisible = visible;
+    if (!visible) {
+      // Leaving the mine sweeps its cards along: a stale streak hanging over
+      // the next screen is exactly what this flag exists to prevent.
+      for (final notice in List.of(notices)) {
+        if (notice.kind == NoticeKind.gain) _drop(notice);
+      }
+      notifyListeners();
+    }
+  }
+
   void _announceGain(ResourceId id, BigDouble amount) {
+    if (!_gainsVisible) return;
     if (amount.isZero) return;
     final key = 'gain.${id.name}';
     final streak = (_gainStreak[key] ?? BigDouble.zero) + amount;
@@ -651,17 +673,9 @@ class Game extends ChangeNotifier {
     if (_hidden || _background) return;
 
     // Income reporting belongs to the stockpile watcher and its cards; the
-    // floats keep only the drama.
-    if (outcome.critical) {
-      criticalFlashes.value = criticalFlashes.value + 1;
-      _addFloat(
-        text: 'КРИТ ×${sim.criticalMultiplier.round()}',
-        color: 0xFFFFD782,
-        left: 26 + (outcome.layersBroken * 17 % 120).toDouble(),
-        top: 92 + (outcome.quantoniumGained * 11 % 30).toDouble(),
-        size: 24,
-      );
-    }
+    // float is for the strike's crit -- the same drama whichever lane threw
+    // the blow.
+    if (outcome.critical) _reportCrit();
     if (outcome.thickLayersBroken > 0) {
       _addFloat(
         text: 'ТОВСТИЙ ШАР · всі ресурси ×${PrototypeSimulation.thickSpan}',
@@ -709,6 +723,20 @@ class Game extends ChangeNotifier {
     floats.removeWhere((f) => f.id == id);
   }
 
+  /// The strike's crit, said the same way for both lanes: a flash and a
+  /// stamp over the face.
+  void _reportCrit() {
+    criticalFlashes.value = criticalFlashes.value + 1;
+    if (_hidden || _background) return;
+    _addFloat(
+      text: 'КРИТ ×${PrototypeSimulation.strikeCritPower.toStringAsFixed(2)}',
+      color: 0xFFFFD782,
+      left: 96 + (hitShakes.value * 37 % 150).toDouble(),
+      top: 118 + (hitShakes.value * 17 % 46).toDouble(),
+      size: 20,
+    );
+  }
+
   /// One manual blow at the face.
   ///
   /// The strike lands between ticks by design: it is the player's own damage,
@@ -718,15 +746,12 @@ class Game extends ChangeNotifier {
     final outcome = sim.strike();
     if (!outcome.landed) return;
     hitShakes.value = hitShakes.value + 1;
+    if (outcome.critical) _reportCrit();
     if (outcome.layersBroken > 0) {
       breakFlashes.value = breakFlashes.value + 1;
     }
-    if (!_hidden && !_background) {
-      _announceGain(ResourceId.regolith, outcome.regolithGained);
-      for (final entry in outcome.oresGained.entries) {
-        _announceGain(entry.key, entry.value);
-      }
-    }
+    // No gain announcements here: the stockpile watcher reports every income
+    // once, and a second voice was double-counting the streaks.
     _syncEnergyLoop();
     notifyListeners();
   }

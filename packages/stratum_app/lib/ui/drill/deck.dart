@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../../game.dart';
+import '../resource_style.dart';
 import '../tokens.dart';
 
 /// The rig's controls, laid on a deck that fades the rock out beneath them.
@@ -49,27 +50,74 @@ class DeckState extends State<Deck> {
                 onTap: () => setState(() => _expanded = !_expanded),
               ),
               const SizedBox(height: 10),
-              // The race the whole game is built on: rock hardness against bit
-              // power, ending in the only number that answers "how long".
+              // The race the whole game is built on: what the blow is worth,
+              // against the rock that answers "how long". The strike's whole
+              // story runs along the left; the rock's answer stands in its
+              // own column on the right.
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Stat(
-                    label: 'щільність',
-                    value: '${sim.layerHpMax.value}',
-                    colour: Palette.textDim,
+                  // The strike trio scales down inside its slot if its
+                  // numbers ever outgrow it; the rock's column keeps its
+                  // size and its right edge.
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.topLeft,
+                      // Two rows, one theme: everything on the left is the
+                      // blow, everything on the right column is the rock --
+                      // the panel reads as "my strike against this layer".
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Stat(
+                            label: 'сила удару',
+                            value: '${sim.strikePower}',
+                            colour: Palette.gold,
+                          ),
+                          const SizedBox(height: 7),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Stat(
+                                label: 'шанс крита',
+                                value:
+                                    '${(PrototypeSimulation.strikeCritChance * 100).round()}%',
+                                colour: Palette.amber,
+                              ),
+                              const SizedBox(width: 14),
+                              Stat(
+                                label: 'сила крита',
+                                value:
+                                    '×${PrototypeSimulation.strikeCritPower.toStringAsFixed(2)}',
+                                colour: Palette.amber,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 18),
-                  Stat(
-                    label: 'сила',
-                    value: '${sim.power.value}',
-                    colour: Palette.gold,
-                  ),
-                  const Spacer(),
-                  Stat(
-                    label: 'до пробиття',
-                    value: '${sim.hitsToBreak.value} ударів',
-                    colour: Palette.textDim,
-                    alignEnd: true,
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Stat(
+                        label: 'щільність',
+                        value: '${sim.layerHpMax.value}',
+                        colour: Palette.textDim,
+                        alignEnd: true,
+                      ),
+                      const SizedBox(height: 7),
+                      Stat(
+                        label: 'до пробиття',
+                        value: '${sim.hitsToBreak.value} ударів',
+                        colour: Palette.textDim,
+                        alignEnd: true,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -81,38 +129,7 @@ class DeckState extends State<Deck> {
                 curve: Curves.easeOutCubic,
                 alignment: Alignment.topCenter,
                 child: _expanded
-                    ? Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const SizedBox(height: 13),
-                          Row(
-                            children: [
-                              Stat(
-                                label: 'реголіт / цикл',
-                                value: '${sim.regolithPerCycle.value}',
-                                colour: Palette.ore,
-                              ),
-                              const SizedBox(width: 16),
-                              Stat(
-                                label: 'кристали',
-                                value: '${(sim.crystalChance * 100).round()}%',
-                                colour: Palette.crystal,
-                                note:
-                                    '+${PrototypeSimulation.crystalDropAt(sim.layer.value)}',
-                              ),
-                              const Spacer(),
-                              Stat(
-                                label: 'крит',
-                                value: '${(sim.criticalChance * 100).round()}%',
-                                colour: Palette.amber,
-                                note: '×${sim.criticalMultiplier.round()}',
-                                alignEnd: true,
-                              ),
-                            ],
-                          ),
-                        ],
-                      )
+                    ? LootTable(sim: sim)
                     : const SizedBox(width: double.infinity),
               ),
             ],
@@ -128,6 +145,190 @@ class DeckState extends State<Deck> {
 /// Collapsed, the deck keeps only what the player watches while drilling --
 /// hardness, power, cycles left -- and hands the rest of the screen back to
 /// the rock.
+/// What a strike can bring up: a grid of plates, three to a row.
+///
+/// Regolith is the guaranteed haul, so its plate spans the full row and
+/// quotes the band a blow can land in; everything under it is chance, name on
+/// the left, odds on the right. Ores still locked by depth stay listed and
+/// dimmed -- the grid doubles as the map of what going deeper opens.
+class LootTable extends StatelessWidget {
+  const LootTable({required this.sim, super.key});
+
+  final PrototypeSimulation sim;
+
+  static const double _gap = 8;
+
+  @override
+  Widget build(BuildContext context) {
+    final layer = sim.layer.value;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 12),
+        Text(
+          'ЗДОБИЧ ЗА УДАР',
+          style: AppText.body(
+            8,
+            weight: FontWeight.w700,
+            color: Palette.tech,
+            letterSpacing: 1.6,
+          ),
+        ),
+        const SizedBox(height: 7),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final third = (constraints.maxWidth - 2 * _gap) / 3;
+            return Wrap(
+              spacing: _gap,
+              runSpacing: _gap,
+              children: [
+                LootCard(
+                  id: ResourceId.regolith,
+                  amount: '${sim.strikeRegolithMin} – ${sim.strikeRegolithMax}',
+                  width: constraints.maxWidth,
+                ),
+                for (final row in PrototypeSimulation.oreTable)
+                  if (layer >= row.unlockAt)
+                    LootCard(
+                      id: row.id,
+                      chance: '${(row.chance * 100).round()}%',
+                      amount: '${PrototypeSimulation.oreDropAt(layer)}',
+                      width: third,
+                    )
+                  else
+                    LootCard(
+                      id: row.id,
+                      chance: 'з ${row.unlockAt} м',
+                      amount: '—',
+                      width: third,
+                      locked: true,
+                    ),
+                LootCard(
+                  id: ResourceId.crystals,
+                  chance: '${(sim.crystalChance * 100).round()}%',
+                  amount: '${PrototypeSimulation.crystalDropAt(layer)}',
+                  width: third,
+                ),
+                LootCard(
+                  id: ResourceId.quantonium,
+                  chance:
+                      '${(PrototypeSimulation.strikeQuantoniumChance * 100).toStringAsFixed(0)}%',
+                  amount: '${PrototypeSimulation.quantoniumDropAt(layer)}',
+                  width: third,
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// The sketched plate: name left, odds right, and the framed cell under them
+/// with the icon breaking out of its left edge.
+class LootCard extends StatelessWidget {
+  const LootCard({
+    required this.id,
+    required this.amount,
+    required this.width,
+    this.chance,
+    this.locked = false,
+    super.key,
+  });
+
+  final ResourceId id;
+
+  /// The odds line, or null for a guaranteed drop: certainty needs no label.
+  final String? chance;
+
+  final String amount;
+  final double width;
+  final bool locked;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = resourceStyles[id]!;
+    return SizedBox(
+      width: width,
+      child: Opacity(
+        opacity: locked ? 0.45 : 1,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 2, right: 2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      style.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.body(
+                        8.5,
+                        weight: FontWeight.w600,
+                        color: Palette.textMuted,
+                        shadows: true,
+                      ),
+                    ),
+                  ),
+                  if (chance != null)
+                    Text(
+                      chance!,
+                      style: AppText.display(
+                        8.5,
+                        weight: FontWeight.w600,
+                        color: Palette.textFaint,
+                        shadows: true,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 3),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
+              decoration: BoxDecoration(
+                color: Palette.well,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: locked
+                      ? Palette.lineBar
+                      : style.colour.withValues(alpha: 0.4),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(style.icon, size: 14, color: style.colour),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      amount,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: AppText.display(
+                        10.5,
+                        weight: FontWeight.w700,
+                        color: locked ? Palette.textFaint : Palette.textDim,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class DeckHandle extends StatelessWidget {
   const DeckHandle({required this.expanded, required this.onTap, super.key});
 

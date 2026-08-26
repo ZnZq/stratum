@@ -20,10 +20,15 @@ class NoticeLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Positioned(
       left: 0,
-      top: AppMetrics.resourceBar,
+      // Anchored to the quiet band of the scene: below the depth readout,
+      // stacking downward over the rock, so a full column of cards ends well
+      // before the deck's readouts begin. Centring put them exactly where
+      // the deck panel lives.
+      top: AppMetrics.resourceBar + 112,
       bottom: AppMetrics.navTotal,
       child: IgnorePointer(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topLeft,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

@@ -38,15 +38,19 @@ void main() {
       final sim = _played(20);
       final restored = PrototypeSimulation()..readJson(sim.toJson());
 
-      final expected = [for (var i = 0; i < 12; i++) sim.tick().critical];
-      final actual = [for (var i = 0; i < 12; i++) restored.tick().critical];
+      final expected = [
+        for (var i = 0; i < 12; i++) sim.tick().crystalsGained.isZero,
+      ];
+      final actual = [
+        for (var i = 0; i < 12; i++) restored.tick().crystalsGained.isZero,
+      ];
 
       expect(
         actual,
         expected,
         reason:
             'restoring the streams is what stops a save-scummer from '
-            'replaying the same crits every load',
+            'replaying the same drops every load',
       );
     });
 
@@ -98,17 +102,26 @@ void main() {
       expect('$hpBefore', '${BigDouble.fromNum(5)}');
     });
 
-    test('a strike mines the cycle yield scaled by its power share', () {
+    test('a strike loots regolith inside the stated band', () {
       final sim = PrototypeSimulation();
       final before = sim.regolith.value;
-      final expected =
-          sim.regolithPerCycle.value * (sim.strikePower / sim.power.value);
+      final min = sim.strikeRegolithMin;
+      final max = sim.strikeRegolithMax;
 
       final outcome = sim.strike();
 
-      expect('${outcome.regolithGained}', '$expected');
+      final critMax =
+          max * BigDouble.fromNum(PrototypeSimulation.strikeCritPower);
       expect(
-        sim.regolith.value >= before + expected,
+        outcome.regolithGained.gteWithTolerance(min) &&
+            critMax.gteWithTolerance(outcome.regolithGained),
+        isTrue,
+        reason:
+            'the haul is a roll, but only ever inside the band the loot '
+            'table promises, stretched at most by one crit',
+      );
+      expect(
+        sim.regolith.value >= before + min,
         isTrue,
         reason:
             'the strike yield lands in the store on top of any break '
@@ -162,6 +175,7 @@ void main() {
       final oreBefore = sim.regolith.value;
       final expectedOre =
           sim.regolithPerCycle.value *
+          BigDouble.fromNum(PrototypeSimulation.strikeShareOfRig) *
           BigDouble.fromNum(100) *
           BigDouble.fromNum(PrototypeSimulation.offlineEfficiency);
 

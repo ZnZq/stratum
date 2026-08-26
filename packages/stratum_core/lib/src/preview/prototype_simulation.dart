@@ -11,6 +11,7 @@ class StrikeOutcome {
     required this.thickLayersBroken,
     required this.regolithGained,
     required this.oresGained,
+    required this.critical,
   });
 
   static const StrikeOutcome none = StrikeOutcome(
@@ -19,12 +20,16 @@ class StrikeOutcome {
     thickLayersBroken: 0,
     regolithGained: BigDouble.zero,
     oresGained: {},
+    critical: false,
   );
 
   final int spent;
   final int layersBroken;
   final int thickLayersBroken;
   final BigDouble regolithGained;
+
+  /// Whether this blow critted, multiplying its damage and haul alike.
+  final bool critical;
 
   /// The chance ores this blow happened to shake loose.
   final Map<ResourceId, BigDouble> oresGained;
@@ -143,10 +148,12 @@ class PrototypeSimulation {
       name: 'drill cost',
     );
     hitsToBreak = Computed(() {
+      // Counted at the strike's power, not the rig's: the readout answers
+      // the finger on the rock, and the drill's own blow is on its card.
       final remaining = layerHp.value;
-      final perCycle = power.value;
-      if (perCycle.isZero) return 1;
-      final estimate = (remaining / perCycle).ceil().toDouble();
+      final perHit = strikePower;
+      if (perHit.isZero) return 1;
+      final estimate = (remaining / perHit).ceil().toDouble();
       return estimate < 1 ? 1 : estimate.toInt();
     }, name: 'hits to break');
 
@@ -317,8 +324,10 @@ class PrototypeSimulation {
 
   /// Rarer than quantonium up top and commoner far down, so the early game is
   /// ore-led and the mineral becomes the thing worth going deeper for.
-  double get crystalChance {
-    final chance = 0.08 + layer.value * 0.0012;
+  double get crystalChance => crystalChanceAt(layer.value);
+
+  static double crystalChanceAt(int layer) {
+    final chance = 0.08 + layer * 0.0012;
     return chance > 0.4 ? 0.4 : chance;
   }
 
@@ -344,11 +353,16 @@ class PrototypeSimulation {
   }) {
     if (cycles <= 0) return OfflineGain.none;
     final scale = BigDouble.fromNum(cycles) * BigDouble.fromNum(efficiency);
-    final ore = regolithPerCycle.value * scale;
+    // The cycle's whole income is its strike, so the expectation is the
+    // strike's guaranteed share.
+    final ore =
+        regolithPerCycle.value * BigDouble.fromNum(strikeShareOfRig) * scale;
     final crystals =
         crystalDropAt(layer.value) * BigDouble.fromNum(crystalChance) * scale;
     final quantonium =
-        BigDouble.fromNum(quantoniumDropAt(layer.value) * quantoniumChance) *
+        BigDouble.fromNum(
+          quantoniumDropAt(layer.value) * strikeQuantoniumChance,
+        ) *
         scale;
     final ores = <ResourceId, BigDouble>{
       for (final row in oreTable)
@@ -390,6 +404,28 @@ class PrototypeSimulation {
   /// A strike scales with the rig: a flat hit would be noise by the second
   /// stratum and the active lane would quietly die.
   static const double strikeShareOfRig = 0.35;
+
+  /// The regolith haul of one strike is a roll, not a constant: this is the
+  /// half-width of the band around the mean.
+  static const double regolithSpread = 0.2;
+
+  /// Quantonium can shake loose from any strike, but rarely: the reliable
+  /// drip stays with the cycle, this is a bonus glint.
+  static const double strikeQuantoniumChance = 0.02;
+
+  /// A strike's own crit: one roll that multiplies the whole blow -- the
+  /// damage dealt and the haul taken alike.
+  static const double strikeCritChance = 0.05;
+  static const double strikeCritPower = 1.20;
+
+  /// The band a strike's regolith lands in.
+  BigDouble get strikeRegolithMin =>
+      _strikeRegolithMean * BigDouble.fromNum(1 - regolithSpread);
+  BigDouble get strikeRegolithMax =>
+      _strikeRegolithMean * BigDouble.fromNum(1 + regolithSpread);
+
+  BigDouble get _strikeRegolithMean =>
+      regolithPerCycle.value * BigDouble.fromNum(strikeShareOfRig);
 
   BigDouble get strikePower => strikePowerAt(strikeLevel.value);
 
@@ -446,78 +482,113 @@ class PrototypeSimulation {
   }
 
   /// One manual blow at the face: spends energy, deals [strikePower], and
-  /// mines.
+  /// takes the loot a strike is worth.
   ///
-  /// A strike and a drill tick are the same event at different powers: hit
-  /// the rock, take out what the hit is worth. The yield is the cycle's,
-  /// scaled by the power ratio, so the two lanes stay on one economy instead
-  /// of being balanced against each other. Ores roll at the same scaled
-  /// expectation on their own `strike.*` streams; crystals and quantonium
-  /// stay cycle-only (the anti-brick drip belongs to the heartbeat), and
-  /// there is no crit roll -- crits are the drill's drama.
+  /// Extraction belongs to strikes alone. The drill's cycle ends in a strike
+  /// of its own, so both lanes roll the same loot table at the same odds,
+  /// each on its own streams; the difference between the lanes is who threw
+  /// the blow. No crit roll here -- crits are the drill's drama.
   StrikeOutcome strike() => batch(() {
     if (energy.value < strikeCost) return StrikeOutcome.none;
     energy.value = energy.value - strikeCost;
 
-    final share = strikePower / power.value;
-    final regolith = regolithPerCycle.value * share;
-    stock.add(ResourceId.regolith, regolith);
-
-    final fraction = share.toDouble();
-    final ores = <ResourceId, BigDouble>{};
-    for (final row in oreTable) {
-      if (layer.value < row.unlockAt) continue;
-      final chance = row.chance * fraction;
-      if (random
-          .stream('strike.${row.stream}')
-          .chance(chance > 1 ? 1 : chance)) {
-        final drop = oreDropAt(layer.value);
-        stock.add(row.id, drop);
-        ores[row.id] = drop;
-      }
-    }
-
-    final result = _applyDamage(strikePower);
+    final rolled = _rollLoot(prefix: 'strike.', multiplier: BigDouble.one);
+    final damage = rolled.critical
+        ? strikePower * BigDouble.fromNum(strikeCritPower)
+        : strikePower;
+    final result = _applyDamage(damage);
     return StrikeOutcome(
       spent: strikeCost,
       layersBroken: result.broken,
       thickLayersBroken: result.thickBroken,
-      regolithGained: regolith,
-      oresGained: ores,
+      regolithGained: rolled.loot[ResourceId.regolith] ?? BigDouble.zero,
+      oresGained: rolled.loot..remove(ResourceId.regolith),
+      critical: rolled.critical,
     );
   });
 
-  CycleOutcome _cycle(int chain) {
-    final critical = random.stream('crit').chance(criticalChance);
-    final multiplier = critical
-        ? BigDouble.fromNum(criticalMultiplier)
-        : BigDouble.one;
+  /// What every strike carries out of the face, whoever struck.
+  ///
+  /// Regolith always, at the strike share of the cycle formula; ores and
+  /// crystals by chance at the table's own odds. Each lane rolls on its own
+  /// streams ([prefix]), so manual digging can never shift the drill's
+  /// sequence. Quantonium is NOT loot: the anti-brick drip belongs to the
+  /// heartbeat.
+  ({bool critical, Map<ResourceId, BigDouble> loot}) _rollLoot({
+    required String prefix,
+    required BigDouble multiplier,
+  }) {
+    final loot = <ResourceId, BigDouble>{};
 
-    final gained = regolithPerCycle.value * multiplier;
-    stock.add(ResourceId.regolith, gained);
-
-    // Its own substream: adding a roll to the cycle must not shift every roll
-    // that follows it and turn the parity tests red.
-    var crystalsGained = BigDouble.zero;
-    if (random.stream('crystal').chance(crystalChance)) {
-      crystalsGained = crystalDropAt(layer.value) * multiplier;
-      stock.add(ResourceId.crystals, crystalsGained);
+    // The one crit in the game. Rolled here so the loot scales in place; the
+    // caller reads the flag to scale the blow itself the same way.
+    final critical = random
+        .stream('${prefix}loot.crit')
+        .chance(strikeCritChance);
+    if (critical) {
+      multiplier = multiplier * BigDouble.fromNum(strikeCritPower);
     }
+
+    // A roll inside the band rather than a constant: the haul of a single
+    // blow is allowed to feel like luck.
+    final spread = random
+        .stream('${prefix}regolith')
+        .range(1 - regolithSpread, 1 + regolithSpread);
+    final regolith =
+        _strikeRegolithMean * BigDouble.fromNum(spread) * multiplier;
+    stock.add(ResourceId.regolith, regolith);
+    loot[ResourceId.regolith] = regolith;
 
     for (final row in oreTable) {
       if (layer.value < row.unlockAt) continue;
-      if (random.stream(row.stream).chance(row.chance)) {
-        stock.add(row.id, oreDropAt(layer.value) * multiplier);
+      if (random.stream('$prefix${row.stream}').chance(row.chance)) {
+        final drop = oreDropAt(layer.value) * multiplier;
+        stock.add(row.id, drop);
+        loot[row.id] = drop;
       }
     }
 
-    var quantoniumGained = 0;
-    if (random.stream('quantonium').chance(quantoniumChance)) {
-      quantoniumGained = quantoniumDropAt(layer.value);
-      stock.add(ResourceId.quantonium, quantoniumGained.big);
+    if (random.stream('${prefix}crystal').chance(crystalChance)) {
+      final drop = crystalDropAt(layer.value) * multiplier;
+      stock.add(ResourceId.crystals, drop);
+      loot[ResourceId.crystals] = drop;
     }
 
-    final struck = _applyDamage(power.value * multiplier);
+    // Named apart from the cycle's own anti-brick stream: the loot glint and
+    // the heartbeat drip must never share a sequence.
+    if (random
+        .stream('${prefix}quantonium.loot')
+        .chance(strikeQuantoniumChance)) {
+      final drop = quantoniumDropAt(layer.value).big * multiplier;
+      stock.add(ResourceId.quantonium, drop);
+      loot[ResourceId.quantonium] = drop;
+    }
+
+    return (critical: critical, loot: loot);
+  }
+
+  CycleOutcome _cycle(int chain) {
+    // The cycle is damage plus THE SAME strike a click throws -- same table,
+    // same odds, same amounts. The drill has no crit of its own for now: the
+    // only crit in the game is the strike's, and it lives inside the loot
+    // roll. A drill mining its own specific resource returns with the typed
+    // drills.
+    final rolled = _rollLoot(prefix: '', multiplier: BigDouble.one);
+    final loot = rolled.loot;
+    final gained = loot[ResourceId.regolith] ?? BigDouble.zero;
+    final crystalsGained = loot[ResourceId.crystals] ?? BigDouble.zero;
+
+    // The anti-brick drip lives in the loot table now: every strike can
+    // shake quantonium loose, and the cycle rolls it through its own strike.
+    final quantoniumGained = loot.containsKey(ResourceId.quantonium)
+        ? quantoniumDropAt(layer.value)
+        : 0;
+
+    final struck = _applyDamage(
+      rolled.critical
+          ? power.value * BigDouble.fromNum(strikeCritPower)
+          : power.value,
+    );
     final broken = struck.broken;
     final thickBroken = struck.thickBroken;
 
@@ -530,7 +601,7 @@ class PrototypeSimulation {
       regolithGained: gained,
       crystalsGained: crystalsGained,
       quantoniumGained: quantoniumGained,
-      critical: critical,
+      critical: rolled.critical,
       layersBroken: broken,
       thickLayersBroken: thickBroken,
       echoes: echoes,

@@ -43,7 +43,7 @@ class UpgradesScreen extends StatelessWidget {
             icon: Ti.grain,
             colour: Palette.ore,
             name: 'Реголітовий бур',
-            note: 'базовий · добуває реголіт щоциклу',
+            note: 'б\u02bcє по шару щоциклу · здобич — як з удару',
             children: [
               // Two levers that multiply into one number. Each row previews only
               // its own lever; their product is the total above, so the same
