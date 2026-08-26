@@ -10,8 +10,11 @@ void main() {
         accumulated = accumulated + BigDouble.fromNum(0.001);
       }
 
-      expect(accumulated == BigDouble.one, isFalse,
-          reason: 'otherwise this test proves nothing');
+      expect(
+        accumulated == BigDouble.one,
+        isFalse,
+        reason: 'otherwise this test proves nothing',
+      );
       expect(accumulated.equalsWithTolerance(BigDouble.one), isTrue);
     });
 
@@ -23,7 +26,11 @@ void main() {
       final cost = BigDouble.fromNum(15);
       final resources = cost / BigDouble.fromNum(9) * BigDouble.fromNum(9);
 
-      expect(resources >= cost, isFalse, reason: 'otherwise this test proves nothing');
+      expect(
+        resources >= cost,
+        isFalse,
+        reason: 'otherwise this test proves nothing',
+      );
       expect(resources.gteWithTolerance(cost), isTrue);
     });
   });
@@ -47,7 +54,10 @@ void main() {
         isTrue,
       );
       expect(
-        BigDouble(1.0000000000001, -100).equalsWithTolerance(BigDouble(1, -100)),
+        BigDouble(
+          1.0000000000001,
+          -100,
+        ).equalsWithTolerance(BigDouble(1, -100)),
         isTrue,
       );
     });
@@ -69,10 +79,7 @@ void main() {
     });
 
     test('opposite signs are never within tolerance', () {
-      expect(
-        BigDouble(1, 5).equalsWithTolerance(BigDouble(-1, 5)),
-        isFalse,
-      );
+      expect(BigDouble(1, 5).equalsWithTolerance(BigDouble(-1, 5)), isFalse);
     });
   });
 

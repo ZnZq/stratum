@@ -83,7 +83,11 @@ class BalanceHarness {
     required void Function(int tick) onTick,
   }) {
     if (ticks < 1) {
-      throw ArgumentError.value(ticks, 'ticks', 'a run needs at least one tick');
+      throw ArgumentError.value(
+        ticks,
+        'ticks',
+        'a run needs at least one tick',
+      );
     }
 
     final samples = <BalanceSample>[_sampleAt(0)];
@@ -103,15 +107,14 @@ class BalanceHarness {
   }
 
   BalanceSample _sampleAt(int tick) => BalanceSample(
-        tick: tick,
-        elapsed: _elapsedAt(tick),
-        values: {for (final probe in probes) probe.name: probe.read()},
-      );
+    tick: tick,
+    elapsed: _elapsedAt(tick),
+    values: {for (final probe in probes) probe.name: probe.read()},
+  );
 
   Duration _elapsedAt(int tick) => Duration(
-        microseconds:
-            rate.interval.inMicroseconds * tick ~/ rate.ticksPerFire,
-      );
+    microseconds: rate.interval.inMicroseconds * tick ~/ rate.ticksPerFire,
+  );
 }
 
 /// What a run produced, plus the questions worth asking of it.
@@ -172,8 +175,12 @@ class BalanceReport {
   /// It has to open straight from a local file with no server and no
   /// connection, which rules out every charting library.
   String toHtml({required String title, List<BalanceChart>? charts}) {
-    final resolved = charts ??
-        [for (final name in probeNames) BalanceChart(title: name, probes: [name])];
+    final resolved =
+        charts ??
+        [
+          for (final name in probeNames)
+            BalanceChart(title: name, probes: [name]),
+        ];
     for (final chart in resolved) {
       for (final probe in chart.probes) {
         _requireProbe(probe);
@@ -187,10 +194,12 @@ class BalanceReport {
       ..writeln('<style>$_style</style>')
       ..writeln('</head><body>')
       ..writeln('<h1>${_escape(title)}</h1>')
-      ..writeln('<p class="meta">${samples.length} samples over '
-          '${samples.last.tick} ticks '
-          '(${_formatDuration(samples.last.elapsed)} of game time) at '
-          '${_escape(rate.toString())}</p>');
+      ..writeln(
+        '<p class="meta">${samples.length} samples over '
+        '${samples.last.tick} ticks '
+        '(${_formatDuration(samples.last.elapsed)} of game time) at '
+        '${_escape(rate.toString())}</p>',
+      );
 
     for (final chart in resolved) {
       buffer.writeln(_renderChart(chart));
@@ -227,44 +236,56 @@ class BalanceReport {
     final lastTick = samples.last.tick;
     final xSpan = lastTick == 0 ? 1 : lastTick;
 
-    double x(int tick) =>
-        padding + (width - padding * 2) * (tick / xSpan);
+    double x(int tick) => padding + (width - padding * 2) * (tick / xSpan);
     double y(double value) =>
-        height - padding - (height - padding * 2) * ((value - minY) / (maxY - minY));
+        height -
+        padding -
+        (height - padding * 2) * ((value - minY) / (maxY - minY));
 
     final buffer = StringBuffer()
       ..writeln('<section>')
       ..writeln('<h2>${_escape(chart.title)}</h2>')
       ..writeln('<svg viewBox="0 0 $width $height" role="img">')
-      ..writeln('<rect class="plot" x="$padding" y="$padding" '
-          'width="${width - padding * 2}" height="${height - padding * 2}"/>');
+      ..writeln(
+        '<rect class="plot" x="$padding" y="$padding" '
+        'width="${width - padding * 2}" height="${height - padding * 2}"/>',
+      );
 
     for (var i = 0; i < chart.probes.length; i++) {
       final probe = chart.probes[i];
       final points = [
         for (final sample in samples)
-          if (sample.values[probe] case final value?
-              when value.isFinite)
+          if (sample.values[probe] case final value? when value.isFinite)
             '${x(sample.tick).toStringAsFixed(2)},'
                 '${y(value).toStringAsFixed(2)}',
       ].join(' ');
-      buffer.writeln('<polyline class="s${i % _seriesColours}" points="$points"/>');
+      buffer.writeln(
+        '<polyline class="s${i % _seriesColours}" points="$points"/>',
+      );
     }
 
     buffer
-      ..writeln('<text class="axis" x="$padding" y="${padding - 12}">'
-          '${_escape(_formatValue(maxY))}</text>')
-      ..writeln('<text class="axis" x="$padding" y="${height - padding + 18}">'
-          '${_escape(_formatValue(minY))}</text>')
-      ..writeln('<text class="axis end" x="${width - padding}" '
-          'y="${height - padding + 18}">'
-          '${_formatDuration(samples.last.elapsed)}</text>')
+      ..writeln(
+        '<text class="axis" x="$padding" y="${padding - 12}">'
+        '${_escape(_formatValue(maxY))}</text>',
+      )
+      ..writeln(
+        '<text class="axis" x="$padding" y="${height - padding + 18}">'
+        '${_escape(_formatValue(minY))}</text>',
+      )
+      ..writeln(
+        '<text class="axis end" x="${width - padding}" '
+        'y="${height - padding + 18}">'
+        '${_formatDuration(samples.last.elapsed)}</text>',
+      )
       ..writeln('</svg>')
       ..writeln('<p class="legend">');
 
     for (var i = 0; i < chart.probes.length; i++) {
-      buffer.writeln('<span class="key s${i % _seriesColours}">'
-          '${_escape(chart.probes[i])}</span>');
+      buffer.writeln(
+        '<span class="key s${i % _seriesColours}">'
+        '${_escape(chart.probes[i])}</span>',
+      );
     }
 
     buffer
@@ -289,9 +310,15 @@ class BalanceReport {
   }
 
   static String _formatDuration(Duration duration) {
-    if (duration.inDays > 0) return '${duration.inDays}d ${duration.inHours % 24}h';
-    if (duration.inHours > 0) return '${duration.inHours}h ${duration.inMinutes % 60}m';
-    if (duration.inMinutes > 0) return '${duration.inMinutes}m ${duration.inSeconds % 60}s';
+    if (duration.inDays > 0) {
+      return '${duration.inDays}d ${duration.inHours % 24}h';
+    }
+    if (duration.inHours > 0) {
+      return '${duration.inHours}h ${duration.inMinutes % 60}m';
+    }
+    if (duration.inMinutes > 0) {
+      return '${duration.inMinutes}m ${duration.inSeconds % 60}s';
+    }
     return '${duration.inSeconds}s';
   }
 

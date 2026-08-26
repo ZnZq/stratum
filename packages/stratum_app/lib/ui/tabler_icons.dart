@@ -14,12 +14,18 @@ abstract final class Ti {
   static const IconData settings2 = IconData(0xf5ac, fontFamily: 'TablerIcons');
   static const IconData flame = IconData(0xec2c, fontFamily: 'TablerIcons');
   static const IconData refresh = IconData(0xeb13, fontFamily: 'TablerIcons');
-  static const IconData arrowBarDown =
-      IconData(0xea0d, fontFamily: 'TablerIcons');
-  static const IconData binaryTree =
-      IconData(0xf5d4, fontFamily: 'TablerIcons');
+  static const IconData arrowBarDown = IconData(
+    0xea0d,
+    fontFamily: 'TablerIcons',
+  );
+  static const IconData binaryTree = IconData(
+    0xf5d4,
+    fontFamily: 'TablerIcons',
+  );
   static const IconData planet = IconData(0xec08, fontFamily: 'TablerIcons');
   static const IconData tools = IconData(0xebca, fontFamily: 'TablerIcons');
-  static const IconData userHexagon =
-      IconData(0xfc4e, fontFamily: 'TablerIcons');
+  static const IconData userHexagon = IconData(
+    0xfc4e,
+    fontFamily: 'TablerIcons',
+  );
 }

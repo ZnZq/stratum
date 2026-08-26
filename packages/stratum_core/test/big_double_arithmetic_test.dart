@@ -6,12 +6,28 @@ import 'package:test/test.dart';
 /// Asserts the normalization invariant: exactly zero, or a mantissa in [1, 10).
 void expectNormalized(BigDouble n, String what) {
   if (n.isZero) {
-    expect(n.mantissa, 0.0, reason: '$what: zero must carry a canonical mantissa');
-    expect(n.exponent, 0, reason: '$what: zero must carry a canonical exponent');
+    expect(
+      n.mantissa,
+      0.0,
+      reason: '$what: zero must carry a canonical mantissa',
+    );
+    expect(
+      n.exponent,
+      0,
+      reason: '$what: zero must carry a canonical exponent',
+    );
     return;
   }
-  expect(n.mantissa.abs(), greaterThanOrEqualTo(1.0), reason: '$what: mantissa below 1');
-  expect(n.mantissa.abs(), lessThan(10.0), reason: '$what: mantissa at or above 10');
+  expect(
+    n.mantissa.abs(),
+    greaterThanOrEqualTo(1.0),
+    reason: '$what: mantissa below 1',
+  );
+  expect(
+    n.mantissa.abs(),
+    lessThan(10.0),
+    reason: '$what: mantissa at or above 10',
+  );
 }
 
 void main() {
@@ -113,8 +129,10 @@ void main() {
       final rng = math.Random(20260825);
 
       for (var i = 0; i < 2000; i++) {
-        final a = (rng.nextDouble() * 2 - 1) * math.pow(10, rng.nextInt(60) - 30);
-        final b = (rng.nextDouble() * 2 - 1) * math.pow(10, rng.nextInt(60) - 30);
+        final a =
+            (rng.nextDouble() * 2 - 1) * math.pow(10, rng.nextInt(60) - 30);
+        final b =
+            (rng.nextDouble() * 2 - 1) * math.pow(10, rng.nextInt(60) - 30);
         if (a == 0 || b == 0) continue;
 
         final ba = BigDouble.fromNum(a);

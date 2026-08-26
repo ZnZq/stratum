@@ -120,7 +120,9 @@ void main() {
         var ticks = 0;
         final engine = TickEngine(
           scheduler: TickScheduler(rate: TickRate(const Duration(seconds: 4))),
-          onBatch: (batch) { ticks += batch.ticks; },
+          onBatch: (batch) {
+            ticks += batch.ticks;
+          },
           clock: clock,
         )..start();
 
@@ -213,7 +215,7 @@ void main() {
   });
 
   group('changing the rate', () {
-    test('retimes the timer and drops the accumulator', () {
+    test('retimes the timer around the time already served', () {
       fakeAsync((async) {
         final clock = TestClock();
         final batches = <TickBatch>[];
@@ -226,14 +228,17 @@ void main() {
         clock.advance(const Duration(milliseconds: 3900));
         engine.rate = TickRate(const Duration(seconds: 1));
 
-        // The accumulator burned along with the old rate, so the first second
-        // after the change still yields nothing...
-        elapseBoth(async, clock, const Duration(milliseconds: 999));
+        // 3.9s of a 4s tick is 0.975 of the way there, and that fraction
+        // survives the change: 25ms of the new second is all that is left...
+        elapseBoth(async, clock, const Duration(milliseconds: 24));
         expect(batches, isEmpty);
 
-        // ...and at a full second of the new rate the tick is there.
         elapseBoth(async, clock, const Duration(milliseconds: 1));
         expect(batches, hasLength(1));
+
+        // ...after which the loop settles into the new period.
+        elapseBoth(async, clock, const Duration(seconds: 1));
+        expect(batches, hasLength(2));
 
         engine.dispose();
       });
@@ -284,12 +289,17 @@ void main() {
   });
 
   group('progress toward the next tick', () {
-    TickEngine engineOn(TestClock clock, {Duration interval = const Duration(seconds: 4), int ticksPerFire = 1}) =>
-        TickEngine(
-          scheduler: TickScheduler(rate: TickRate(interval, ticksPerFire: ticksPerFire)),
-          onBatch: (_) {},
-          clock: clock,
-        );
+    TickEngine engineOn(
+      TestClock clock, {
+      Duration interval = const Duration(seconds: 4),
+      int ticksPerFire = 1,
+    }) => TickEngine(
+      scheduler: TickScheduler(
+        rate: TickRate(interval, ticksPerFire: ticksPerFire),
+      ),
+      onBatch: (_) {},
+      clock: clock,
+    );
 
     test('starts empty', () {
       fakeAsync((async) {
@@ -351,8 +361,11 @@ void main() {
     test('measures the interval, not a single tick within it', () {
       fakeAsync((async) {
         final clock = TestClock();
-        final engine = engineOn(clock,
-            interval: const Duration(seconds: 2), ticksPerFire: 4);
+        final engine = engineOn(
+          clock,
+          interval: const Duration(seconds: 2),
+          ticksPerFire: 4,
+        );
 
         engine.start();
         clock.advance(const Duration(seconds: 1));
@@ -371,8 +384,11 @@ void main() {
         engine.stop();
         clock.advance(const Duration(seconds: 2));
 
-        expect(engine.progress, closeTo(0.5, 1e-9),
-            reason: 'a paused game must not keep filling the bar');
+        expect(
+          engine.progress,
+          closeTo(0.5, 1e-9),
+          reason: 'a paused game must not keep filling the bar',
+        );
         engine.dispose();
       });
     });
@@ -387,24 +403,33 @@ void main() {
         clock.advance(const Duration(hours: 1));
         engine.start();
 
-        expect(engine.progress, closeTo(0.75, 1e-9),
-            reason: 'time spent paused is discarded, banked progress is not');
+        expect(
+          engine.progress,
+          closeTo(0.75, 1e-9),
+          reason: 'time spent paused is discarded, banked progress is not',
+        );
         engine.dispose();
       });
     });
 
-    test('restarts from empty when the rate changes', () {
+    test('keeps its fill when the rate changes', () {
       fakeAsync((async) {
         final clock = TestClock();
         final engine = engineOn(clock)..start();
 
-        clock.advance(const Duration(milliseconds: 3900));
+        clock.advance(const Duration(seconds: 3));
         engine.rate = TickRate(const Duration(seconds: 1));
 
-        expect(engine.progress, 0);
+        expect(
+          engine.progress,
+          closeTo(0.75, 1e-9),
+          reason:
+              'three quarters of a 4s tick is three quarters of a 1s '
+              'tick -- the bar carries on, it does not start over',
+        );
 
-        clock.advance(const Duration(milliseconds: 500));
-        expect(engine.progress, closeTo(0.5, 1e-9));
+        clock.advance(const Duration(milliseconds: 125));
+        expect(engine.progress, closeTo(0.875, 1e-9));
 
         engine.dispose();
       });
@@ -463,18 +488,23 @@ void main() {
   });
 
   group('reading a disposed engine', () {
-    test('is an error, so a stray animation frame surfaces the lifecycle bug', () {
-      fakeAsync((async) {
-        final engine = TickEngine(
-          scheduler: TickScheduler(rate: TickRate(const Duration(seconds: 4))),
-          onBatch: (_) {},
-          clock: TestClock(),
-        )..dispose();
+    test(
+      'is an error, so a stray animation frame surfaces the lifecycle bug',
+      () {
+        fakeAsync((async) {
+          final engine = TickEngine(
+            scheduler: TickScheduler(
+              rate: TickRate(const Duration(seconds: 4)),
+            ),
+            onBatch: (_) {},
+            clock: TestClock(),
+          )..dispose();
 
-        expect(() => engine.progress, throwsStateError);
-        expect(() => engine.timeToNextTick, throwsStateError);
-      });
-    });
+          expect(() => engine.progress, throwsStateError);
+          expect(() => engine.timeToNextTick, throwsStateError);
+        });
+      },
+    );
   });
 
   group('stopping from inside the callback', () {
@@ -542,8 +572,11 @@ void main() {
         elapseBoth(async, clock, const Duration(minutes: 10));
 
         expect(charge, cap);
-        expect(engine.isRunning, isFalse,
-            reason: 'a full charge has nothing left to regenerate');
+        expect(
+          engine.isRunning,
+          isFalse,
+          reason: 'a full charge has nothing left to regenerate',
+        );
 
         // Nothing accrues while the loop sleeps, however long it sleeps.
         elapseBoth(async, clock, const Duration(hours: 3));
@@ -573,8 +606,11 @@ void main() {
         final frozen = engine.progress;
         elapseBoth(async, clock, const Duration(minutes: 30));
 
-        expect(engine.progress, frozen,
-            reason: 'a still bar tells the player they are capped');
+        expect(
+          engine.progress,
+          frozen,
+          reason: 'a still bar tells the player they are capped',
+        );
         engine.dispose();
       });
     });

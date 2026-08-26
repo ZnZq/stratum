@@ -59,7 +59,11 @@ void main() {
       s.value = 1;
       s.value = 2;
 
-      expect(notifications, 2, reason: 'otherwise this test does not prove batch does anything');
+      expect(
+        notifications,
+        2,
+        reason: 'otherwise this test does not prove batch does anything',
+      );
     });
   });
 
@@ -143,8 +147,16 @@ void main() {
         throwsStateError,
       );
 
-      expect(s.value, 1, reason: 'the write already happened and is not rolled back');
-      expect(notifications, 1, reason: 'the listener must learn about a real change');
+      expect(
+        s.value,
+        1,
+        reason: 'the write already happened and is not rolled back',
+      );
+      expect(
+        notifications,
+        1,
+        reason: 'the listener must learn about a real change',
+      );
     });
 
     test('a throw does not leave the batch depth stuck', () {
@@ -152,7 +164,10 @@ void main() {
       var notifications = 0;
       s.listen(() => notifications++);
 
-      expect(() => batch(() => throw StateError('on purpose')), throwsStateError);
+      expect(
+        () => batch(() => throw StateError('on purpose')),
+        throwsStateError,
+      );
 
       // Had the depth stayed non-zero, notifications would go silent forever.
       s.value = 1;

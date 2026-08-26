@@ -31,8 +31,11 @@ abstract class Notation {
     return text.replaceFirst(RegExp(r'\.?0+$'), '');
   }
 
-  static String formatMantissa(double mantissa, int places, NumberStyle style) =>
-      _trim(mantissa.toStringAsFixed(places), style);
+  static String formatMantissa(
+    double mantissa,
+    int places,
+    NumberStyle style,
+  ) => _trim(mantissa.toStringAsFixed(places), style);
 }
 
 /// The genre-standard suffix form: `1.5k`, `12.3m`, `4.2d`.
@@ -46,7 +49,17 @@ class SuffixNotation extends Notation {
   /// Lives here, so localisation is a different notation instance rather than a
   /// code change.
   static const List<String> suffixes = [
-    'k', 'm', 'b', 't', 'qa', 'qu', 'sx', 'sp', 'o', 'n', 'd',
+    'k',
+    'm',
+    'b',
+    't',
+    'qa',
+    'qu',
+    'sx',
+    'sp',
+    'o',
+    'n',
+    'd',
   ];
 
   /// The first exponent with no suffix left.

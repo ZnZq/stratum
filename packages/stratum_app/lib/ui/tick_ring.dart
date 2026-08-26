@@ -44,8 +44,7 @@ class _TickRingState extends State<TickRing>
     // The gear turns once every 2.6s normally and every 0.6s under forcing,
     // matching the prototype's two spin speeds.
     final period = widget.spinning ? 0.6 : 2.6;
-    _spin.value =
-        (_spin.value + delta.inMicroseconds / 1e6 / period) % 1.0;
+    _spin.value = (_spin.value + delta.inMicroseconds / 1e6 / period) % 1.0;
   }
 
   @override

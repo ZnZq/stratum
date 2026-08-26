@@ -7,7 +7,12 @@ import 'package:test/test.dart';
 ///
 /// This loop is exactly what the series formulas replace, which makes it the
 /// yardstick for whether they are right.
-int naiveAffordGeometric(double resources, double first, double growth, int owned) {
+int naiveAffordGeometric(
+  double resources,
+  double first,
+  double growth,
+  int owned,
+) {
   var left = resources;
   var count = 0;
   var price = first * math.pow(growth, owned);
@@ -19,7 +24,12 @@ int naiveAffordGeometric(double resources, double first, double growth, int owne
   return count;
 }
 
-int naiveAffordArithmetic(double resources, double first, double step, int owned) {
+int naiveAffordArithmetic(
+  double resources,
+  double first,
+  double step,
+  int owned,
+) {
   var left = resources;
   var count = 0;
   var price = first + step * owned;
@@ -72,10 +82,18 @@ void main() {
         expected += 15 * math.pow(1.13, i);
       }
 
-      final got = BigDouble.sumGeometricSeries(big(20), big(15), big(1.13), big(0));
+      final got = BigDouble.sumGeometricSeries(
+        big(20),
+        big(15),
+        big(1.13),
+        big(0),
+      );
 
-      expect(got.equalsWithTolerance(big(expected), 1e-9), isTrue,
-          reason: 'got ${got.toJson()}, expected $expected');
+      expect(
+        got.equalsWithTolerance(big(expected), 1e-9),
+        isTrue,
+        reason: 'got ${got.toJson()}, expected $expected',
+      );
     });
   });
 
@@ -127,9 +145,18 @@ void main() {
       expect(count > big(5000), isTrue, reason: 'got ${count.toJson()}');
       // Checked from the inside: that many costs no more than what is on hand,
       // and one more already costs too much.
-      final spent = BigDouble.sumGeometricSeries(count, big(15), big(1.13), big(0));
-      final spentPlusOne =
-          BigDouble.sumGeometricSeries(count + BigDouble.one, big(15), big(1.13), big(0));
+      final spent = BigDouble.sumGeometricSeries(
+        count,
+        big(15),
+        big(1.13),
+        big(0),
+      );
+      final spentPlusOne = BigDouble.sumGeometricSeries(
+        count + BigDouble.one,
+        big(15),
+        big(1.13),
+        big(0),
+      );
 
       expect(spent.lteWithTolerance(BigDouble(1, 300)), isTrue);
       expect(spentPlusOne > BigDouble(1, 300), isTrue);
@@ -176,7 +203,8 @@ void main() {
         final first = rng.nextDouble() * 90 + 10;
         final growth = 1.02 + rng.nextDouble() * 0.5;
         final owned = rng.nextInt(20);
-        final resources = first * math.pow(growth, owned) * (rng.nextDouble() * 400 + 1);
+        final resources =
+            first * math.pow(growth, owned) * (rng.nextDouble() * 400 + 1);
 
         final want = naiveAffordGeometric(resources, first, growth, owned);
         final got = BigDouble.affordGeometricSeries(
@@ -186,8 +214,12 @@ void main() {
           big(owned),
         );
 
-        expect(got, big(want),
-            reason: 'resources=$resources first=$first growth=$growth owned=$owned');
+        expect(
+          got,
+          big(want),
+          reason:
+              'resources=$resources first=$first growth=$growth owned=$owned',
+        );
       }
     });
 
@@ -208,8 +240,11 @@ void main() {
           big(owned),
         );
 
-        expect(got, big(want),
-            reason: 'resources=$resources first=$first step=$step owned=$owned');
+        expect(
+          got,
+          big(want),
+          reason: 'resources=$resources first=$first step=$step owned=$owned',
+        );
       }
     });
   });

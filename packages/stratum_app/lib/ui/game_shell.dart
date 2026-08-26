@@ -54,18 +54,30 @@ class _GameShellState extends State<GameShell> {
                 height: constraints.maxHeight / scale,
                 child: ListenableBuilder(
                   listenable: _game,
-                  builder: (context, _) => Column(
+                  // The screen runs edge to edge and the chrome floats over it,
+                  // so the borehole is never boxed inside a panel.
+                  builder: (context, _) => Stack(
                     children: [
-                      _ResourceBar(game: _game),
-                      Expanded(
+                      Positioned.fill(
                         child: switch (_tab) {
                           GameTab.drill => DrillScreen(game: _game),
                           _ => _Placeholder(tab: _tab),
                         },
                       ),
-                      _TabBar(
-                        active: _tab,
-                        onSelect: (tab) => setState(() => _tab = tab),
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: _ResourceBar(game: _game),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: _TabBar(
+                          active: _tab,
+                          onSelect: (tab) => setState(() => _tab = tab),
+                        ),
                       ),
                     ],
                   ),
@@ -88,10 +100,14 @@ class _ResourceBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final sim = game.sim;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      height: AppMetrics.resourceBar,
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
       decoration: const BoxDecoration(
-        color: Palette.bar,
-        border: Border(bottom: BorderSide(color: Palette.lineBar)),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xF20B0C10), Color(0xB30B0C10), Color(0x000B0C10)],
+        ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -100,31 +116,36 @@ class _ResourceBar extends StatelessWidget {
             child: Row(
               children: [
                 _Resource(
-                    icon: Ti.stack2,
-                    colour: Palette.ore,
-                    value: '${sim.ore.value}'),
+                  icon: Ti.stack2,
+                  colour: Palette.ore,
+                  value: '${sim.ore.value}',
+                ),
                 const SizedBox(width: 13),
                 _Resource(
-                    icon: Ti.atom2,
-                    colour: Palette.quantonium,
-                    value: '${sim.quantonium.value}'),
+                  icon: Ti.atom2,
+                  colour: Palette.quantonium,
+                  value: '${sim.quantonium.value}',
+                ),
                 const SizedBox(width: 13),
                 _Resource(
-                    icon: Ti.diamond,
-                    colour: Palette.sample,
-                    value: '${sim.samples.value}'),
+                  icon: Ti.diamond,
+                  colour: Palette.sample,
+                  value: '${sim.samples.value}',
+                ),
                 const SizedBox(width: 13),
                 _Resource(
-                    icon: Ti.cpu,
-                    colour: Palette.compute,
-                    value: '${sim.backgroundCompute.value}'),
+                  icon: Ti.cpu,
+                  colour: Palette.compute,
+                  value: '${sim.backgroundCompute.value}',
+                ),
               ],
             ),
           ),
           _Resource(
-              icon: Ti.capsule,
-              colour: Palette.gold,
-              value: '${sim.capsules.value}'),
+            icon: Ti.capsule,
+            colour: Palette.gold,
+            value: '${sim.capsules.value}',
+          ),
         ],
       ),
     );
@@ -149,9 +170,10 @@ class _Resource extends StatelessWidget {
       children: [
         Icon(icon, size: 15, color: colour),
         const SizedBox(width: 4),
-        Text(value,
-            style: AppText.display(12.5,
-                weight: FontWeight.w700, color: colour)),
+        Text(
+          value,
+          style: AppText.display(12.5, weight: FontWeight.w700, color: colour),
+        ),
       ],
     );
   }
@@ -174,9 +196,10 @@ class _TabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      height: AppMetrics.navBar,
+      padding: const EdgeInsets.symmetric(vertical: 7),
       decoration: const BoxDecoration(
-        color: Palette.bar,
+        color: Palette.shell,
         border: Border(top: BorderSide(color: Palette.lineBar)),
       ),
       child: Row(
@@ -189,18 +212,18 @@ class _TabBar extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(icon,
-                        size: 20,
-                        color: tab == active
-                            ? Palette.gold
-                            : Palette.textFaint),
+                    Icon(
+                      icon,
+                      size: 20,
+                      color: tab == active ? Palette.gold : Palette.textFaint,
+                    ),
                     const SizedBox(height: 2),
                     Text(
                       label,
-                      style: AppText.body(9.5,
-                          color: tab == active
-                              ? Palette.gold
-                              : Palette.textFaint),
+                      style: AppText.body(
+                        9.5,
+                        color: tab == active ? Palette.gold : Palette.textFaint,
+                      ),
                     ),
                   ],
                 ),
@@ -231,8 +254,10 @@ class _Placeholder extends StatelessWidget {
             GameTab.drill => '',
           }, style: AppText.eyebrow()),
           const SizedBox(height: 6),
-          Text('наступний прохід',
-              style: AppText.body(12, color: Palette.textFaint)),
+          Text(
+            'наступний прохід',
+            style: AppText.body(12, color: Palette.textFaint),
+          ),
         ],
       ),
     );

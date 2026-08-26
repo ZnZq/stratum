@@ -166,7 +166,10 @@ void main() {
         probes: [BalanceProbe.magnitude('ore', () => ore)],
       );
 
-      final report = harness.run(ticks: 1, onTick: (_) => ore = BigDouble(1, 600));
+      final report = harness.run(
+        ticks: 1,
+        onTick: (_) => ore = BigDouble(1, 600),
+      );
 
       expect(report.samples.first.values['ore'], closeTo(500, 1e-9));
       expect(report.samples.last.values['ore'], closeTo(600, 1e-9));
@@ -277,10 +280,13 @@ void main() {
           BalanceProbe('cost', () => cost),
         ],
         sampleEvery: 10,
-      ).run(ticks: 100, onTick: (tick) {
-        value += 1;
-        cost *= 1.05;
-      });
+      ).run(
+        ticks: 100,
+        onTick: (tick) {
+          value += 1;
+          cost *= 1.05;
+        },
+      );
     }
 
     test('is a complete document', () {
@@ -318,7 +324,10 @@ void main() {
       final html = sampleReport().toHtml(
         title: 'run',
         charts: [
-          BalanceChart(title: 'cost against income', probes: ['income', 'cost']),
+          BalanceChart(
+            title: 'cost against income',
+            probes: ['income', 'cost'],
+          ),
         ],
       );
 
@@ -361,7 +370,9 @@ void main() {
       expect(
         () => sampleReport().toHtml(
           title: 'run',
-          charts: [BalanceChart(title: 'bad', probes: ['nope'])],
+          charts: [
+            BalanceChart(title: 'bad', probes: ['nope']),
+          ],
         ),
         throwsArgumentError,
       );

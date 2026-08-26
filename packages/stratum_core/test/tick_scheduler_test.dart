@@ -33,7 +33,10 @@ void main() {
 
     test('imposes no lower bound on the interval', () {
       // The one-second floor is a game balance rule, not an engine rule.
-      expect(TickRate(const Duration(milliseconds: 1)).interval.inMilliseconds, 1);
+      expect(
+        TickRate(const Duration(milliseconds: 1)).interval.inMilliseconds,
+        1,
+      );
     });
   });
 
@@ -92,7 +95,9 @@ void main() {
         rate: TickRate(Duration(milliseconds: 755), ticksPerFire: 2),
       );
 
-      final batch = s.advance(const Duration(milliseconds: 2265)); // exactly 3 intervals
+      final batch = s.advance(
+        const Duration(milliseconds: 2265),
+      ); // exactly 3 intervals
 
       expect(batch.ticks, 6);
       expect(batch.consumed, const Duration(milliseconds: 2265));
@@ -130,8 +135,11 @@ void main() {
       expect(batch.ticks, 3);
       expect(batch.consumed, const Duration(seconds: 12));
       expect(batch.overflow, const Duration(seconds: 28));
-      expect(s.pending, Duration.zero,
-          reason: 'everything past the cap went out, none of it stayed inside');
+      expect(
+        s.pending,
+        Duration.zero,
+        reason: 'everything past the cap went out, none of it stayed inside',
+      );
     });
 
     test('an eight hour absence does not try to simulate every tick', () {
@@ -160,7 +168,11 @@ void main() {
 
       final batch = s.advance(const Duration(seconds: 100));
 
-      expect(batch.ticks, 8, reason: 'two fires of 4 ticks; the third is already past the cap');
+      expect(
+        batch.ticks,
+        8,
+        reason: 'two fires of 4 ticks; the third is already past the cap',
+      );
       expect(batch.consumed, const Duration(seconds: 2));
     });
 
@@ -205,26 +217,41 @@ void main() {
   });
 
   group('changing the rate', () {
-    test('drops the accumulator', () {
+    test('carries the accumulator across as a fraction of the interval', () {
       final s = TickScheduler(rate: TickRate(Duration(seconds: 4)));
-      s.advance(const Duration(milliseconds: 3900));
+      s.advance(const Duration(seconds: 3));
 
-      s.rate = TickRate(second);
+      s.rate = TickRate(Duration(seconds: 2));
 
-      expect(s.pending, Duration.zero,
-          reason: 'otherwise time could be banked on a slow rate and '
-              'cashed in as a burst of ticks on a fast one');
-      expect(s.advance(const Duration(milliseconds: 999)).ticks, 0);
+      expect(
+        s.pending,
+        const Duration(milliseconds: 1500),
+        reason: 'three quarters served stays three quarters served',
+      );
+      expect(s.advance(const Duration(milliseconds: 499)).ticks, 0);
       expect(s.advance(const Duration(milliseconds: 1)).ticks, 1);
     });
 
-    test('setting the same rate still resets, and says so plainly', () {
+    test('banks no extra ticks, however the rate is worked', () {
+      final slow = TickScheduler(rate: TickRate(Duration(seconds: 4)));
+      slow.advance(const Duration(milliseconds: 3900));
+      slow.rate = TickRate(second);
+
+      expect(
+        slow.advance(const Duration(milliseconds: 24)).ticks,
+        0,
+        reason: 'the carry-over is 0.975 of a tick, not 3.9 seconds worth',
+      );
+      expect(slow.advance(const Duration(milliseconds: 1)).ticks, 1);
+    });
+
+    test('setting the same rate changes nothing', () {
       final s = TickScheduler(rate: TickRate(Duration(seconds: 4)));
       s.advance(const Duration(seconds: 3));
 
       s.rate = TickRate(Duration(seconds: 4));
 
-      expect(s.pending, Duration.zero);
+      expect(s.pending, const Duration(seconds: 3));
     });
 
     test('reset clears the accumulator without touching the rate', () {
@@ -255,8 +282,11 @@ void main() {
       stopwatch.stop();
 
       expect(total, 100000);
-      expect(stopwatch.elapsedMilliseconds, lessThan(500),
-          reason: 'took ${stopwatch.elapsedMilliseconds}ms');
+      expect(
+        stopwatch.elapsedMilliseconds,
+        lessThan(500),
+        reason: 'took ${stopwatch.elapsedMilliseconds}ms',
+      );
     });
   });
 }

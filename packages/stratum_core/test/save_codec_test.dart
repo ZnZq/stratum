@@ -8,10 +8,13 @@ void main() {
   group('round trip', () {
     test('carries sections there and back', () {
       final codec = codecAt(1);
-      final document = SaveDocument(version: 1, sections: {
-        'rng': {'seed': 42},
-        'drilling': {'depth': 17},
-      });
+      final document = SaveDocument(
+        version: 1,
+        sections: {
+          'rng': {'seed': 42},
+          'drilling': {'depth': 17},
+        },
+      );
 
       final restored = codec.decode(codec.encode(document));
 
@@ -29,8 +32,12 @@ void main() {
     test('survives an empty save', () {
       final codec = codecAt(1);
 
-      expect(codec.decode(codec.encode(SaveDocument(version: 1, sections: {})))
-          .sections, isEmpty);
+      expect(
+        codec
+            .decode(codec.encode(SaveDocument(version: 1, sections: {})))
+            .sections,
+        isEmpty,
+      );
     });
 
     test('carries a real RandomSource through', () {
@@ -60,9 +67,8 @@ void main() {
           apply: (sections) => {...sections, 'added': 'by migration'},
         ),
       ]);
-      final old = codecAt(1).encode(
-        SaveDocument(version: 1, sections: {'kept': 'original'}),
-      );
+      final old = codecAt(1)
+          .encode(SaveDocument(version: 1, sections: {'kept': 'original'}));
 
       final restored = codec.decode(old);
 
@@ -74,9 +80,27 @@ void main() {
     test('runs a chain in order across several versions', () {
       final trail = <int>[];
       final codec = codecAt(4, [
-        SaveMigration(fromVersion: 1, apply: (s) { trail.add(1); return s; }),
-        SaveMigration(fromVersion: 2, apply: (s) { trail.add(2); return s; }),
-        SaveMigration(fromVersion: 3, apply: (s) { trail.add(3); return s; }),
+        SaveMigration(
+          fromVersion: 1,
+          apply: (s) {
+            trail.add(1);
+            return s;
+          },
+        ),
+        SaveMigration(
+          fromVersion: 2,
+          apply: (s) {
+            trail.add(2);
+            return s;
+          },
+        ),
+        SaveMigration(
+          fromVersion: 3,
+          apply: (s) {
+            trail.add(3);
+            return s;
+          },
+        ),
       ]);
       final old = codecAt(1).encode(SaveDocument(version: 1, sections: {}));
 
@@ -87,8 +111,20 @@ void main() {
     test('accepts migrations registered out of order', () {
       final trail = <int>[];
       final codec = codecAt(3, [
-        SaveMigration(fromVersion: 2, apply: (s) { trail.add(2); return s; }),
-        SaveMigration(fromVersion: 1, apply: (s) { trail.add(1); return s; }),
+        SaveMigration(
+          fromVersion: 2,
+          apply: (s) {
+            trail.add(2);
+            return s;
+          },
+        ),
+        SaveMigration(
+          fromVersion: 1,
+          apply: (s) {
+            trail.add(1);
+            return s;
+          },
+        ),
       ]);
 
       codec.decode(codecAt(1).encode(SaveDocument(version: 1, sections: {})));
@@ -99,7 +135,13 @@ void main() {
     test('runs nothing when the save is already current', () {
       var ran = false;
       final codec = codecAt(2, [
-        SaveMigration(fromVersion: 1, apply: (s) { ran = true; return s; }),
+        SaveMigration(
+          fromVersion: 1,
+          apply: (s) {
+            ran = true;
+            return s;
+          },
+        ),
       ]);
 
       codec.decode(codecAt(2).encode(SaveDocument(version: 2, sections: {})));
@@ -114,10 +156,9 @@ void main() {
           apply: (sections) => {...sections}..remove('obsolete'),
         ),
       ]);
-      final old = codecAt(1).encode(SaveDocument(
-        version: 1,
-        sections: {'obsolete': 1, 'kept': 2},
-      ));
+      final old = codecAt(
+        1,
+      ).encode(SaveDocument(version: 1, sections: {'obsolete': 1, 'kept': 2}));
 
       final restored = codec.decode(old);
 
@@ -133,11 +174,13 @@ void main() {
 
       expect(
         () => codec.decode(old),
-        throwsA(isA<SaveFormatException>().having(
-          (e) => e.message,
-          'message',
-          contains('2'),
-        )),
+        throwsA(
+          isA<SaveFormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('2'),
+          ),
+        ),
       );
     });
 
@@ -157,22 +200,26 @@ void main() {
       // Running an older build must not quietly erase the progress a newer one
       // wrote, so anything the codec does not recognise passes through intact.
       final codec = codecAt(1);
-      final encoded = codec.encode(SaveDocument(
-        version: 1,
-        sections: {'from_the_future': {'nested': true}},
-      ));
+      final encoded = codec.encode(
+        SaveDocument(
+          version: 1,
+          sections: {
+            'from_the_future': {'nested': true},
+          },
+        ),
+      );
 
-      expect(codec.decode(encoded).sections['from_the_future'],
-          {'nested': true});
+      expect(codec.decode(encoded).sections['from_the_future'], {
+        'nested': true,
+      });
     });
 
     test('survive a migration that ignores them', () {
       final codec = codecAt(2, [
         SaveMigration(fromVersion: 1, apply: (s) => {...s, 'touched': true}),
       ]);
-      final old = codecAt(1).encode(
-        SaveDocument(version: 1, sections: {'stranger': 'value'}),
-      );
+      final old = codecAt(1)
+          .encode(SaveDocument(version: 1, sections: {'stranger': 'value'}));
 
       expect(codec.decode(old).sections['stranger'], 'value');
     });
@@ -184,39 +231,50 @@ void main() {
 
       expect(
         () => codecAt(2).decode(future),
-        throwsA(isA<SaveFormatException>().having(
-          (e) => e.message,
-          'message',
-          allOf(contains('9'), contains('2')),
-        )),
+        throwsA(
+          isA<SaveFormatException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('9'), contains('2')),
+          ),
+        ),
       );
     });
 
     test('malformed text is refused', () {
-      expect(() => codecAt(1).decode('not json at all'),
-          throwsA(isA<SaveFormatException>()));
-      expect(() => codecAt(1).decode(''),
-          throwsA(isA<SaveFormatException>()));
+      expect(
+        () => codecAt(1).decode('not json at all'),
+        throwsA(isA<SaveFormatException>()),
+      );
+      expect(() => codecAt(1).decode(''), throwsA(isA<SaveFormatException>()));
     });
 
     test('a payload that is not an object is refused', () {
-      expect(() => codecAt(1).decode('[1, 2, 3]'),
-          throwsA(isA<SaveFormatException>()));
+      expect(
+        () => codecAt(1).decode('[1, 2, 3]'),
+        throwsA(isA<SaveFormatException>()),
+      );
     });
 
     test('a missing version is refused', () {
-      expect(() => codecAt(1).decode('{"sections": {}}'),
-          throwsA(isA<SaveFormatException>()));
+      expect(
+        () => codecAt(1).decode('{"sections": {}}'),
+        throwsA(isA<SaveFormatException>()),
+      );
     });
 
     test('a non-integer version is refused', () {
-      expect(() => codecAt(1).decode('{"version": "one", "sections": {}}'),
-          throwsA(isA<SaveFormatException>()));
+      expect(
+        () => codecAt(1).decode('{"version": "one", "sections": {}}'),
+        throwsA(isA<SaveFormatException>()),
+      );
     });
 
     test('missing sections are refused', () {
-      expect(() => codecAt(1).decode('{"version": 1}'),
-          throwsA(isA<SaveFormatException>()));
+      expect(
+        () => codecAt(1).decode('{"version": 1}'),
+        throwsA(isA<SaveFormatException>()),
+      );
     });
 
     test('rejects a non-positive current version', () {
@@ -227,7 +285,12 @@ void main() {
   group('the encoded form stays readable', () {
     test('is plain JSON with the version up front', () {
       final encoded = codecAt(1).encode(
-        SaveDocument(version: 1, sections: {'rng': {'seed': 42}}),
+        SaveDocument(
+          version: 1,
+          sections: {
+            'rng': {'seed': 42},
+          },
+        ),
       );
 
       expect(encoded, startsWith('{"version":1'));

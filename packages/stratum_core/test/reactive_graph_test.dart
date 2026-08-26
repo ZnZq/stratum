@@ -111,8 +111,11 @@ void main() {
 
       expect(leafNode.value, 'yes');
       expect(middle.calls, 2, reason: 'the middle node had to recompute');
-      expect(leaf.calls, 1,
-          reason: 'but the result is the same, so there was nothing to wake the leaf for');
+      expect(
+        leaf.calls,
+        1,
+        reason: 'but the result is the same, so there was nothing to wake the leaf for',
+      );
     });
 
     test('a changed intermediate result does wake them', () {
@@ -134,7 +137,10 @@ void main() {
       final useLeft = Signal(true);
       final left = Signal(1);
       final right = Signal(100);
-      final body = Counted('branch', () => useLeft.value ? left.value : right.value);
+      final body = Counted(
+        'branch',
+        () => useLeft.value ? left.value : right.value,
+      );
       final c = Computed(body.call);
 
       expect(c.value, 1);
@@ -152,7 +158,11 @@ void main() {
       // Now the other way around: left has dropped out of the dependencies.
       left.value = 7;
       expect(c.value, 200);
-      expect(body.calls, 2, reason: 'the left branch is no longer a dependency');
+      expect(
+        body.calls,
+        2,
+        reason: 'the left branch is no longer a dependency',
+      );
     });
   });
 
@@ -172,7 +182,11 @@ void main() {
       root.value = 4;
 
       expect(mergeNode.value, 32);
-      expect(merge.calls, 2, reason: 'two paths to the root, but one recomputation');
+      expect(
+        merge.calls,
+        2,
+        reason: 'two paths to the root, but one recomputation',
+      );
     });
   });
 
@@ -200,7 +214,11 @@ void main() {
       expect(
         () => self.value,
         throwsA(
-          isA<StateError>().having((e) => e.message, 'message', contains('drill power')),
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('drill power'),
+          ),
         ),
       );
     });
@@ -304,13 +322,20 @@ void main() {
       source.value = 3;
       source.value = 4;
 
-      expect(notifications, 1,
-          reason: 'the listener already knows to re-read; repeating buys nothing');
+      expect(
+        notifications,
+        1,
+        reason: 'the listener already knows to re-read; repeating buys nothing',
+      );
 
       c.value;
       source.value = 5;
 
-      expect(notifications, 2, reason: 'once it has re-read, notifications make sense again');
+      expect(
+        notifications,
+        2,
+        reason: 'once it has re-read, notifications make sense again',
+      );
     });
   });
 
@@ -322,8 +347,12 @@ void main() {
       final modules = Signal(0);
 
       final base = Computed(() => (10 + 6 * drills.value).big);
-      final treeMultiplier = Computed(() => 1.15.big.pow(treeLevel.value.toDouble()));
-      final moduleMultiplier = Computed(() => 1.big + 0.25.big * modules.value.big);
+      final treeMultiplier = Computed(
+        () => 1.15.big.pow(treeLevel.value.toDouble()),
+      );
+      final moduleMultiplier = Computed(
+        () => 1.big + 0.25.big * modules.value.big,
+      );
       final body = Counted(
         'power',
         () => base.value * treeMultiplier.value * moduleMultiplier.value,
@@ -368,7 +397,11 @@ void main() {
       c.dispose();
       source.value = 5;
 
-      expect(notifications, 0, reason: 'a disposed node must not hear about changes');
+      expect(
+        notifications,
+        0,
+        reason: 'a disposed node must not hear about changes',
+      );
     });
 
     test('the rest of the graph keeps working after one node leaves', () {

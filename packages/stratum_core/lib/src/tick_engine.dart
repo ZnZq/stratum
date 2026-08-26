@@ -61,7 +61,13 @@ class TickEngine {
   ///
   /// Going straight to `scheduler.rate` would leave the timer period stale, so
   /// the new rate would only take effect an interval later.
+  ///
+  /// The time already served is banked first, so the scheduler can carry it
+  /// across as a fraction of the new interval. Without that sync it would be
+  /// lost twice over -- the accumulator holds only what the timer has settled,
+  /// and the rest is the gap since the last sync.
   set rate(TickRate value) {
+    if (isRunning) syncNow();
     scheduler.rate = value;
     _lastSync = _clock.elapsed;
     if (isRunning) {
@@ -152,7 +158,21 @@ class TickEngine {
   }
 
   void _startTimer() {
-    _timer = Timer.periodic(scheduler.rate.interval, (_) => syncNow());
+    // A rate change leaves part of the interval already served, and a plain
+    // periodic timer would fire a whole interval after it -- the bar would sit
+    // full and wait. So the first fire is short by whatever was carried over,
+    // and only then does the loop settle into its period.
+    final remaining = timeToNextTick;
+    if (remaining >= scheduler.rate.interval) {
+      _timer = Timer.periodic(scheduler.rate.interval, (_) => syncNow());
+      return;
+    }
+    _timer = Timer(remaining, () {
+      syncNow();
+      if (isRunning) {
+        _timer = Timer.periodic(scheduler.rate.interval, (_) => syncNow());
+      }
+    });
   }
 
   void _stopTimer() {

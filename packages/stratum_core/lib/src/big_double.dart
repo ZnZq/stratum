@@ -20,14 +20,14 @@ class BigDouble implements Comparable<BigDouble> {
   /// and a const context cannot compute. The invariant is on whoever writes the
   /// constant, so an assert guards it.
   const BigDouble.fromMantissaExponent(this.mantissa, this.exponent)
-      : style = null,
-        assert(
-          mantissa == 0 ||
-              (mantissa >= 1 && mantissa < 10) ||
-              (mantissa <= -1 && mantissa > -10),
-          'mantissa must be zero or within [1, 10) in magnitude',
-        ),
-        assert(mantissa != 0 || exponent == 0, 'zero has a canonical exponent');
+    : style = null,
+      assert(
+        mantissa == 0 ||
+            (mantissa >= 1 && mantissa < 10) ||
+            (mantissa <= -1 && mantissa > -10),
+        'mantissa must be zero or within [1, 10) in magnitude',
+      ),
+      assert(mantissa != 0 || exponent == 0, 'zero has a canonical exponent');
 
   const BigDouble._raw(this.mantissa, this.exponent, [this.style]);
 
@@ -206,7 +206,8 @@ class BigDouble implements Comparable<BigDouble> {
     // yields 2^3 = 7.999999999999997, and that error then leaks into prices and
     // thresholds. In this game nearly every power is an integer, so this path
     // is the main one, and for small exponents it is also faster.
-    if (power == power.roundToDouble() && power.abs() <= _maxExactIntegerPower) {
+    if (power == power.roundToDouble() &&
+        power.abs() <= _maxExactIntegerPower) {
       final magnitude = _powBySquaring(power.abs().toInt());
       return (power < 0 ? one / magnitude : magnitude)._styled(style);
     }
@@ -222,7 +223,10 @@ class BigDouble implements Comparable<BigDouble> {
 
     final wholePart = logResult.floorToDouble();
     return _normalized(
-        _pow10Fractional(logResult - wholePart), wholePart.toInt(), style);
+      _pow10Fractional(logResult - wholePart),
+      wholePart.toInt(),
+      style,
+    );
   }
 
   /// Ceiling for the exact integer-power path.
@@ -278,7 +282,9 @@ class BigDouble implements Comparable<BigDouble> {
     // there every purchase costs the same.
     if (growth == one) return startingPrice * count;
 
-    return startingPrice * (growth.pow(count.toDouble()) - one) / (growth - one);
+    return startingPrice *
+        (growth.pow(count.toDouble()) - one) /
+        (growth - one);
   }
 
   static BigDouble affordGeometricSeries(
@@ -421,8 +427,10 @@ class BigDouble implements Comparable<BigDouble> {
   ///
   /// Relative rather than absolute, so the same decision is made the same way
   /// at `1e-100` and at `1e100`.
-  bool equalsWithTolerance(BigDouble other,
-      [double tolerance = roundTolerance]) {
+  bool equalsWithTolerance(
+    BigDouble other, [
+    double tolerance = roundTolerance,
+  ]) {
     if (isZero && other.isZero) return true;
     if (sign != other.sign) return false;
 
@@ -431,8 +439,10 @@ class BigDouble implements Comparable<BigDouble> {
     return difference <= scale * BigDouble.fromNum(tolerance);
   }
 
-  int compareWithTolerance(BigDouble other,
-      [double tolerance = roundTolerance]) {
+  int compareWithTolerance(
+    BigDouble other, [
+    double tolerance = roundTolerance,
+  ]) {
     if (equalsWithTolerance(other, tolerance)) return 0;
     return compareTo(other);
   }
@@ -459,8 +469,11 @@ class BigDouble implements Comparable<BigDouble> {
   String toString([NumberStyle? style]) =>
       (style ?? this.style ?? NumberStyle.global).format(this);
 
-  static BigDouble _normalized(double mantissa, int exponent,
-      [NumberStyle? style]) {
+  static BigDouble _normalized(
+    double mantissa,
+    int exponent, [
+    NumberStyle? style,
+  ]) {
     if (mantissa.isNaN) {
       return _domainError('NaN is not a BigDouble value', zero);
     }

@@ -48,7 +48,10 @@ class SaveCodec {
       );
     }
     for (final migration in migrations) {
-      final clash = _migrations.putIfAbsent(migration.fromVersion, () => migration);
+      final clash = _migrations.putIfAbsent(
+        migration.fromVersion,
+        () => migration,
+      );
       if (!identical(clash, migration)) {
         throw ArgumentError.value(
           migration.fromVersion,

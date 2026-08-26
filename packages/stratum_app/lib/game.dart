@@ -36,21 +36,38 @@ class Game extends ChangeNotifier {
       scheduler: TickScheduler(rate: chargeRate),
       onBatch: _onChargeBatch,
     );
+
+    // The simulation owns whether forcing is on, and it can switch it off by
+    // itself when the charge runs out. Subscribing means the drill rate always
+    // follows that one flag instead of being set alongside it and drifting.
+    _forcingWatch = sim.forcing.listen(_applyDrillRate);
     drill.start();
   }
 
   static final TickRate baseRate = TickRate(const Duration(seconds: 4));
-  static final TickRate forcingRate = TickRate(const Duration(seconds: 1));
 
-  /// One point of charge every five seconds fills the gauge in the same eight
-  /// and a bit minutes the prototype took, only without borrowing the drill's
-  /// heartbeat to do it.
-  static final TickRate chargeRate = TickRate(const Duration(seconds: 5));
+  /// Forcing halves the heartbeat rather than pinning it to a fixed length,
+  /// so anything that shortens the base tick later carries through by itself.
+  static final TickRate forcingRate = TickRate(
+    Duration(microseconds: baseRate.interval.inMicroseconds ~/ 2),
+  );
+
+  /// One point of charge every two seconds, on its own loop rather than
+  /// borrowing the drill's heartbeat. The meter above the readout is driven
+  /// by this engine, so what the player watches filling is the real interval.
+  static final TickRate chargeRate = TickRate(const Duration(seconds: 2));
 
   final PrototypeSimulation sim = PrototypeSimulation();
 
   late final TickEngine drill;
   late final TickEngine chargeLoop;
+  late final Unsubscribe _forcingWatch;
+
+  void _applyDrillRate() {
+    final wanted = sim.forcing.value ? forcingRate : baseRate;
+    if (identical(drill.rate, wanted)) return;
+    drill.rate = wanted;
+  }
 
   final List<FloatingNumber> floats = [];
   int _nextFloatId = 0;
@@ -60,6 +77,15 @@ class Game extends ChangeNotifier {
   final ValueNotifier<int> breakFlashes = ValueNotifier(0);
 
   bool get isForcing => sim.forcing.value;
+
+  /// The heartbeat as it currently stands, forcing included.
+  String get tickInterval => secondsLabel(drill.rate.interval);
+
+  /// How long one point of charge takes, for the gauge to say so out loud.
+  static String get chargeInterval => secondsLabel(chargeRate.interval);
+
+  static String secondsLabel(Duration interval) =>
+      '${(interval.inMilliseconds / 1000).toStringAsFixed(1)} с';
 
   void _onDrillBatch(TickBatch batch) {
     for (var i = 0; i < batch.ticks; i++) {
@@ -75,6 +101,7 @@ class Game extends ChangeNotifier {
       sim.regenerateCharge();
     }
     if (sim.chargeFull) chargeLoop.stop();
+    if (_gripHeld) _engageForcing();
     notifyListeners();
   }
 
@@ -111,7 +138,7 @@ class Game extends ChangeNotifier {
     }
     if (outcome.thickLayersBroken > 0) {
       _addFloat(
-        text: 'ТОВСТИЙ ШАР · всі ресурси ×5',
+        text: 'ТОВСТИЙ ШАР · всі ресурси ×${PrototypeSimulation.thickSpan}',
         color: 0xFFFFD782,
         left: 28,
         top: 42,
@@ -139,31 +166,45 @@ class Game extends ChangeNotifier {
     required double top,
     required double size,
   }) {
-    floats.add(FloatingNumber(
-      id: _nextFloatId++,
-      text: text,
-      color: color,
-      left: left,
-      top: top,
-      size: size,
-    ));
+    floats.add(
+      FloatingNumber(
+        id: _nextFloatId++,
+        text: text,
+        color: color,
+        left: left,
+        top: top,
+        size: size,
+      ),
+    );
   }
 
   void retireFloat(int id) {
     floats.removeWhere((f) => f.id == id);
   }
 
+  /// Whether the player is still pressing the rock.
+  ///
+  /// Kept apart from [PrototypeSimulation.forcing], which the simulation
+  /// clears on its own when the gauge runs dry. The press outlives that, so
+  /// forcing resumes by itself as soon as a point is back instead of asking
+  /// the player to lift and press again.
+  bool _gripHeld = false;
+
   void startForcing() {
-    if (sim.charge.value <= 2 || sim.forcing.value) return;
-    sim.forcing.value = true;
-    drill.rate = forcingRate;
-    notifyListeners();
+    _gripHeld = true;
+    _engageForcing();
   }
 
   void stopForcing() {
+    _gripHeld = false;
     if (!sim.forcing.value) return;
     sim.forcing.value = false;
-    drill.rate = baseRate;
+    _syncChargeLoop();
+    notifyListeners();
+  }
+
+  void _engageForcing() {
+    if (sim.forcing.value || !sim.beginForcing()) return;
     _syncChargeLoop();
     notifyListeners();
   }
@@ -173,8 +214,14 @@ class Game extends ChangeNotifier {
     notifyListeners();
   }
 
+  void buyPowerUpgrade() {
+    sim.buyPowerUpgrade();
+    notifyListeners();
+  }
+
   @override
   void dispose() {
+    _forcingWatch();
     drill.dispose();
     chargeLoop.dispose();
     criticalFlashes.dispose();

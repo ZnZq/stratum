@@ -97,11 +97,23 @@ class TickScheduler {
 
   TickRate get rate => _rate;
 
-  /// Changing the rate drops the accumulator, otherwise a player could bank
-  /// time on a slow rate and cash it in as a burst of ticks on a fast one.
+  /// Changing the rate carries the accumulator across as a *fraction of an
+  /// interval* rather than as seconds.
+  ///
+  /// A tick already three quarters served stays three quarters served when the
+  /// interval halves: the player who has been waiting does not get sent back to
+  /// the start of the wait. Scaling instead of keeping the seconds is what
+  /// closes the obvious exploit -- banking time on a slow rate and cashing it
+  /// in as a burst of ticks on a fast one buys nothing, because the banked
+  /// amount is measured in ticks, and that number does not change.
   set rate(TickRate value) {
+    if (_pending > Duration.zero) {
+      final served = _pending.inMicroseconds / _rate.interval.inMicroseconds;
+      _pending = Duration(
+        microseconds: (served * value.interval.inMicroseconds).round(),
+      );
+    }
     _rate = value;
-    _pending = Duration.zero;
   }
 
   /// Time accumulated but not yet played out.

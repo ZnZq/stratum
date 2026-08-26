@@ -54,12 +54,15 @@ void main() {
       expect(BigDouble(2.25, 7).toString(NumberStyle.compact), '22.5m');
     });
 
-    test('promotes the tier when rounding pushes the mantissa to a thousand', () {
-      // 9.99999e23 in the sx tier is 999.999, which rounds to 1000.00 at two
-      // places. Printing that as "1000sx" instead of "1sp" would be wrong.
-      expect(BigDouble(9.99999, 23).toString(NumberStyle.compact), '1sp');
-      expect(BigDouble(9.99999, 5).toString(NumberStyle.compact), '1m');
-    });
+    test(
+      'promotes the tier when rounding pushes the mantissa to a thousand',
+      () {
+        // 9.99999e23 in the sx tier is 999.999, which rounds to 1000.00 at two
+        // places. Printing that as "1000sx" instead of "1sp" would be wrong.
+        expect(BigDouble(9.99999, 23).toString(NumberStyle.compact), '1sp');
+        expect(BigDouble(9.99999, 5).toString(NumberStyle.compact), '1m');
+      },
+    );
 
     test('promotes past the end of the table into scientific', () {
       expect(BigDouble(9.99999, 35).toString(NumberStyle.compact), '1e36');
@@ -187,7 +190,10 @@ void main() {
     });
 
     test('serialization ignores it', () {
-      expect(BigDouble(1.5, 3).withStyle(NumberStyle.scientific).toJson(), '1.5e3');
+      expect(
+        BigDouble(1.5, 3).withStyle(NumberStyle.scientific).toJson(),
+        '1.5e3',
+      );
     });
   });
 

@@ -3,9 +3,12 @@ import 'package:test/test.dart';
 
 void main() {
   group('equality', () {
-    test('two numbers built from different shapes of the same value are equal', () {
-      expect(BigDouble(1234.5, 2), BigDouble(1.2345, 5));
-    });
+    test(
+      'two numbers built from different shapes of the same value are equal',
+      () {
+        expect(BigDouble(1234.5, 2), BigDouble(1.2345, 5));
+      },
+    );
 
     test('equal numbers share a hashCode', () {
       expect(BigDouble(1234.5, 2).hashCode, BigDouble(1.2345, 5).hashCode);

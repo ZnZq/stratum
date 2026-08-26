@@ -212,8 +212,14 @@ void main() {
 
       final restored = RandomSource.fromJson(source.toJson());
 
-      expect(draw(restored.stream('crit'), 10), draw(source.stream('crit'), 10));
-      expect(draw(restored.stream('echo'), 10), draw(source.stream('echo'), 10));
+      expect(
+        draw(restored.stream('crit'), 10),
+        draw(source.stream('crit'), 10),
+      );
+      expect(
+        draw(restored.stream('echo'), 10),
+        draw(source.stream('echo'), 10),
+      );
     });
 
     test('a stream absent from the save starts from its derived seed', () {
@@ -253,7 +259,11 @@ void main() {
       }
 
       for (var bit = 0; bit < 53; bit++) {
-        expect(ones[bit] / draws, closeTo(0.5, 0.02), reason: 'bit $bit is skewed');
+        expect(
+          ones[bit] / draws,
+          closeTo(0.5, 0.02),
+          reason: 'bit $bit is skewed',
+        );
       }
     });
 
@@ -285,8 +295,11 @@ void main() {
         if (crit.chance(0.5) == echo.chance(0.5)) agreements++;
       }
 
-      expect(agreements / rolls, closeTo(0.5, 0.02),
-          reason: 'correlated substreams would sit far from a half');
+      expect(
+        agreements / rolls,
+        closeTo(0.5, 0.02),
+        reason: 'correlated substreams would sit far from a half',
+      );
     });
 
     test('names one character apart do not track each other', () {

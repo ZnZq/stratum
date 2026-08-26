@@ -66,7 +66,11 @@ void main() {
         BigDouble.minPositive,
         BigDouble(9.999999999999, 12345),
       ]) {
-        expect(BigDouble.parse(n.toJson()), n, reason: 'did not survive the round trip: $n');
+        expect(
+          BigDouble.parse(n.toJson()),
+          n,
+          reason: 'did not survive the round trip: $n',
+        );
       }
     });
 

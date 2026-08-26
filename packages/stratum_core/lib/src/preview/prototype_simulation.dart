@@ -42,41 +42,48 @@ class CycleOutcome {
 /// recomputing anything that has not changed.
 class PrototypeSimulation {
   PrototypeSimulation({int seed = 20260825})
-      : random = RandomSource(seed: seed) {
+    : random = RandomSource(seed: seed) {
     layerDensity = Computed(
       () => densityAt(layer.value),
       name: 'layer density',
     );
+    perDrillPower = Computed(
+      () => perDrillPowerWith(drillPowerLevel.value),
+      name: 'power per drill',
+    );
     power = Computed(
-      () => BigDouble.fromNum(10 + 6 * drills.value) *
-          BigDouble.fromNum(_milestoneMultiplier(drills.value)) *
-          BigDouble.fromNum(1.15).pow(powerLevel.value.toDouble()) *
-          (BigDouble.one + BigDouble.fromNum(0.25) * modules.value.big),
+      () => powerWith(drills: drills.value, upgrades: drillPowerLevel.value),
       name: 'drill power',
     );
+    powerUpgradeCost = Computed(
+      () =>
+          (BigDouble.fromNum(50) *
+                  BigDouble.fromNum(1.75).pow(drillPowerLevel.value.toDouble()))
+              .ceil(),
+      name: 'power upgrade cost',
+    );
     orePerCycle = Computed(
-      () => BigDouble.fromNum(1.6) *
+      () =>
+          BigDouble.fromNum(1.6) *
           BigDouble.fromNum(1.03).pow(layer.value.toDouble()) *
           BigDouble.fromNum(1.2).pow(enrichmentLevel.value.toDouble()),
       name: 'ore per cycle',
     );
     drillCost = Computed(
-      () => (BigDouble.fromNum(15) *
-              BigDouble.fromNum(1.13).pow(drills.value.toDouble()) *
-              BigDouble.fromNum(1 - 0.04 * discountLevel.value))
-          .ceil(),
+      () =>
+          (BigDouble.fromNum(15) *
+                  BigDouble.fromNum(1.13).pow(drills.value.toDouble()) *
+                  BigDouble.fromNum(1 - 0.04 * discountLevel.value))
+              .ceil(),
       name: 'drill cost',
     );
-    cyclesToBreak = Computed(
-      () {
-        final remaining = layerHp.value;
-        final perCycle = power.value;
-        if (perCycle.isZero) return 1;
-        final estimate = (remaining / perCycle).ceil().toDouble();
-        return estimate < 1 ? 1 : estimate.toInt();
-      },
-      name: 'cycles to break',
-    );
+    cyclesToBreak = Computed(() {
+      final remaining = layerHp.value;
+      final perCycle = power.value;
+      if (perCycle.isZero) return 1;
+      final estimate = (remaining / perCycle).ceil().toDouble();
+      return estimate < 1 ? 1 : estimate.toInt();
+    }, name: 'cycles to break');
 
     _resetLayer();
   }
@@ -85,8 +92,17 @@ class PrototypeSimulation {
 
   final Signal<int> layer = Signal(0, name: 'layer');
   final Signal<BigDouble> ore = Signal(BigDouble.zero, name: 'ore');
-  final Signal<BigDouble> quantonium = Signal(BigDouble.zero, name: 'quantonium');
-  final Signal<int> drills = Signal(0, name: 'drills');
+  final Signal<BigDouble> quantonium = Signal(
+    BigDouble.zero,
+    name: 'quantonium',
+  );
+
+  /// A rig always has at least one drill: total power is a product, and a
+  /// count of zero would mean the game could never start.
+  final Signal<int> drills = Signal(1, name: 'drills');
+
+  /// Ore-bought upgrades to what a single drill delivers.
+  final Signal<int> drillPowerLevel = Signal(0, name: 'drill power level');
   final Signal<int> modules = Signal(0, name: 'modules');
   final Signal<int> samples = Signal(0, name: 'samples');
   final Signal<int> capsules = Signal(0, name: 'capsules');
@@ -104,26 +120,70 @@ class PrototypeSimulation {
 
   /// Damage already taken by the current layer, kept between cycles.
   final Signal<BigDouble> layerHp = Signal(BigDouble.zero, name: 'layer hp');
-  final Signal<BigDouble> layerHpMax = Signal(BigDouble.one, name: 'layer hp max');
+  final Signal<BigDouble> layerHpMax = Signal(
+    BigDouble.one,
+    name: 'layer hp max',
+  );
 
   late final Computed<BigDouble> layerDensity;
   late final Computed<BigDouble> power;
+  late final Computed<BigDouble> perDrillPower;
+  late final Computed<BigDouble> powerUpgradeCost;
   late final Computed<BigDouble> orePerCycle;
   late final Computed<BigDouble> drillCost;
   late final Computed<int> cyclesToBreak;
 
   static const int chargeCap = 100;
 
+  /// What one forced cycle costs, paid IN ADVANCE.
+  ///
+  /// Charging on completion instead would hand the acceleration out free: a
+  /// player tapping forcing on and off between ticks would shorten the
+  /// interval and never reach the moment the gauge is read.
+  static const int forcingCost = 4;
+
+  /// What one unupgraded drill delivers per cycle.
+  static const double basePerDrillPower = 10;
+
+  /// Each upgrade multiplies a single drill's output by this.
+  static const double perDrillGrowth = 1.2;
+
   /// The prototype caps damage carry-over here, so one enormous hit cannot
   /// tunnel through an unbounded number of layers in a single cycle.
   static const int maxLayersPerCycle = 25;
 
-  /// Every twenty-fifth metre is a thick layer.
-  static bool isThick(int layer) => (layer + 1) % 25 == 0;
+  static const int thickEvery = 25;
+
+  /// A thick layer is three metres of rock in one piece: breaking it advances
+  /// the depth by all three and pays out three times over, so its reward and
+  /// its thickness are the same number rather than two to keep in step.
+  static const int thickSpan = 3;
+
+  /// Every twenty-fifth metre starts a thick layer.
+  static bool isThick(int layer) => (layer + 1) % thickEvery == 0;
+
+  /// How many metres a layer occupies.
+  static int spanOf(int layer) => isThick(layer) ? thickSpan : 1;
+
+  /// The metre the next layer starts at.
+  static int nextLayer(int layer) => layer + spanOf(layer);
+
+  /// The metre the layer covering [metre] starts at.
+  ///
+  /// Metres inside a thick layer are not layers of their own, so anything
+  /// walking the stack has to land on the piece that contains them.
+  static int layerStart(int metre) {
+    final within = metre % thickEvery;
+    if (metre >= thickEvery && within < thickSpan - 1) {
+      return metre - within - 1;
+    }
+    return metre;
+  }
 
   /// Density is a plain exponent with a stratum step every fifty metres.
   static BigDouble densityAt(int layer) {
-    final base = BigDouble.fromNum(5) *
+    final base =
+        BigDouble.fromNum(5) *
         BigDouble.fromNum(1.055).pow(layer.toDouble()) *
         BigDouble.fromNum(2.5).pow((layer ~/ 50).toDouble());
     return isThick(layer) ? base * BigDouble.fromNum(10) : base;
@@ -154,12 +214,35 @@ class PrototypeSimulation {
   ///
   /// Writes are batched so the UI hears about the whole cycle once rather than
   /// once per field touched.
-  CycleOutcome tick() => batch(() => _cycle(0));
+  CycleOutcome tick() => batch(() {
+    final outcome = _cycle(0);
+    // The cycle just paid for is over; forcing only continues if the gauge
+    // can cover the next one before it starts.
+    if (forcing.value && !_payForForcing()) forcing.value = false;
+    return outcome;
+  });
+
+  /// Turns forcing on, paying for the cycle it is about to accelerate.
+  ///
+  /// Returns whether the gauge could cover it.
+  bool beginForcing() {
+    if (forcing.value) return true;
+    if (!_payForForcing()) return false;
+    forcing.value = true;
+    return true;
+  }
+
+  bool _payForForcing() {
+    if (charge.value < forcingCost) return false;
+    charge.value = charge.value - forcingCost;
+    return true;
+  }
 
   CycleOutcome _cycle(int chain) {
     final critical = random.stream('crit').chance(criticalChance);
-    final multiplier =
-        critical ? BigDouble.fromNum(criticalMultiplier) : BigDouble.one;
+    final multiplier = critical
+        ? BigDouble.fromNum(criticalMultiplier)
+        : BigDouble.one;
 
     final gained = orePerCycle.value * multiplier;
     ore.value = ore.value + gained;
@@ -184,12 +267,6 @@ class PrototypeSimulation {
       }
     }
 
-    if (forcing.value) {
-      final left = charge.value - 8;
-      charge.value = left < 0 ? 0 : left;
-      if (charge.value == 0) forcing.value = false;
-    }
-
     var echoes = 0;
     if (chain < 6 && random.stream('echo').chance(echoChance)) {
       echoes = 1 + _cycle(chain + 1).echoes;
@@ -209,15 +286,15 @@ class PrototypeSimulation {
   bool _breakLayer() {
     final thick = isThick(layer.value);
     if (thick) {
-      ore.value = ore.value + orePerCycle.value * BigDouble.fromNum(5);
+      ore.value = ore.value + orePerCycle.value * BigDouble.fromNum(thickSpan);
       quantonium.value =
-          quantonium.value + (quantoniumDropAt(layer.value) * 5).big;
+          quantonium.value + (quantoniumDropAt(layer.value) * thickSpan).big;
       samples.value = samples.value + 1;
     } else {
       ore.value = ore.value + orePerCycle.value * BigDouble.fromNum(1.5);
     }
 
-    layer.value = layer.value + 1;
+    layer.value = nextLayer(layer.value);
     _resetLayer();
     return thick;
   }
@@ -247,6 +324,17 @@ class PrototypeSimulation {
     });
   }
 
+  bool get canBuyPowerUpgrade =>
+      ore.value.gteWithTolerance(powerUpgradeCost.value);
+
+  void buyPowerUpgrade() {
+    if (!canBuyPowerUpgrade) return;
+    batch(() {
+      ore.value = ore.value - powerUpgradeCost.value;
+      drillPowerLevel.value = drillPowerLevel.value + 1;
+    });
+  }
+
   /// The next drill-count milestone that doubles power, or null past the last.
   int? get nextMilestone {
     for (final threshold in const [10, 25, 50, 100]) {
@@ -255,9 +343,19 @@ class PrototypeSimulation {
     return null;
   }
 
-  BigDouble powerAt(int drillCount) =>
-      BigDouble.fromNum(10 + 6 * drillCount) *
-      BigDouble.fromNum(_milestoneMultiplier(drillCount)) *
-      BigDouble.fromNum(1.15).pow(powerLevel.value.toDouble()) *
+  /// What a single drill would deliver at the given upgrade level.
+  BigDouble perDrillPowerWith(int upgrades) =>
+      BigDouble.fromNum(basePerDrillPower) *
+      BigDouble.fromNum(perDrillGrowth).pow(upgrades.toDouble());
+
+  /// Total power for a hypothetical rig.
+  ///
+  /// Count and per-drill power are two separate levers that multiply, so the
+  /// player chooses between more drills and better ones rather than being
+  /// handed a single line to walk.
+  BigDouble powerWith({required int drills, required int upgrades}) =>
+      BigDouble.fromNum(drills) *
+      perDrillPowerWith(upgrades) *
+      BigDouble.fromNum(_milestoneMultiplier(drills)) *
       (BigDouble.one + BigDouble.fromNum(0.25) * modules.value.big);
 }

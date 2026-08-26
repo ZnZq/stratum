@@ -134,13 +134,14 @@ class RandomSource {
       _streams.putIfAbsent(name, () => RandomStream.seeded(_deriveSeed(name)));
 
   Map<String, dynamic> toJson() => {
-        'seed': seed,
-        'streams': {
-          for (final entry in _streams.entries) entry.key: entry.value.toJson(),
-        },
-      };
+    'seed': seed,
+    'streams': {
+      for (final entry in _streams.entries) entry.key: entry.value.toJson(),
+    },
+  };
 
-  int _deriveSeed(String name) => _fnv1a64(name) ^ RandomStream._splitMix64(seed);
+  int _deriveSeed(String name) =>
+      _fnv1a64(name) ^ RandomStream._splitMix64(seed);
 
   /// FNV-1a, written out rather than taken from `String.hashCode`, which Dart
   /// does not promise to keep stable across runs or SDK versions.

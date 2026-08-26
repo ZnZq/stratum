@@ -68,7 +68,10 @@ void main() {
 
     test('rejects infinities', () {
       expect(() => BigDouble.fromNum(double.infinity), throwsArgumentError);
-      expect(() => BigDouble.fromNum(double.negativeInfinity), throwsArgumentError);
+      expect(
+        () => BigDouble.fromNum(double.negativeInfinity),
+        throwsArgumentError,
+      );
     });
   });
 
@@ -97,17 +100,23 @@ void main() {
       test('does not wrap around (strictMode: $strict)', () {
         BigDouble.strictMode = strict;
 
-        final huge = BigDouble(1, BigDouble.expLimit) * BigDouble(1, BigDouble.expLimit);
+        final huge =
+            BigDouble(1, BigDouble.expLimit) * BigDouble(1, BigDouble.expLimit);
 
         expect(huge.exponent, BigDouble.expLimit);
-        expect(huge.isNegative, isFalse,
-            reason: 'a wrapped int would give a negative exponent');
+        expect(
+          huge.isNegative,
+          isFalse,
+          reason: 'a wrapped int would give a negative exponent',
+        );
       });
 
       test('underflow collapses to zero (strictMode: $strict)', () {
         BigDouble.strictMode = strict;
 
-        final tiny = BigDouble(1, -BigDouble.expLimit) * BigDouble(1, -BigDouble.expLimit);
+        final tiny =
+            BigDouble(1, -BigDouble.expLimit) *
+            BigDouble(1, -BigDouble.expLimit);
 
         expect(tiny, BigDouble.zero);
       });
