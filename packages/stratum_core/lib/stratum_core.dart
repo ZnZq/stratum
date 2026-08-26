@@ -12,5 +12,6 @@ export 'src/preview/prototype_simulation.dart';
 export 'src/random_source.dart';
 export 'src/reactive_graph.dart';
 export 'src/save_codec.dart';
+export 'src/stockpile.dart';
 export 'src/tick_engine.dart';
 export 'src/tick_scheduler.dart';

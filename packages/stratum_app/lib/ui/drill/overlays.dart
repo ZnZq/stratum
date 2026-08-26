@@ -19,43 +19,42 @@ class DepthReadout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sim = game.sim;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, AppMetrics.resourceBar + 4, 14, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'симуляція ${sim.restarts.value + 1}',
-            style: AppText.body(
-              9,
-              color: Palette.textMuted,
-              letterSpacing: 2.4,
-              shadows: true,
+    // No padding of its own: it is one element of the head band now, and the
+    // band places it.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'симуляція ${sim.restarts.value + 1}',
+          style: AppText.body(
+            9,
+            color: Palette.textMuted,
+            letterSpacing: 2.4,
+            shadows: true,
+          ),
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text(
+              sim.layer.value.big.toString(NumberStyle.integer),
+              style: AppText.display(
+                44,
+                color: Palette.gold,
+                height: 1,
+                shadows: true,
+              ),
             ),
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                sim.layer.value.big.toString(NumberStyle.integer),
-                style: AppText.display(
-                  44,
-                  color: Palette.gold,
-                  height: 1,
-                  shadows: true,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'м',
-                style: AppText.display(16, color: Palette.gold, shadows: true),
-              ),
-            ],
-          ),
-        ],
-      ),
+            const SizedBox(width: 4),
+            Text(
+              'м',
+              style: AppText.display(16, color: Palette.gold, shadows: true),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

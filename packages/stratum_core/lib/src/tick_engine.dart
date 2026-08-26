@@ -167,12 +167,19 @@ class TickEngine {
       _timer = Timer.periodic(scheduler.rate.interval, (_) => syncNow());
       return;
     }
-    _timer = Timer(remaining, () {
+    late final Timer oneShot;
+    oneShot = Timer(remaining, () {
+      // The sync can retime or stop the engine from inside: a callback that
+      // ends forcing changes the rate, and the rate setter re-arms the timer.
+      // After that, _timer belongs to someone else -- chaining the periodic
+      // here regardless would leave it running with no handle to cancel it,
+      // a phantom loop that keeps mining through pauses and stops.
       syncNow();
-      if (isRunning) {
+      if (identical(_timer, oneShot)) {
         _timer = Timer.periodic(scheduler.rate.interval, (_) => syncNow());
       }
     });
+    _timer = oneShot;
   }
 
   void _stopTimer() {

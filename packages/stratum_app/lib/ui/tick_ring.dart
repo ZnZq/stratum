@@ -13,10 +13,16 @@ import 'tokens.dart';
 /// of the same duration would drift the moment the rate changes for forcing or
 /// the app comes back from the background.
 class TickRing extends StatefulWidget {
-  const TickRing({required this.engine, required this.spinning, super.key});
+  const TickRing({
+    required this.engine,
+    required this.spinning,
+    this.diameter = 96,
+    super.key,
+  });
 
   final TickEngine engine;
   final bool spinning;
+  final double diameter;
 
   @override
   State<TickRing> createState() => _TickRingState();
@@ -36,7 +42,7 @@ class _TickRingState extends State<TickRing>
   }
 
   void _onFrame(Duration elapsed) {
-    final delta = elapsed - _lastFrame;
+    final delta = clampFrameDelta(elapsed - _lastFrame);
     _lastFrame = elapsed;
 
     _progress.value = widget.engine.progress;
@@ -58,14 +64,14 @@ class _TickRingState extends State<TickRing>
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 96,
-      height: 96,
+      width: widget.diameter,
+      height: widget.diameter,
       child: Stack(
         alignment: Alignment.center,
         children: [
           RepaintBoundary(
             child: CustomPaint(
-              size: const Size(96, 96),
+              size: Size(widget.diameter, widget.diameter),
               painter: _RingPainter(_progress),
             ),
           ),
@@ -73,9 +79,9 @@ class _TickRingState extends State<TickRing>
             valueListenable: _spin,
             builder: (context, turns, child) =>
                 Transform.rotate(angle: turns * 2 * math.pi, child: child),
-            child: const Icon(
-              IconData(0xf5ac, fontFamily: 'TablerIcons'),
-              size: 30,
+            child: Icon(
+              const IconData(0xf5ac, fontFamily: 'TablerIcons'),
+              size: widget.diameter * 0.31,
               color: Palette.gold,
             ),
           ),
@@ -93,12 +99,15 @@ class _RingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final centre = Offset(size.width / 2, size.height / 2);
-    const radius = 40.0;
+    // Derived from the box rather than fixed, so the ring can be sized to
+    // whatever it is wrapping instead of only to the head it started on.
+    final radius = size.shortestSide / 2 - 8;
+    final stroke = size.shortestSide / 19;
     final rect = Rect.fromCircle(center: centre, radius: radius);
 
     final track = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 5
+      ..strokeWidth = stroke
       ..color = Palette.line;
     canvas.drawCircle(centre, radius, track);
 
@@ -107,7 +116,7 @@ class _RingPainter extends CustomPainter {
 
     final arc = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 5
+      ..strokeWidth = stroke
       ..strokeCap = StrokeCap.round
       ..color = Palette.amber;
     canvas.drawArc(rect, -math.pi / 2, swept * 2 * math.pi, false, arc);

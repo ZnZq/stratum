@@ -21,6 +21,97 @@ void elapseBoth(FakeAsync async, TestClock clock, Duration by) {
 }
 
 void main() {
+  group('a pause', () {
+    test('a rate change from inside a tick does not leak a second loop', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        var ticks = 0;
+        late final TickEngine engine;
+        engine = TickEngine(
+          scheduler: TickScheduler(rate: TickRate(const Duration(seconds: 4))),
+          onBatch: (batch) {
+            ticks += batch.ticks;
+            // Mirrors forcing ending on the very tick it paid for: the
+            // handler retimes the engine from inside the sync, which re-arms
+            // the timer while the catch-up one-shot's callback is running.
+            engine.rate = TickRate(const Duration(seconds: 4));
+          },
+          clock: clock,
+        )..start();
+
+        // A part-served interval arms the catch-up one-shot.
+        elapseBoth(async, clock, const Duration(seconds: 3));
+        engine.rate = TickRate(const Duration(seconds: 1));
+        elapseBoth(async, clock, const Duration(milliseconds: 250));
+        expect(ticks, 1);
+
+        ticks = 0;
+        elapseBoth(async, clock, const Duration(seconds: 40));
+        expect(
+          ticks,
+          10,
+          reason:
+              'one loop means ten ticks in forty seconds; the leaked '
+              'phantom loop fired on top of the real one',
+        );
+
+        engine.stop();
+        ticks = 0;
+        elapseBoth(async, clock, const Duration(minutes: 5));
+        expect(
+          ticks,
+          0,
+          reason:
+              'stop() must silence everything, including any loop the '
+              'engine no longer holds a handle to',
+        );
+
+        engine.dispose();
+      });
+    });
+
+    test('holds the bar, and the pause is never mined as catch-up', () {
+      fakeAsync((async) {
+        final clock = TestClock();
+        final batches = <TickBatch>[];
+        final engine = TickEngine(
+          scheduler: TickScheduler(rate: TickRate(const Duration(seconds: 4))),
+          onBatch: batches.add,
+          clock: clock,
+        )..start();
+
+        elapseBoth(async, clock, const Duration(seconds: 3));
+        engine.stop();
+        expect(engine.progress, closeTo(0.75, 1e-9));
+
+        // The wall clock runs through the pause; the engine must not.
+        elapseBoth(async, clock, const Duration(minutes: 10));
+        expect(batches, isEmpty);
+        expect(engine.progress, closeTo(0.75, 1e-9));
+
+        engine.start();
+        expect(
+          engine.progress,
+          closeTo(0.75, 1e-9),
+          reason:
+              'the bar resumes where it froze, not where the wall '
+              'clock got to',
+        );
+
+        elapseBoth(async, clock, const Duration(milliseconds: 999));
+        expect(
+          batches,
+          isEmpty,
+          reason: 'ten paused minutes must not arrive as a burst of ticks',
+        );
+        elapseBoth(async, clock, const Duration(milliseconds: 1));
+        expect(batches, hasLength(1));
+
+        engine.dispose();
+      });
+    });
+  });
+
   group('lifecycle', () {
     test('does not fire before it is started', () {
       fakeAsync((async) {

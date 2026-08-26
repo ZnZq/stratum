@@ -35,6 +35,7 @@ abstract final class Palette {
   static const Color capsuleInk = Color(0xFF2A2258);
   static const Color compute = Color(0xFF9FE1CB);
   static const Color ore = Color(0xFFD3D1C7);
+  static const Color crystal = Color(0xFF9FD8FF);
 
   /// Instrument accent: rulers, tick marks, technical captions.
   static const Color tech = Color(0xFF7FD9C4);
@@ -91,7 +92,19 @@ abstract final class Strata {
 /// without guessing at their size.
 abstract final class AppMetrics {
   static const double resourceBar = 48;
-  static const double navBar = 52;
+
+  /// Icons only: the strip below carries the words, so repeating them here
+  /// would put two rows of competing text under every screen.
+  static const double navBar = 46;
+
+  /// The strip of screens above the section bar. Always on screen, so screens
+  /// reserve room for it rather than being covered by it.
+  ///
+  /// Barely taller than a chip: the slack was reading as a gap between the two
+  /// levels, and they are one control.
+  static const double navStrip = 44;
+
+  static const double navTotal = navBar + navStrip;
 }
 
 /// Type roles.
@@ -148,3 +161,14 @@ abstract final class AppText {
   static TextStyle eyebrow({Color color = Palette.textMuted}) =>
       body(10, weight: FontWeight.w600, color: color, letterSpacing: 2.5);
 }
+
+/// Clamps a ticker's per-frame delta to something a real frame could be.
+///
+/// A muted ticker (TickerMode is off under the pause overlay) keeps counting
+/// time, so the first frame after resuming arrives carrying the whole pause --
+/// and a pattern that accumulates deltas would leap forward as if it had
+/// never stopped. Clamped, it resumes from the frame it froze on.
+Duration clampFrameDelta(Duration delta) =>
+    delta > _maxFrameDelta ? _maxFrameDelta : delta;
+
+const Duration _maxFrameDelta = Duration(milliseconds: 66);

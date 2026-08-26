@@ -12,6 +12,8 @@ dependencies:
     sdk: flutter
   stratum_core:
     path: ../stratum_core
+  # Saves go to the OS's per-app directory, which only the platform can name.
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:

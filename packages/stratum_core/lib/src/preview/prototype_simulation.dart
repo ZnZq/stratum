@@ -1,11 +1,13 @@
 import '../big_double.dart';
 import '../random_source.dart';
 import '../reactive_graph.dart';
+import '../stockpile.dart';
 
 /// What one drilling cycle produced, for the UI to turn into feedback.
 class CycleOutcome {
   const CycleOutcome({
     required this.oreGained,
+    required this.crystalsGained,
     required this.quantoniumGained,
     required this.critical,
     required this.layersBroken,
@@ -15,6 +17,7 @@ class CycleOutcome {
 
   static const CycleOutcome none = CycleOutcome(
     oreGained: BigDouble.zero,
+    crystalsGained: BigDouble.zero,
     quantoniumGained: 0,
     critical: false,
     layersBroken: 0,
@@ -23,6 +26,7 @@ class CycleOutcome {
   );
 
   final BigDouble oreGained;
+  final BigDouble crystalsGained;
   final int quantoniumGained;
   final bool critical;
   final int layersBroken;
@@ -88,14 +92,24 @@ class PrototypeSimulation {
     _resetLayer();
   }
 
-  final RandomSource random;
+  /// Not final: restoring a save swaps in the streams as they stood, so the
+  /// rolls carry on from where the player left them rather than replaying the
+  /// same sequence from the seed every launch.
+  RandomSource random;
 
   final Signal<int> layer = Signal(0, name: 'layer');
-  final Signal<BigDouble> ore = Signal(BigDouble.zero, name: 'ore');
-  final Signal<BigDouble> quantonium = Signal(
-    BigDouble.zero,
-    name: 'quantonium',
-  );
+
+  /// Everything the player holds. The per-resource signals below are views on
+  /// it, so a readout can watch one resource without hearing about the rest.
+  final Stockpile stock = Stockpile();
+
+  Signal<BigDouble> get ore => stock.signal(ResourceId.ore);
+  Signal<BigDouble> get crystals => stock.signal(ResourceId.crystals);
+  Signal<BigDouble> get quantonium => stock.signal(ResourceId.quantonium);
+  Signal<BigDouble> get samples => stock.signal(ResourceId.samples);
+  Signal<BigDouble> get capsules => stock.signal(ResourceId.capsules);
+  Signal<BigDouble> get cores => stock.signal(ResourceId.cores);
+  Signal<BigDouble> get backgroundCompute => stock.signal(ResourceId.compute);
 
   /// A rig always has at least one drill: total power is a product, and a
   /// count of zero would mean the game could never start.
@@ -104,9 +118,6 @@ class PrototypeSimulation {
   /// Ore-bought upgrades to what a single drill delivers.
   final Signal<int> drillPowerLevel = Signal(0, name: 'drill power level');
   final Signal<int> modules = Signal(0, name: 'modules');
-  final Signal<int> samples = Signal(0, name: 'samples');
-  final Signal<int> capsules = Signal(0, name: 'capsules');
-  final Signal<int> backgroundCompute = Signal(0, name: 'background compute');
   final Signal<int> restarts = Signal(0, name: 'restarts');
   final Signal<int> charge = Signal(chargeCap, name: 'forcing charge');
   final Signal<bool> forcing = Signal(false, name: 'forcing');
@@ -191,6 +202,12 @@ class PrototypeSimulation {
 
   static int quantoniumDropAt(int layer) => 1 + layer ~/ 15;
 
+  /// Crystals are not tied to a stratum: one mineral, worth more the deeper it
+  /// is cut out of. Growth is geometric so the resource keeps pace with the
+  /// rock it comes from instead of falling behind by the second stratum.
+  static BigDouble crystalDropAt(int layer) =>
+      BigDouble.fromNum(1.02).pow(layer.toDouble());
+
   static double _milestoneMultiplier(int owned) {
     var multiplier = 1.0;
     for (final threshold in const [10, 25, 50, 100]) {
@@ -205,6 +222,13 @@ class PrototypeSimulation {
 
   double get echoChance => 0.01;
 
+  /// Rarer than quantonium up top and commoner far down, so the early game is
+  /// ore-led and the mineral becomes the thing worth going deeper for.
+  double get crystalChance {
+    final chance = 0.08 + layer.value * 0.0012;
+    return chance > 0.4 ? 0.4 : chance;
+  }
+
   double get quantoniumChance {
     final chance = 0.12 + layer.value * 0.0015 + 0.02 * quantoniumLevel.value;
     return chance > 0.5 ? 0.5 : chance;
@@ -214,13 +238,7 @@ class PrototypeSimulation {
   ///
   /// Writes are batched so the UI hears about the whole cycle once rather than
   /// once per field touched.
-  CycleOutcome tick() => batch(() {
-    final outcome = _cycle(0);
-    // The cycle just paid for is over; forcing only continues if the gauge
-    // can cover the next one before it starts.
-    if (forcing.value && !_payForForcing()) forcing.value = false;
-    return outcome;
-  });
+  CycleOutcome tick() => batch(() => _cycle(0));
 
   /// Turns forcing on, paying for the cycle it is about to accelerate.
   ///
@@ -231,6 +249,21 @@ class PrototypeSimulation {
     forcing.value = true;
     return true;
   }
+
+  /// Pays for one more forced cycle. Clears forcing when the gauge cannot.
+  ///
+  /// Whether to renew is the caller's to decide, because it is the caller that
+  /// knows if the player is still asking for it. The cycle already paid for is
+  /// never taken back: letting go mid-cycle stops the NEXT one, not the one in
+  /// hand -- otherwise a tap would spend the charge and deliver nothing.
+  bool renewForcing() {
+    if (!forcing.value) return false;
+    if (_payForForcing()) return true;
+    forcing.value = false;
+    return false;
+  }
+
+  void endForcing() => forcing.value = false;
 
   bool _payForForcing() {
     if (charge.value < forcingCost) return false;
@@ -245,12 +278,20 @@ class PrototypeSimulation {
         : BigDouble.one;
 
     final gained = orePerCycle.value * multiplier;
-    ore.value = ore.value + gained;
+    stock.add(ResourceId.ore, gained);
+
+    // Its own substream: adding a roll to the cycle must not shift every roll
+    // that follows it and turn the parity tests red.
+    var crystalsGained = BigDouble.zero;
+    if (random.stream('crystal').chance(crystalChance)) {
+      crystalsGained = crystalDropAt(layer.value) * multiplier;
+      stock.add(ResourceId.crystals, crystalsGained);
+    }
 
     var quantoniumGained = 0;
     if (random.stream('quantonium').chance(quantoniumChance)) {
       quantoniumGained = quantoniumDropAt(layer.value);
-      quantonium.value = quantonium.value + quantoniumGained.big;
+      stock.add(ResourceId.quantonium, quantoniumGained.big);
     }
 
     var damage = power.value * multiplier;
@@ -274,6 +315,7 @@ class PrototypeSimulation {
 
     return CycleOutcome(
       oreGained: gained,
+      crystalsGained: crystalsGained,
       quantoniumGained: quantoniumGained,
       critical: critical,
       layersBroken: broken,
@@ -286,12 +328,16 @@ class PrototypeSimulation {
   bool _breakLayer() {
     final thick = isThick(layer.value);
     if (thick) {
-      ore.value = ore.value + orePerCycle.value * BigDouble.fromNum(thickSpan);
-      quantonium.value =
-          quantonium.value + (quantoniumDropAt(layer.value) * thickSpan).big;
-      samples.value = samples.value + 1;
+      final bonus = BigDouble.fromNum(thickSpan);
+      stock.add(ResourceId.ore, orePerCycle.value * bonus);
+      stock.add(ResourceId.crystals, crystalDropAt(layer.value) * bonus);
+      stock.add(
+        ResourceId.quantonium,
+        (quantoniumDropAt(layer.value) * thickSpan).big,
+      );
+      stock.add(ResourceId.samples, BigDouble.one);
     } else {
-      ore.value = ore.value + orePerCycle.value * BigDouble.fromNum(1.5);
+      stock.add(ResourceId.ore, orePerCycle.value * BigDouble.fromNum(1.5));
     }
 
     layer.value = nextLayer(layer.value);
@@ -314,26 +360,94 @@ class PrototypeSimulation {
 
   bool get chargeFull => charge.value >= chargeCap;
 
-  bool get canBuyDrill => ore.value.gteWithTolerance(drillCost.value);
+  bool get canBuyDrill => stock.has(ResourceId.ore, drillCost.value);
 
   void buyDrill() {
-    if (!canBuyDrill) return;
     batch(() {
-      ore.value = ore.value - drillCost.value;
+      if (!stock.spend(ResourceId.ore, drillCost.value)) return;
       drills.value = drills.value + 1;
     });
   }
 
   bool get canBuyPowerUpgrade =>
-      ore.value.gteWithTolerance(powerUpgradeCost.value);
+      stock.has(ResourceId.ore, powerUpgradeCost.value);
 
   void buyPowerUpgrade() {
-    if (!canBuyPowerUpgrade) return;
     batch(() {
-      ore.value = ore.value - powerUpgradeCost.value;
+      if (!stock.spend(ResourceId.ore, powerUpgradeCost.value)) return;
       drillPowerLevel.value = drillPowerLevel.value + 1;
     });
   }
+
+  /// The run, as a plain map.
+  ///
+  /// Derived values are left out and recomputed on the way back in: writing
+  /// `layerHpMax` would let a save disagree with the density formula, and the
+  /// formula has to win. Forcing is not written either -- it is a held button,
+  /// and a save cannot hold one.
+  Map<String, Object?> toJson() => {
+    'layer': layer.value,
+    'layerHp': layerHp.value.toJson(),
+    'drills': drills.value,
+    'drillPower': drillPowerLevel.value,
+    'modules': modules.value,
+    'restarts': restarts.value,
+    'charge': charge.value,
+    'tree': {
+      'power': powerLevel.value,
+      'enrichment': enrichmentLevel.value,
+      'discount': discountLevel.value,
+      'quantonium': quantoniumLevel.value,
+    },
+    'stock': stock.toJson(),
+    'random': random.toJson(),
+  };
+
+  /// Restores a run written by [toJson].
+  ///
+  /// Anything missing falls back to the value a fresh run starts with, so a
+  /// save written by an older build loads instead of throwing: sections the
+  /// build does not know are the migration chain's problem, but absent keys
+  /// inside a section it does know are not.
+  void readJson(Map<String, Object?> json) => batch(() {
+    layer.value = _readInt(json['layer'], 0);
+    drills.value = _readInt(json['drills'], 1);
+    drillPowerLevel.value = _readInt(json['drillPower'], 0);
+    modules.value = _readInt(json['modules'], 0);
+    restarts.value = _readInt(json['restarts'], 0);
+    charge.value = _readInt(json['charge'], chargeCap).clamp(0, chargeCap);
+    forcing.value = false;
+
+    final tree = json['tree'];
+    if (tree is Map) {
+      powerLevel.value = _readInt(tree['power'], 0);
+      enrichmentLevel.value = _readInt(tree['enrichment'], 0);
+      discountLevel.value = _readInt(tree['discount'], 0);
+      quantoniumLevel.value = _readInt(tree['quantonium'], 0);
+    }
+
+    final held = json['stock'];
+    if (held is Map) {
+      stock.readJson(Map<String, Object?>.from(held));
+    }
+
+    final rolls = json['random'];
+    if (rolls is Map) {
+      random = RandomSource.fromJson(Map<String, dynamic>.from(rolls));
+    }
+
+    _resetLayer();
+    final damaged = json['layerHp'];
+    if (damaged is String) {
+      final remaining = BigDouble.parse(damaged);
+      if (remaining > BigDouble.zero && remaining < layerHpMax.value) {
+        layerHp.value = remaining;
+      }
+    }
+  });
+
+  static int _readInt(Object? value, int fallback) =>
+      value is int ? value : fallback;
 
   /// The next drill-count milestone that doubles power, or null past the last.
   int? get nextMilestone {

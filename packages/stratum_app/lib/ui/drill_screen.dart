@@ -5,6 +5,7 @@ import 'drill/deck.dart';
 import 'drill/overlays.dart';
 import 'drill/rig.dart';
 import 'drill/rock.dart';
+import 'drill/shaft.dart';
 import 'tokens.dart';
 
 /// The borehole, seen in section, filling the screen.
@@ -23,6 +24,7 @@ class DrillScreen extends StatelessWidget {
       color: Palette.scene,
       child: Stack(
         children: [
+          Positioned.fill(child: ShaftBackdrop(forcing: game.isForcing)),
           Positioned.fill(child: Rock(game: game)),
           ForcingGrip(game: game),
           Positioned.fill(child: DrillString(game: game)),
@@ -51,7 +53,6 @@ class DrillScreen extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(top: 0, left: 0, child: DepthReadout(game: game)),
           Positioned(left: 0, right: 0, bottom: 0, child: Deck(game: game)),
         ],
       ),
