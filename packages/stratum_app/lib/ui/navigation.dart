@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
 import 'tabler_icons.dart';
@@ -39,8 +40,9 @@ enum GameScreen {
   /// The mine itself: dig by hand, watch the rigs work.
   drill(NavSection.extraction, 'Шахта', Ti.arrowBarDown),
 
-  /// The manual lane's levers: strike power, energy cap, regen.
-  strikes(NavSection.extraction, 'Удари', Ti.handClick),
+  /// The arm itself and the three parts of it that upgrade: bit, drive,
+  /// supply.
+  strikes(NavSection.extraction, 'Маніпулятор', Ti.handClick),
 
   /// Every drill the player owns, and where they are upgraded.
   upgrades(NavSection.extraction, 'Бури', Ti.adjustments),
@@ -111,10 +113,7 @@ enum GameScreen {
 /// else.
 bool screenNeedsAttention(GameScreen screen, Game game) => switch (screen) {
   GameScreen.upgrades => game.sim.canBuyDrill || game.sim.canBuyPowerUpgrade,
-  GameScreen.strikes =>
-    game.sim.canBuyStrikeUpgrade ||
-        game.sim.canBuyEnergyCapUpgrade ||
-        game.sim.canBuyEnergyRegenUpgrade,
+  GameScreen.strikes => ArmPart.values.any(game.sim.canUpgrade),
   _ => false,
 };
 

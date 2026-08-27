@@ -75,7 +75,7 @@ class Game extends ChangeNotifier {
       onBatch: _onDrillBatch,
     );
     energyLoop = TickEngine(
-      scheduler: TickScheduler(rate: energyRate),
+      scheduler: TickScheduler(rate: TickRate(_energyInterval(0))),
       onBatch: _onEnergyBatch,
     );
 
@@ -124,8 +124,28 @@ class Game extends ChangeNotifier {
   /// A gap in the chain is an error rather than a silent skip -- see
   /// [SaveCodec].
   static final SaveCodec codec = SaveCodec(
-    currentVersion: 5,
+    currentVersion: 6,
     migrations: [
+      // v5 -> v6: the manual lane became the manipulator arm. Its three
+      // levers were strike power, energy cap and energy regen; they are now
+      // three PARTS, and cap and regen merged into one. Strike power carries
+      // over to the bit and the old cap level to the supply, which is the
+      // closest thing each had; the regen track has no heir and is dropped.
+      SaveMigration(
+        fromVersion: 5,
+        apply: (sections) {
+          final run = sections['run'];
+          if (run is! Map) return sections;
+          final out = Map<String, Object?>.from(run);
+          final strikes = out.remove('strikes');
+          out['arm'] = {
+            'bit': strikes is Map ? strikes['power'] ?? 0 : 0,
+            'drive': 0,
+            'supply': strikes is Map ? strikes['cap'] ?? 0 : 0,
+          };
+          return {...sections, 'run': out};
+        },
+      ),
       // v4 -> v5: data is counted in measurements now, not in tonnes. The
       // old accumulators are in units a thousandfold larger, and keeping
       // them would leave the collapse gate permanently open, so they are
@@ -464,7 +484,16 @@ class Game extends ChangeNotifier {
   /// One point of charge every two seconds, on its own loop rather than
   /// borrowing the drill's heartbeat. The meter above the readout is driven
   /// by this engine, so what the player watches filling is the real interval.
-  static final TickRate energyRate = TickRate(const Duration(seconds: 2));
+  /// The supply level sets this, so it is derived rather than fixed: a
+  /// faster pack is a shorter wait between points, and the engine is re-armed
+  /// whenever the level moves.
+  static Duration _energyInterval(int supplyLevel) => Duration(
+    microseconds:
+        (PrototypeSimulation.baseEnergySeconds /
+                (1 + PrototypeSimulation.regenSpeedPerLevel * supplyLevel) *
+                1e6)
+            .round(),
+  );
 
   final PrototypeSimulation sim = PrototypeSimulation();
 
@@ -666,8 +695,7 @@ class Game extends ChangeNotifier {
   /// the engines do; the core is handed them rather than owning a clock.
   double get cycleSeconds => drill.rate.interval.inMicroseconds / 1e6;
 
-  double get energyPerSecond =>
-      sim.energyPerRegen / (energyRate.interval.inMicroseconds / 1e6);
+  double get energyPerSecond => sim.energyPerRegen / sim.energySeconds;
 
   /// What the store gains of [id] per second, hand and rig together.
   BigDouble yieldPerSecond(ResourceId id) => sim.yieldPerSecond(
@@ -677,7 +705,7 @@ class Game extends ChangeNotifier {
   );
 
   /// How long one point of energy takes, for the gauge to say so out loud.
-  static String get energyInterval => secondsLabel(energyRate.interval);
+  String get energyInterval => '${sim.energySeconds.toStringAsFixed(3)} с';
 
   static String secondsLabel(Duration interval) =>
       '${(interval.inMilliseconds / 1000).toStringAsFixed(1)} с';
@@ -703,6 +731,12 @@ class Game extends ChangeNotifier {
 
   /// The energy loop sleeps while the gauge is full, so spending has to wake it.
   void _syncEnergyLoop() {
+    // The pack's cadence is a level away from changing, so the engine is
+    // re-armed here rather than at every call site that might have moved it.
+    final wanted = _energyInterval(sim.supplyLevel.value);
+    if (energyLoop.rate.interval != wanted) {
+      energyLoop.rate = TickRate(wanted);
+    }
     // Nothing wakes while paused; resume() reruns this itself.
     if (_paused) return;
     if (sim.energyFull) {
@@ -814,19 +848,11 @@ class Game extends ChangeNotifier {
     notifyListeners();
   }
 
-  void buyStrikeUpgrade() {
-    sim.buyStrikeUpgrade();
-    notifyListeners();
-  }
-
-  void buyEnergyCapUpgrade() {
-    sim.buyEnergyCapUpgrade();
+  /// Buys [levels] of an arm part. The energy loop is re-synced either way:
+  /// the supply part moves both the gauge's ceiling and the engine's cadence.
+  void upgradeArm(ArmPart part, {int levels = 1}) {
+    if (sim.upgrade(part, levels: levels) == 0) return;
     _syncEnergyLoop();
-    notifyListeners();
-  }
-
-  void buyEnergyRegenUpgrade() {
-    sim.buyEnergyRegenUpgrade();
     notifyListeners();
   }
 

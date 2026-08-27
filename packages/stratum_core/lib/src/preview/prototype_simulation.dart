@@ -103,6 +103,24 @@ class OfflineGain {
   bool get isEmpty => gained.isEmpty;
 }
 
+/// The three parts of the manipulator arm the player upgrades.
+///
+/// Named after the hardware rather than the stat, because a part carries
+/// several buffs at once and grows more of them as it evolves.
+enum ArmPart {
+  /// What the arm strikes with: the blow's own power, and the floor of what
+  /// it brings back.
+  bit,
+
+  /// What drives the bit into the face: how deep a blow bites into what is
+  /// still standing, and the ceiling of the haul.
+  drive,
+
+  /// The pack in the shoulder: how many blows are in the magazine and how
+  /// fast it refills.
+  supply,
+}
+
 /// A provisional model of the drilling loop, carrying the prototype's numbers.
 ///
 /// PROVISIONAL. The balance reference is still undecided — the prototype's
@@ -158,10 +176,10 @@ class PrototypeSimulation {
       final remaining = layerHp.value;
       final perHit = strikePower;
       if (perHit.isZero) return 1;
-      final ratio = (remaining / perHit) * BigDouble.fromNum(structuralShare);
-      final estimate =
-          ((BigDouble.one + ratio).ln() / -math.log(1 - structuralShare))
-              .ceilToDouble();
+      final share = pierceShare;
+      final ratio = (remaining / perHit) * BigDouble.fromNum(share);
+      final estimate = ((BigDouble.one + ratio).ln() / -math.log(1 - share))
+          .ceilToDouble();
       return estimate < 1 ? 1 : estimate.toInt();
     }, name: 'hits to break');
     bankableData = Computed(() {
@@ -202,10 +220,14 @@ class PrototypeSimulation {
   final Signal<int> restarts = Signal(0, name: 'restarts');
   final Signal<int> energy = Signal(energyCapBase, name: 'energy');
 
-  /// Regolith-bought upgrades to the manual lane.
-  final Signal<int> strikeLevel = Signal(0, name: 'strike level');
-  final Signal<int> energyCapLevel = Signal(0, name: 'energy cap level');
-  final Signal<int> energyRegenLevel = Signal(0, name: 'energy regen level');
+  /// The three parts of the manipulator arm, each its own upgrade track.
+  ///
+  /// One track per PART rather than one per stat: a part carries several
+  /// buffs at once, and later generations of it add more. The player upgrades
+  /// a piece of hardware, not a number.
+  final Signal<int> bitLevel = Signal(0, name: 'bit level');
+  final Signal<int> driveLevel = Signal(0, name: 'drive level');
+  final Signal<int> supplyLevel = Signal(0, name: 'supply level');
 
   /// Tree levels. Purchasing is not wired up yet; they exist so the formulas
   /// read the way the prototype's do.
@@ -264,18 +286,48 @@ class PrototypeSimulation {
   late final Computed<int> hitsToBreak;
   late final Computed<BigDouble> bankableData;
 
-  static const int energyCapBase = 100;
+  static const int energyCapBase = 250;
 
-  /// Each capacity level adds this many points to the gauge.
-  static const int energyPerCapLevel = 25;
+  /// Each supply level adds this many points to the gauge.
+  static const int energyPerCapLevel = 10;
 
-  int get energyCap => energyCapBase + energyPerCapLevel * energyCapLevel.value;
+  int get energyCap => energyCapBase + energyPerCapLevel * supplyLevel.value;
 
-  /// How much one regen tick pours in.
-  int get energyPerRegen => 1 + energyRegenLevel.value;
+  /// A regen tick always pours in exactly one point. What the supply upgrade
+  /// buys is a SHORTER wait, not a bigger pour: the sustained strike rate is
+  /// then literally the regen rate, and the gauge's ceiling stays what it is
+  /// -- the length of a burst.
+  int get energyPerRegen => 1;
 
-  /// Each strike level multiplies the blow by this.
-  static const double strikeGrowth = 1.35;
+  /// The wait between two points at rest.
+  static const double baseEnergySeconds = 2.0;
+
+  /// Each supply level adds this share to the regen RATE, additively: five
+  /// hundred levels come out at +50%, so the wait bottoms out at 1.333 s.
+  /// Speeding the rate rather than shortening the wait is what keeps the
+  /// formula from crossing zero at the top of the track.
+  static const double regenSpeedPerLevel = 0.001;
+
+  double get energySeconds =>
+      baseEnergySeconds / (1 + regenSpeedPerLevel * supplyLevel.value);
+
+  /// Every part levels to here, in five generations of a hundred.
+  static const int maxPartLevel = 500;
+  static const int levelsPerGeneration = 100;
+
+  /// Which generation a level belongs to, from 0 (Mk I) to 4 (Mk V).
+  static int generationOf(int level) {
+    final generation = level ~/ levelsPerGeneration;
+    final last = maxPartLevel ~/ levelsPerGeneration - 1;
+    return generation > last ? last : generation;
+  }
+
+  /// PROVISIONAL buff rates. Balance comes later; what is meant to last is
+  /// that each part carries several of these at once.
+  static const double basePowerPerLevel = 10;
+  static const double minRegolithGrowth = 1.03;
+  static const double maxRegolithGrowth = 1.05;
+  static const double piercePerLevel = 0.00001;
 
   /// What one unupgraded drill delivers per cycle.
   static const double basePerDrillPower = 10;
@@ -567,66 +619,100 @@ class PrototypeSimulation {
   static const double strikeCritPower = 1.20;
 
   /// The band a strike's regolith lands in.
+  ///
+  /// The two ends move on different parts: the bit raises the FLOOR (a
+  /// heavier head never comes back empty) and the drive raises the CEILING
+  /// (a harder blow is what shakes a jackpot loose). PROVISIONAL rates.
   BigDouble get strikeRegolithMin =>
-      _strikeRegolithMean * BigDouble.fromNum(1 - regolithSpread);
+      _strikeRegolithMean *
+      BigDouble.fromNum(1 - regolithSpread) *
+      BigDouble.fromNum(minRegolithGrowth).pow(bitLevel.value.toDouble());
+
   BigDouble get strikeRegolithMax =>
-      _strikeRegolithMean * BigDouble.fromNum(1 + regolithSpread);
+      _strikeRegolithMean *
+      BigDouble.fromNum(1 + regolithSpread) *
+      BigDouble.fromNum(maxRegolithGrowth).pow(driveLevel.value.toDouble());
 
   BigDouble get _strikeRegolithMean =>
       regolithPerCycle.value * BigDouble.fromNum(strikeShareOfRig);
 
-  BigDouble get strikePower => strikePowerAt(strikeLevel.value);
+  /// What the arm swings on its own, before the rig is consulted.
+  BigDouble armPowerAt(int level) =>
+      BigDouble.fromNum(baseStrikePower + basePowerPerLevel * level);
 
+  /// How much of the layer's REMAINING hp every blow collapses, the drive's
+  /// own buff on top of the floor every blow has.
+  double get pierceShare => structuralShare + piercePerLevel * driveLevel.value;
+
+  BigDouble get strikePower => strikePowerAt(bitLevel.value);
+
+  /// The blow, never weaker than a share of the rig: an arm that could not
+  /// keep up with its own drills would make the manual lane noise by the
+  /// second stratum.
   BigDouble strikePowerAt(int level) {
     final scaled = power.value * BigDouble.fromNum(strikeShareOfRig);
-    final floor = BigDouble.fromNum(baseStrikePower);
-    final resting = scaled > floor ? scaled : floor;
-    return resting * BigDouble.fromNum(strikeGrowth).pow(level.toDouble());
+    final own = armPowerAt(level);
+    return scaled > own ? scaled : own;
   }
 
-  BigDouble get strikeUpgradeCost =>
-      (BigDouble.fromNum(120) *
-              BigDouble.fromNum(2.1).pow(strikeLevel.value.toDouble()))
-          .ceil();
-
-  BigDouble get energyCapUpgradeCost =>
-      (BigDouble.fromNum(150) *
-              BigDouble.fromNum(2.0).pow(energyCapLevel.value.toDouble()))
-          .ceil();
-
-  BigDouble get energyRegenUpgradeCost =>
-      (BigDouble.fromNum(200) *
-              BigDouble.fromNum(2.4).pow(energyRegenLevel.value.toDouble()))
-          .ceil();
-
-  bool get canBuyStrikeUpgrade =>
-      stock.has(ResourceId.regolith, strikeUpgradeCost);
-
-  bool get canBuyEnergyCapUpgrade =>
-      stock.has(ResourceId.regolith, energyCapUpgradeCost);
-
-  bool get canBuyEnergyRegenUpgrade =>
-      stock.has(ResourceId.regolith, energyRegenUpgradeCost);
-
-  void buyStrikeUpgrade() {
-    batch(() {
-      if (!stock.spend(ResourceId.regolith, strikeUpgradeCost)) return;
-      strikeLevel.value = strikeLevel.value + 1;
-    });
+  /// PROVISIONAL price curves, gentle enough that five hundred levels are a
+  /// road rather than a wall.
+  static BigDouble costOf(ArmPart part, int level) {
+    final base = switch (part) {
+      ArmPart.bit => 120.0,
+      ArmPart.drive => 200.0,
+      ArmPart.supply => 150.0,
+    };
+    final growth = switch (part) {
+      ArmPart.bit => 1.12,
+      ArmPart.drive => 1.13,
+      ArmPart.supply => 1.11,
+    };
+    return (BigDouble.fromNum(base) *
+            BigDouble.fromNum(growth).pow(level.toDouble()))
+        .ceil();
   }
 
-  void buyEnergyCapUpgrade() {
-    batch(() {
-      if (!stock.spend(ResourceId.regolith, energyCapUpgradeCost)) return;
-      energyCapLevel.value = energyCapLevel.value + 1;
-    });
-  }
+  Signal<int> levelOf(ArmPart part) => switch (part) {
+    ArmPart.bit => bitLevel,
+    ArmPart.drive => driveLevel,
+    ArmPart.supply => supplyLevel,
+  };
 
-  void buyEnergyRegenUpgrade() {
-    batch(() {
-      if (!stock.spend(ResourceId.regolith, energyRegenUpgradeCost)) return;
-      energyRegenLevel.value = energyRegenLevel.value + 1;
-    });
+  bool atMaxLevel(ArmPart part) => levelOf(part).value >= maxPartLevel;
+
+  BigDouble upgradeCost(ArmPart part) => costOf(part, levelOf(part).value);
+
+  bool canUpgrade(ArmPart part) =>
+      !atMaxLevel(part) && stock.has(ResourceId.regolith, upgradeCost(part));
+
+  /// Buys [levels] of [part], stopping at the cap or at what the store can
+  /// pay for -- whichever comes first. Returns how many actually landed.
+  int upgrade(ArmPart part, {int levels = 1}) => batch(() {
+    final signal = levelOf(part);
+    var bought = 0;
+    while (bought < levels && signal.value < maxPartLevel) {
+      final price = costOf(part, signal.value);
+      if (!stock.spend(ResourceId.regolith, price)) break;
+      signal.value = signal.value + 1;
+      bought++;
+    }
+    return bought;
+  });
+
+  /// How many levels of [part] the store could pay for right now.
+  int affordableLevels(ArmPart part) {
+    var purse = stock.amount(ResourceId.regolith);
+    var level = levelOf(part).value;
+    var count = 0;
+    while (level < maxPartLevel && count < maxPartLevel) {
+      final price = costOf(part, level);
+      if (!purse.gteWithTolerance(price)) break;
+      purse -= price;
+      level++;
+      count++;
+    }
+    return count;
   }
 
   /// What one strike is expected to bring out of the face: the drop at this
@@ -732,13 +818,13 @@ class PrototypeSimulation {
       multiplier = multiplier * BigDouble.fromNum(strikeCritPower);
     }
 
-    // A roll inside the band rather than a constant: the haul of a single
-    // blow is allowed to feel like luck.
-    final spread = random
-        .stream('${prefix}regolith')
-        .range(1 - regolithSpread, 1 + regolithSpread);
-    final regolith =
-        _strikeRegolithMean * BigDouble.fromNum(spread) * multiplier;
+    // A roll inside the band the loot table promises. The band's ends are
+    // upgraded separately, so the roll walks between them rather than around
+    // a mean -- one draw either way, so adding the parts shifted no stream.
+    final low = strikeRegolithMin;
+    final span = strikeRegolithMax - low;
+    final spread = random.stream('${prefix}regolith').nextDouble();
+    final regolith = (low + span * BigDouble.fromNum(spread)) * multiplier;
     stock.add(ResourceId.regolith, regolith);
     loot[ResourceId.regolith] = regolith;
     weighted += _information(regolith, _strikeRegolithMean, 1);
@@ -829,7 +915,7 @@ class PrototypeSimulation {
     // fuller the layer, the more there is to shake apart. Deep walls become
     // finite -- the hit count grows with the log of the overmatch -- while a
     // blow that already outmatches the rock barely notices the term.
-    var remaining = damage + layerHp.value * BigDouble.fromNum(structuralShare);
+    var remaining = damage + layerHp.value * BigDouble.fromNum(pierceShare);
     var broken = 0;
     var thickBroken = 0;
     while (remaining > BigDouble.zero && broken < maxLayersPerCycle) {
@@ -939,10 +1025,10 @@ class PrototypeSimulation {
       'cycleStartMs': cycleStartMs.value,
     },
     'energy': energy.value,
-    'strikes': {
-      'power': strikeLevel.value,
-      'cap': energyCapLevel.value,
-      'regen': energyRegenLevel.value,
+    'arm': {
+      'bit': bitLevel.value,
+      'drive': driveLevel.value,
+      'supply': supplyLevel.value,
     },
     'tree': {
       'power': powerLevel.value,
@@ -983,15 +1069,15 @@ class PrototypeSimulation {
       dataExponentLevel.value = 0;
       cycleStartMs.value = 0;
     }
-    final strikes = json['strikes'];
-    if (strikes is Map) {
-      strikeLevel.value = _readInt(strikes['power'], 0);
-      energyCapLevel.value = _readInt(strikes['cap'], 0);
-      energyRegenLevel.value = _readInt(strikes['regen'], 0);
+    final arm = json['arm'];
+    if (arm is Map) {
+      bitLevel.value = _readInt(arm['bit'], 0).clamp(0, maxPartLevel);
+      driveLevel.value = _readInt(arm['drive'], 0).clamp(0, maxPartLevel);
+      supplyLevel.value = _readInt(arm['supply'], 0).clamp(0, maxPartLevel);
     } else {
-      strikeLevel.value = 0;
-      energyCapLevel.value = 0;
-      energyRegenLevel.value = 0;
+      bitLevel.value = 0;
+      driveLevel.value = 0;
+      supplyLevel.value = 0;
     }
     energy.value = _readInt(json['energy'], energyCap).clamp(0, energyCap);
 
