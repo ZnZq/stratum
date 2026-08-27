@@ -178,15 +178,24 @@ class LootTable extends StatelessWidget {
         const SizedBox(height: 7),
         LayoutBuilder(
           builder: (context, constraints) {
-            final third = (constraints.maxWidth - 2 * _gap) / 3;
+            final half = (constraints.maxWidth - _gap) / 2;
             return Wrap(
               spacing: _gap,
               runSpacing: _gap,
               children: [
+                // The certain lane and the rarest one head the grid
+                // together: the two ends of the table, side by side.
                 LootCard(
                   id: ResourceId.regolith,
                   amount: '${sim.strikeRegolithMin} – ${sim.strikeRegolithMax}',
-                  width: constraints.maxWidth,
+                  width: half,
+                ),
+                LootCard(
+                  id: ResourceId.quantonium,
+                  chance:
+                      '${(PrototypeSimulation.strikeQuantoniumChance * 100).toStringAsFixed(0)}%',
+                  amount: '${PrototypeSimulation.quantoniumDropAt(layer)}',
+                  width: half,
                 ),
                 for (final row in PrototypeSimulation.oreTable)
                   if (layer >= row.unlockAt)
@@ -194,28 +203,20 @@ class LootTable extends StatelessWidget {
                       id: row.id,
                       chance: '${(row.chance * 100).round()}%',
                       amount: '${PrototypeSimulation.oreDropAt(layer)}',
-                      width: third,
+                      width: half,
                     )
                   else
                     LootCard(
                       id: row.id,
-                      chance: 'з ${row.unlockAt} м',
-                      amount: '—',
-                      width: third,
+                      amount: 'з ${row.unlockAt} м',
+                      width: half,
                       locked: true,
                     ),
                 LootCard(
                   id: ResourceId.crystals,
                   chance: '${(sim.crystalChance * 100).round()}%',
                   amount: '${PrototypeSimulation.crystalDropAt(layer)}',
-                  width: third,
-                ),
-                LootCard(
-                  id: ResourceId.quantonium,
-                  chance:
-                      '${(PrototypeSimulation.strikeQuantoniumChance * 100).toStringAsFixed(0)}%',
-                  amount: '${PrototypeSimulation.quantoniumDropAt(layer)}',
-                  width: third,
+                  width: half,
                 ),
               ],
             );
@@ -226,8 +227,12 @@ class LootTable extends StatelessWidget {
   }
 }
 
-/// The sketched plate: name left, odds right, and the framed cell under them
-/// with the icon breaking out of its left edge.
+/// One lane of the loot table, as a readout like any other.
+///
+/// The odds ride INSIDE the framed cell rather than beside the name: the
+/// three facts a lane has -- what it is, how often it pays, how much -- then
+/// read left to right as one line, and the card stands two rows tall instead
+/// of three, which is what pays for the wider two-column grid.
 class LootCard extends StatelessWidget {
   const LootCard({
     required this.id,
@@ -240,12 +245,16 @@ class LootCard extends StatelessWidget {
 
   final ResourceId id;
 
-  /// The odds line, or null for a guaranteed drop: certainty needs no label.
+  /// The odds, or null for a guaranteed drop: certainty needs no label.
   final String? chance;
 
   final String amount;
   final double width;
   final bool locked;
+
+  /// What the icon is drawn at, and the height it is allowed to claim.
+  static const double _iconSize = 23;
+  static const double _iconSlot = 18;
 
   @override
   Widget build(BuildContext context) {
@@ -254,74 +263,54 @@ class LootCard extends StatelessWidget {
       width: width,
       child: Opacity(
         opacity: locked ? 0.45 : 1,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 2, right: 2),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      style.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppText.body(
-                        8.5,
-                        weight: FontWeight.w600,
-                        color: Palette.textMuted,
-                        shadows: true,
-                      ),
-                    ),
+        child: Stat(
+          label: style.label,
+          labelColour: style.colour,
+          shadows: true,
+          trailing: chance == null
+              ? null
+              : Text(
+                  chance!,
+                  style: AppText.display(
+                    8.5,
+                    weight: FontWeight.w600,
+                    color: Palette.textFaint,
+                    shadows: true,
                   ),
-                  if (chance != null)
-                    Text(
-                      chance!,
-                      style: AppText.display(
-                        8.5,
-                        weight: FontWeight.w600,
-                        color: Palette.textFaint,
-                        shadows: true,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 3),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
-              decoration: BoxDecoration(
-                color: Palette.well,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: locked
-                      ? Palette.lineBar
-                      : style.colour.withValues(alpha: 0.4),
                 ),
-              ),
-              child: Row(
-                children: [
-                  ResourceIcon(id, size: 18),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      amount,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.right,
-                      style: AppText.display(
-                        10.5,
-                        weight: FontWeight.w700,
-                        color: locked ? Palette.textFaint : Palette.textDim,
-                      ),
+          child: Padding(
+            padding: const EdgeInsets.only(right: 2, top: 1),
+            child: Row(
+              children: [
+                // Drawn larger than the room it claims. The row's height is
+                // set by the icon box -- the figure beside it is shorter --
+                // so growing the icon honestly would push every card in the
+                // grid taller. Bleeding a couple of pixels past the slot buys
+                // the bigger silhouette for nothing.
+                SizedBox(
+                  width: _iconSize,
+                  height: _iconSlot,
+                  child: OverflowBox(
+                    maxHeight: _iconSize,
+                    child: ResourceIcon(id, size: _iconSize),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    amount,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.display(
+                      11,
+                      weight: FontWeight.w700,
+                      color: locked ? Palette.textFaint : Palette.textDim,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

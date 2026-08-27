@@ -15,8 +15,10 @@ class Stat extends StatelessWidget {
     this.value,
     this.child,
     this.colour = Palette.textDim,
+    this.labelColour = Palette.tech,
     this.align = CrossAxisAlignment.start,
     this.note,
+    this.trailing,
     this.above,
     this.below,
     this.shadows = false,
@@ -34,10 +36,20 @@ class Stat extends StatelessWidget {
   final Widget? child;
 
   final Color colour;
+
+  /// The heading's own colour. Tech green is the house voice; a readout that
+  /// belongs to one resource says so by wearing that resource's colour.
+  final Color labelColour;
+
   final CrossAxisAlignment align;
 
   /// A quiet second line under the figure.
   final String? note;
+
+  /// A second fact riding beside the heading. For what belongs to the readout
+  /// itself rather than to its figure -- the odds of a loot lane, say, which
+  /// describe the lane and not the haul.
+  final Widget? trailing;
 
   /// Free slots over the label and under everything, for a meter or a hint.
   final Widget? above;
@@ -49,6 +61,42 @@ class Stat extends StatelessWidget {
 
   static const double valueSize = 14;
 
+  Widget _heading() {
+    final text = Text(
+      label.toUpperCase(),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppText.body(
+        8.5,
+        weight: FontWeight.w700,
+        color: labelColour,
+        letterSpacing: 1.6,
+        shadows: shadows,
+      ),
+    );
+    if (trailing case final trailing?) {
+      // Expanded, not Flexible: a loose slot hands its slack back to the row
+      // and the trailing fact ends up glued to the label instead of standing
+      // at the far edge, where a second column of facts belongs.
+      return Row(
+        // Beside the heading, not at the far edge: the fact qualifies the
+        // name, so it travels with it.
+        mainAxisSize: MainAxisSize.min,
+        // On the baseline, not the box: the heading is Manrope and a trailing
+        // figure is usually Chakra Petch, and two fonts centred by line height
+        // sit at visibly different levels.
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Flexible(child: text),
+          const SizedBox(width: 6),
+          trailing,
+        ],
+      );
+    }
+    return text;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -56,16 +104,7 @@ class Stat extends StatelessWidget {
       crossAxisAlignment: align,
       children: [
         if (above case final above?) ...[above, const SizedBox(height: 3)],
-        Text(
-          label.toUpperCase(),
-          style: AppText.body(
-            8.5,
-            weight: FontWeight.w700,
-            color: Palette.tech,
-            letterSpacing: 1.6,
-            shadows: shadows,
-          ),
-        ),
+        _heading(),
         const SizedBox(height: 1),
         child ??
             Text(
