@@ -1,5 +1,5 @@
-/// The rig hanging in the borehole: pipe, bit, charge gauge and the grip that
-/// forces them.
+/// The rig hanging in the borehole: pipe, bit, energy gauge and the grip
+/// that strikes with them.
 library;
 
 import 'dart:async';
@@ -12,16 +12,16 @@ import 'package:stratum_core/stratum_core.dart';
 
 import '../../game.dart';
 import '../stat.dart';
-import '../tick_ring.dart';
 import '../tokens.dart';
 import 'metrics.dart';
 import 'overlays.dart';
 
-/// The drill string, the tick ring, the bit — and the forcing charge.
+/// The drill string and the bit, with the readouts in a band above them.
 ///
-/// The charge lives in the string rather than in a gauge of its own: it is fuel
-/// standing in the pipe above the bit, and forcing burns it away from the top
-/// down. One panel fewer, and the meaning needs no label.
+/// No cycle clock here, neither the ring around the string nor a figure in the
+/// band: every drill will keep its own cadence once they are typed, so one
+/// number over the whole rig would be a lie the moment the second kind of
+/// drill arrives. What a drill is doing belongs on that drill's own card.
 class DrillString extends StatelessWidget {
   const DrillString({required this.game, super.key});
 
@@ -30,7 +30,6 @@ class DrillString extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sim = game.sim;
-    final charge = sim.energy.value / sim.energyCap;
 
     return IgnorePointer(
       child: Stack(
@@ -48,15 +47,6 @@ class DrillString extends StatelessWidget {
                 DepthReadout(game: game),
                 const Spacer(),
                 EnergyPlate(game: game),
-                const SizedBox(width: 16),
-                Stat(
-                  // "Tick" is the engine's word. What the player sees is one
-                  // pass of the drill, and the deck already counts those.
-                  label: 'цикл',
-                  value: game.tickInterval,
-                  align: CrossAxisAlignment.end,
-                  shadows: true,
-                ),
               ],
             ),
           ),
@@ -75,21 +65,11 @@ class DrillString extends StatelessWidget {
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      DrillPipe(charge: charge, phase: i * 0.13),
+                      DrillPipe(phase: i * 0.13),
                       DrillBit(engine: game.drill, phase: i * 0.13),
                     ],
                   ),
               ],
-            ),
-          ),
-          // Sized to the string it wraps: the tick belongs to the rig as a
-          // whole, so there is one ring over the middle of it and not one per
-          // drill.
-          Align(
-            alignment: Alignment.topCenter,
-            child: Padding(
-              padding: const EdgeInsets.only(top: headTop),
-              child: TickRing(engine: game.drill, diameter: stringLength),
             ),
           ),
         ],
@@ -156,11 +136,7 @@ class EnergyPlate extends StatelessWidget {
           EnergyMeter(engine: game.energyLoop, full: sim.energyFull),
           const SizedBox(height: 4),
           Text(
-            spent
-                ? 'енергія відновлюється · '
-                      '+${sim.energyPerRegen}/${Game.energyInterval}'
-                : 'тап по породі — удар · '
-                      '+${sim.energyPerRegen}/${Game.energyInterval}',
+            '+${sim.energyPerRegen} / ${Game.energyInterval}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.right,
@@ -274,7 +250,7 @@ class EnergyMeterState extends State<EnergyMeter>
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: SizedBox(
-        height: 3,
+        height: 2,
         child: CustomPaint(
           painter: EnergyMeterPainter(_progress, full: widget.full),
         ),
@@ -324,13 +300,11 @@ class EnergyMeterPainter extends CustomPainter {
 
 /// The pipe the bit hangs on.
 ///
-/// Steel with the charge running through it as a lit core, rather than a bar
-/// that is itself the gauge: the rig then reads as machinery whatever the
-/// charge happens to be, and an empty gauge does not make the drill vanish.
+/// Plain steel. It used to carry the forcing charge as a lit core running
+/// down its bore; forcing is gone, and a glowing pipe wired to energy instead
+/// only said a second time what the gauge above already says.
 class DrillPipe extends StatefulWidget {
-  const DrillPipe({required this.charge, this.phase = 0, super.key});
-
-  final double charge;
+  const DrillPipe({this.phase = 0, super.key});
 
   /// Where this drill's flutes start, so neighbours do not turn in lockstep.
   final double phase;
@@ -370,7 +344,7 @@ class DrillPipeState extends State<DrillPipe>
     return RepaintBoundary(
       child: CustomPaint(
         size: const Size(pipeWidth, stringLength),
-        painter: PipePainter(flutes: _flutes, charge: widget.charge),
+        painter: PipePainter(flutes: _flutes),
       ),
     );
   }
@@ -379,11 +353,9 @@ class DrillPipeState extends State<DrillPipe>
 const double rigFlutePeriod = 0.4;
 
 class PipePainter extends CustomPainter {
-  PipePainter({required this.flutes, required this.charge})
-    : super(repaint: flutes);
+  PipePainter({required this.flutes}) : super(repaint: flutes);
 
   final ValueListenable<double> flutes;
-  final double charge;
 
   static const double _fluteSpacing = 13;
   static const double _collarSpacing = 34;
@@ -435,35 +407,6 @@ class PipePainter extends CustomPainter {
       );
     }
 
-    // The charge, running down the inside of the pipe.
-    final lit = size.height * charge.clamp(0.0, 1.0);
-    if (lit > 0.5) {
-      // A quarter of the barrel, not half: the core is what runs THROUGH the
-      // pipe, and seven points on a fourteen-wide pipe made the steel read as
-      // charge with a bit of trim on it.
-      final bore = size.width * 0.26;
-      final core = Rect.fromLTWH(
-        (size.width - bore) / 2,
-        size.height - lit,
-        bore,
-        lit,
-      );
-      canvas.drawRect(
-        core,
-        Paint()
-          ..color = Palette.gold
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5),
-      );
-      canvas.drawRect(
-        core,
-        Paint()
-          ..shader = const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0x99EF9F27), Palette.gold],
-          ).createShader(core),
-      );
-    }
     canvas.restore();
 
     // Collars: the joints between pipe sections.
@@ -506,7 +449,7 @@ class PipePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(PipePainter oldDelegate) => oldDelegate.charge != charge;
+  bool shouldRepaint(PipePainter oldDelegate) => false;
 }
 
 /// The bit, cutting.

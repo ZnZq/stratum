@@ -662,9 +662,6 @@ class Game extends ChangeNotifier {
   /// the current layer can shudder under it.
   final ValueNotifier<int> hitShakes = ValueNotifier(0);
 
-  /// The heartbeat as it currently stands.
-  String get tickInterval => secondsLabel(drill.rate.interval);
-
   /// The two cadences the yield rate is built from. They live here because
   /// the engines do; the core is handed them rather than owning a clock.
   double get cycleSeconds => drill.rate.interval.inMicroseconds / 1e6;

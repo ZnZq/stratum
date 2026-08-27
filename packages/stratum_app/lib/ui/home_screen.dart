@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../game.dart';
+import 'stat.dart';
 import 'tokens.dart';
 
 /// The shell's own face: the AI looking at itself.
@@ -47,26 +48,30 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+          // No stretch here: a Column hands its children an unbounded height,
+          // and a stretching Row would pass that infinity straight down.
           Row(
             children: [
               Expanded(
                 child: _HomeCard(
-                  label: 'ЦИКЛ ${sim.cycleNumber}',
-                  child: _Readout(
-                    value: '${sim.collapses.value}',
+                  child: Stat(
+                    label: 'цикл',
+                    value: '${sim.cycleNumber}',
                     colour: Palette.steel,
-                    caption: 'очок колапсу',
+                    note: 'очок колапсу: ${sim.collapses.value}',
                   ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: _HomeCard(
-                  label: 'СИМУЛЯЦІЯ ${sim.simulationNumber}',
-                  child: _Readout(
+                  // The same word the mine uses for the same number: the shell
+                  // must not rename what the player just looked at.
+                  child: Stat(
+                    label: 'глибина',
                     value: '${sim.layer.value} м',
                     colour: Palette.steel,
-                    caption: 'поточна глибина',
+                    note: 'симуляція ${sim.simulationNumber}',
                   ),
                 ),
               ),
@@ -74,48 +79,56 @@ class HomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _HomeCard(
-            label: 'СИРІ ДАНІ',
-            child: _Readout(
-              value: '${sim.rawData.value}',
-              colour: Palette.tech,
-              size: 24,
-              caption: 'за цикл: ${sim.cycleData.value}',
+            child: Stat(
+              label: 'сирі дані',
+              note: 'за цикл: ${sim.cycleData.value}',
+              // The headline of this screen, so it keeps a size of its own
+              // rather than the house figure size.
+              child: Text(
+                '${sim.rawData.value}',
+                style: AppText.display(
+                  26,
+                  weight: FontWeight.w700,
+                  color: Palette.tech,
+                  height: 1,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 10),
           _HomeCard(
-            label: 'ПЕРЕЗАПУСК',
-            chip: 'згодом',
-            child: _Readout(
+            child: Stat(
+              label: 'перезапуск',
+              labelColour: Palette.gold,
+              trailing: const _Soon(),
               value: '+${sim.bankableData.value}',
               colour: Palette.gold,
-              caption: 'забанкуєш · гаманець: ${sim.dataWallet.value}',
+              note: 'забанкуєш · гаманець: ${sim.dataWallet.value}',
             ),
           ),
           const SizedBox(height: 10),
           _HomeCard(
-            label: 'КОЛАПС',
-            chip: 'згодом',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'перенасичення ${(saturation * 100).toStringAsFixed(1)}%',
-                  style: AppText.display(
-                    15,
-                    weight: FontWeight.w700,
-                    color: Palette.quantonium,
+            child: Stat(
+              label: 'колапс',
+              labelColour: Palette.quantonium,
+              trailing: const _Soon(),
+              value:
+                  'перенасичення '
+                  '${(saturation * 100).toStringAsFixed(1)}%',
+              colour: Palette.quantonium,
+              below: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 5),
+                  _SaturationBar(fraction: saturation),
+                  const SizedBox(height: 6),
+                  Text(
+                    'поріг $threshold · дрейф −3%/добу',
+                    style: AppText.display(9.5, color: Palette.textFaint),
                   ),
-                ),
-                const SizedBox(height: 7),
-                _SaturationBar(fraction: saturation),
-                const SizedBox(height: 6),
-                Text(
-                  'поріг $threshold · дрейф −3%/добу',
-                  style: AppText.body(9.5, color: Palette.textMuted),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const Spacer(flex: 2),
@@ -125,16 +138,12 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// A translucent card, so the shell's field keeps showing through the home
+/// A translucent panel, so the shell's field keeps showing through the home
 /// screen instead of being walled off by it.
 class _HomeCard extends StatelessWidget {
-  const _HomeCard({required this.label, required this.child, this.chip});
+  const _HomeCard({required this.child});
 
-  final String label;
   final Widget child;
-
-  /// A small trailing tag, used to mark an act that is not built yet.
-  final String? chip;
 
   @override
   Widget build(BuildContext context) {
@@ -145,71 +154,25 @@ class _HomeCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Palette.lineBar),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: AppText.body(
-                    9.5,
-                    weight: FontWeight.w700,
-                    color: Palette.textFaint,
-                  ).copyWith(letterSpacing: 1.6),
-                ),
-              ),
-              if (chip case final chip?)
-                Container(
-                  padding: const EdgeInsets.fromLTRB(7, 2, 7, 3),
-                  decoration: BoxDecoration(
-                    color: Palette.bar,
-                    borderRadius: BorderRadius.circular(7),
-                    border: Border.all(color: Palette.lineBar),
-                  ),
-                  child: Text(
-                    chip,
-                    style: AppText.body(8.5, color: Palette.textFaint),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          child,
-        ],
-      ),
+      child: child,
     );
   }
 }
 
-class _Readout extends StatelessWidget {
-  const _Readout({
-    required this.value,
-    required this.colour,
-    required this.caption,
-    this.size = 17,
-  });
-
-  final String value;
-  final Color colour;
-  final String caption;
-  final double size;
+/// The tag on an act that reads out but does not act yet.
+class _Soon extends StatelessWidget {
+  const _Soon();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          value,
-          style: AppText.display(size, weight: FontWeight.w700, color: colour),
-        ),
-        const SizedBox(height: 3),
-        Text(caption, style: AppText.body(9.5, color: Palette.textMuted)),
-      ],
+    return Container(
+      padding: const EdgeInsets.fromLTRB(7, 2, 7, 3),
+      decoration: BoxDecoration(
+        color: Palette.bar,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: Palette.lineBar),
+      ),
+      child: Text('згодом', style: AppText.body(8.5, color: Palette.textFaint)),
     );
   }
 }
@@ -225,7 +188,7 @@ class _SaturationBar extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(5),
       child: SizedBox(
-        height: 8,
+        height: 4,
         child: Stack(
           fit: StackFit.expand,
           children: [
