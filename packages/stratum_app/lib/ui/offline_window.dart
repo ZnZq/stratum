@@ -73,31 +73,11 @@ class OfflineWindow extends StatelessWidget {
                   style: AppText.body(9.5, color: Palette.textMuted),
                 ),
                 const SizedBox(height: 14),
-                _GainRow(
-                  icon: Ti.grain,
-                  colour: Palette.ore,
-                  label: 'Реголіт',
-                  value: gain.ore,
-                ),
+                _GainRow(id: ResourceId.regolith, value: gain.ore),
                 for (final entry in gain.ores.entries)
-                  _GainRow(
-                    icon: resourceStyles[entry.key]!.icon,
-                    colour: resourceStyles[entry.key]!.colour,
-                    label: resourceStyles[entry.key]!.label,
-                    value: entry.value,
-                  ),
-                _GainRow(
-                  icon: Ti.diamond,
-                  colour: Palette.crystal,
-                  label: 'Кристали',
-                  value: gain.crystals,
-                ),
-                _GainRow(
-                  icon: Ti.atom2,
-                  colour: Palette.quantonium,
-                  label: 'Квантоніум',
-                  value: gain.quantonium,
-                ),
+                  _GainRow(id: entry.key, value: entry.value),
+                _GainRow(id: ResourceId.crystals, value: gain.crystals),
+                _GainRow(id: ResourceId.quantonium, value: gain.quantonium),
                 const SizedBox(height: 14),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -131,26 +111,22 @@ class OfflineWindow extends StatelessWidget {
 }
 
 class _GainRow extends StatelessWidget {
-  const _GainRow({
-    required this.icon,
-    required this.colour,
-    required this.label,
-    required this.value,
-  });
+  const _GainRow({required this.id, required this.value});
 
-  final IconData icon;
-  final Color colour;
-  final String label;
+  final ResourceId id;
   final BigDouble value;
 
   @override
   Widget build(BuildContext context) {
     if (value.isZero) return const SizedBox.shrink();
+    final style = resourceStyles[id]!;
+    final colour = style.colour;
+    final label = style.label;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(icon, size: 14, color: colour),
+          ResourceIcon(id, size: 19),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

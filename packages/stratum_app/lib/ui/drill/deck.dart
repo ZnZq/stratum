@@ -304,7 +304,7 @@ class LootCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(style.icon, size: 14, color: style.colour),
+                  ResourceIcon(id, size: 18),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(

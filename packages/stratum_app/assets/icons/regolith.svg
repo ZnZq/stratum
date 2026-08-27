@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="mound" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#CDB98E"/>
+      <stop offset="1" stop-color="#6E5F45"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="16" cy="26.4" rx="13.4" ry="3.6" fill="#38301F"/>
+  <path d="M2.8 26.4Q6.2 16.2 16 13q9.8 3.2 13.2 13.4q-6.6 2.8-13.2 2.8T2.8 26.4Z" fill="url(#mound)"/>
+  <path d="M6.4 25.4Q9.2 17.8 14.6 14.9q-3 4.6-4 10.7q-2.1-.1-4.2-.2Z" fill="#E7D6AA" opacity=".75"/>
+  <path d="M11.8 9.2 16.4 6.4l4.6 3-1 5.4-6.4.4Z" fill="#93825F"/>
+  <path d="M11.8 9.2 16.4 6.4l4.6 3-4.5 1.6Z" fill="#C3B287"/>
+  <path d="m16.5 11 4.5-1.6-1 5.4Z" fill="#5B4E36"/>
+  <path d="m6.8 15.6 3.4-2 3.2 2.2-.8 3.8-4.4.3Z" fill="#7C6D4F"/>
+  <path d="m6.8 15.6 3.4-2 3.2 2.2-3.4 1Z" fill="#AB9A72"/>
+  <path d="m20.4 15.2 3-1.6 2.8 2-.7 3.3-3.9.2Z" fill="#867454"/>
+  <path d="m20.4 15.2 3-1.6 2.8 2-3 .9Z" fill="#B5A379"/>
+  <circle cx="13.2" cy="22.6" r="1.2" fill="#54482F"/>
+  <circle cx="19.4" cy="21.2" r="1.4" fill="#8B7B5C"/>
+  <circle cx="23.2" cy="24" r="1.1" fill="#54482F"/>
+  <circle cx="9.6" cy="22.8" r="1" fill="#9C8B64"/>
+  <circle cx="16.6" cy="24.6" r="1.1" fill="#6B5D40"/>
+  <circle cx="16" cy="8.6" r="0.9" fill="#F2E7C2"/>
+</svg>

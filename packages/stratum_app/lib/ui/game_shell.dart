@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
 import 'console_menu.dart';
@@ -12,6 +13,7 @@ import 'save_menu.dart';
 import 'strikes_screen.dart';
 import 'shell_backdrop.dart';
 import 'upgrades_screen.dart';
+import 'resource_style.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
 import 'warehouse.dart';
@@ -355,35 +357,30 @@ class _ResourceBar extends StatelessWidget {
             Flexible(
               child: Row(
                 children: [
-                  _Resource(
-                    icon: Ti.grain,
-                    colour: Palette.ore,
+                  _ResourceFace(
+                    id: ResourceId.regolith,
                     value: '${sim.regolith.value}',
                   ),
                   const SizedBox(width: 13),
-                  _Resource(
-                    icon: Ti.atom2,
-                    colour: Palette.quantonium,
+                  _ResourceFace(
+                    id: ResourceId.quantonium,
                     value: '${sim.quantonium.value}',
                   ),
                   const SizedBox(width: 13),
-                  _Resource(
-                    icon: Ti.diamond,
-                    colour: Palette.crystal,
+                  _ResourceFace(
+                    id: ResourceId.crystals,
                     value: '${sim.crystals.value}',
                   ),
                   const SizedBox(width: 13),
-                  _Resource(
-                    icon: Ti.cpu,
-                    colour: Palette.compute,
+                  _ResourceFace(
+                    id: ResourceId.compute,
                     value: '${sim.backgroundCompute.value}',
                   ),
                 ],
               ),
             ),
-            _Resource(
-              icon: Ti.capsule,
-              colour: Palette.gold,
+            _ResourceFace(
+              id: ResourceId.capsules,
               value: '${sim.capsules.value}',
             ),
             const SizedBox(width: 6),
@@ -510,11 +507,20 @@ class _BackgroundOverlay extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _DimStat(icon: Ti.grain, value: '${sim.regolith.value}'),
+                _DimResource(
+                  id: ResourceId.regolith,
+                  value: '${sim.regolith.value}',
+                ),
                 const SizedBox(width: 18),
-                _DimStat(icon: Ti.diamond, value: '${sim.crystals.value}'),
+                _DimResource(
+                  id: ResourceId.crystals,
+                  value: '${sim.crystals.value}',
+                ),
                 const SizedBox(width: 18),
-                _DimStat(icon: Ti.atom2, value: '${sim.quantonium.value}'),
+                _DimResource(
+                  id: ResourceId.quantonium,
+                  value: '${sim.quantonium.value}',
+                ),
               ],
             ),
             const SizedBox(height: 18),
@@ -540,10 +546,10 @@ class _BackgroundOverlay extends StatelessWidget {
   }
 }
 
-class _DimStat extends StatelessWidget {
-  const _DimStat({required this.icon, required this.value});
+class _DimResource extends StatelessWidget {
+  const _DimResource({required this.id, required this.value});
 
-  final IconData icon;
+  final ResourceId id;
   final String value;
 
   @override
@@ -551,7 +557,7 @@ class _DimStat extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 13, color: const Color(0x66A0ADC1)),
+        ResourceIcon(id, size: 17, colour: const Color(0x66A0ADC1)),
         const SizedBox(width: 5),
         Text(
           value,
@@ -627,23 +633,20 @@ class _PauseOverlay extends StatelessWidget {
   }
 }
 
-class _Resource extends StatelessWidget {
-  const _Resource({
-    required this.icon,
-    required this.colour,
-    required this.value,
-  });
+/// A strip entry with a bespoke resource face.
+class _ResourceFace extends StatelessWidget {
+  const _ResourceFace({required this.id, required this.value});
 
-  final IconData icon;
-  final Color colour;
+  final ResourceId id;
   final String value;
 
   @override
   Widget build(BuildContext context) {
+    final colour = resourceStyles[id]!.colour;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 15, color: colour),
+        ResourceIcon(id, size: 19),
         const SizedBox(width: 4),
         Text(
           value,

@@ -40,8 +40,7 @@ class UpgradesScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _DrillCard(
-            icon: Ti.grain,
-            colour: Palette.ore,
+            face: const ResourceIcon(ResourceId.regolith, size: 22),
             name: 'Реголітовий бур',
             note: 'б\u02bcє по шару щоциклу · здобич — як з удару',
             children: [
@@ -98,15 +97,13 @@ class UpgradesScreen extends StatelessWidget {
 /// One owned drill type: its face, and the levers that grow it.
 class _DrillCard extends StatelessWidget {
   const _DrillCard({
-    required this.icon,
-    required this.colour,
+    required this.face,
     required this.name,
     required this.note,
     required this.children,
   });
 
-  final IconData icon;
-  final Color colour;
+  final Widget face;
   final String name;
   final String note;
   final List<Widget> children;
@@ -126,15 +123,15 @@ class _DrillCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 30,
-                height: 30,
+                width: 36,
+                height: 36,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: Palette.bar,
                   borderRadius: BorderRadius.circular(9),
                   border: Border.all(color: Palette.line),
                 ),
-                child: Icon(icon, size: 15, color: colour),
+                child: face,
               ),
               const SizedBox(width: 9),
               Expanded(
@@ -190,15 +187,15 @@ class _LockedDrill extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 30,
-              height: 30,
+              width: 36,
+              height: 36,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: Palette.bar,
                 borderRadius: BorderRadius.circular(9),
                 border: Border.all(color: Palette.lineBar),
               ),
-              child: Icon(style.icon, size: 15, color: style.colour),
+              child: ResourceIcon(id, size: 22),
             ),
             const SizedBox(width: 9),
             Expanded(

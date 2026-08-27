@@ -178,15 +178,15 @@ class _Row extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 32,
-              height: 32,
+              width: 38,
+              height: 38,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: Palette.well,
                 borderRadius: BorderRadius.circular(9),
                 border: Border.all(color: Palette.lineBar),
               ),
-              child: Icon(style.icon, size: 16, color: style.colour),
+              child: ResourceIcon(id, size: 24),
             ),
             const SizedBox(width: 10),
             Expanded(

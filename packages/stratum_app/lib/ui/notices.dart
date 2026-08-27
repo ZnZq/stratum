@@ -97,7 +97,10 @@ class _NoticeCard extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 11, color: colour),
+              if (notice.kind == NoticeKind.gain)
+                ResourceIcon(notice.resource!, size: 15)
+              else
+                Icon(icon, size: 11, color: colour),
               const SizedBox(width: 6),
               if (notice.text.contains('\n'))
                 // A gain card: the streak loud, the stockpile total under it

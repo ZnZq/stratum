@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="cap" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFE7B0"/>
+      <stop offset=".5" stop-color="#F2B355"/>
+      <stop offset="1" stop-color="#B36F14"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="16" cy="27.6" rx="8.2" ry="2.2" fill="#33230A"/>
+  <path d="M10.8 9.4q0-5 5.2-5t5.2 5v13.2q0 5-5.2 5t-5.2-5Z" fill="url(#cap)"/>
+  <rect x="10.8" y="10.6" width="10.4" height="2.2" fill="#8C5A10"/>
+  <rect x="10.8" y="19.2" width="10.4" height="2.2" fill="#8C5A10"/>
+  <rect x="10.8" y="10.6" width="10.4" height="0.8" fill="#E2A84E"/>
+  <rect x="10.8" y="19.2" width="10.4" height="0.8" fill="#E2A84E"/>
+  <rect x="13.4" y="13.6" width="5.2" height="4.8" rx="1.4" fill="#4A3208"/>
+  <rect x="13.9" y="14.1" width="4.2" height="3.8" rx="1" fill="#FFF0C4"/>
+  <circle cx="16" cy="16" r="1.3" fill="#FFD782"/>
+  <path d="M12.1 6.2q1.2-1 2.7-1.3v22.4q-1.5-.3-2.7-1.3Z" fill="#FFF3D2" opacity=".55"/>
+</svg>
