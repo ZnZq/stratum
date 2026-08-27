@@ -73,11 +73,8 @@ class OfflineWindow extends StatelessWidget {
                   style: AppText.body(9.5, color: Palette.textMuted),
                 ),
                 const SizedBox(height: 14),
-                _GainRow(id: ResourceId.regolith, value: gain.ore),
-                for (final entry in gain.ores.entries)
+                for (final entry in gain.gained.entries)
                   _GainRow(id: entry.key, value: entry.value),
-                _GainRow(id: ResourceId.crystals, value: gain.crystals),
-                _GainRow(id: ResourceId.quantonium, value: gain.quantonium),
                 const SizedBox(height: 14),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,

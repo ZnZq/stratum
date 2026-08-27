@@ -6,6 +6,7 @@ import 'package:stratum_core/stratum_core.dart';
 
 import '../../game.dart';
 import '../resource_style.dart';
+import '../stat.dart';
 import '../tokens.dart';
 
 /// The rig's controls, laid on a deck that fades the rock out beneath them.
@@ -107,15 +108,13 @@ class DeckState extends State<Deck> {
                       Stat(
                         label: 'щільність',
                         value: '${sim.layerHpMax.value}',
-                        colour: Palette.textDim,
-                        alignEnd: true,
+                        align: CrossAxisAlignment.end,
                       ),
                       const SizedBox(height: 7),
                       Stat(
                         label: 'до пробиття',
                         value: '${sim.hitsToBreak.value} ударів',
-                        colour: Palette.textDim,
-                        alignEnd: true,
+                        align: CrossAxisAlignment.end,
                       ),
                     ],
                   ),
@@ -392,49 +391,4 @@ class ChevronPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(ChevronPainter oldDelegate) => false;
-}
-
-class Stat extends StatelessWidget {
-  const Stat({
-    required this.label,
-    required this.value,
-    required this.colour,
-    this.note,
-    this.alignEnd = false,
-    super.key,
-  });
-
-  final String label;
-  final String value;
-  final Color colour;
-  final String? note;
-  final bool alignEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: alignEnd
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: AppText.body(
-            8.5,
-            weight: FontWeight.w700,
-            color: Palette.tech,
-            letterSpacing: 1.6,
-          ),
-        ),
-        const SizedBox(height: 1),
-        Text(
-          value,
-          style: AppText.display(14, weight: FontWeight.w600, color: colour),
-        ),
-        if (note != null)
-          Text(note!, style: AppText.display(9.5, color: Palette.textFaint)),
-      ],
-    );
-  }
 }

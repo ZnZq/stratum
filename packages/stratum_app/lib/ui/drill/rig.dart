@@ -3,6 +3,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
@@ -10,6 +11,7 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../../game.dart';
+import '../stat.dart';
 import '../tick_ring.dart';
 import '../tokens.dart';
 import 'metrics.dart';
@@ -47,12 +49,13 @@ class DrillString extends StatelessWidget {
                 const Spacer(),
                 EnergyPlate(game: game),
                 const SizedBox(width: 16),
-                HeadStat(
+                Stat(
                   // "Tick" is the engine's word. What the player sees is one
                   // pass of the drill, and the deck already counts those.
                   label: 'цикл',
                   value: game.tickInterval,
-                  colour: Palette.textDim,
+                  align: CrossAxisAlignment.end,
+                  shadows: true,
                 ),
               ],
             ),
@@ -95,56 +98,6 @@ class DrillString extends StatelessWidget {
   }
 }
 
-class HeadStat extends StatelessWidget {
-  const HeadStat({
-    required this.label,
-    required this.value,
-    required this.colour,
-    this.meter,
-    this.caption,
-    this.align = CrossAxisAlignment.center,
-    super.key,
-  });
-
-  final String label;
-  final String value;
-  final Color colour;
-  final Widget? meter;
-  final Widget? caption;
-  final CrossAxisAlignment align;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: align,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (meter != null) ...[meter!, const SizedBox(height: 3)],
-        Text(
-          label.toUpperCase(),
-          style: AppText.body(
-            8.5,
-            weight: FontWeight.w700,
-            color: Palette.tech,
-            letterSpacing: 1.6,
-            shadows: true,
-          ),
-        ),
-        Text(
-          value,
-          style: AppText.display(
-            13,
-            weight: FontWeight.w700,
-            color: colour,
-            shadows: true,
-          ),
-        ),
-        if (caption != null) ...[const SizedBox(height: 2), caption!],
-      ],
-    );
-  }
-}
-
 /// The charge, as a plate with its own bar under it.
 ///
 /// The number says where the gauge stands and the bar says the same thing in
@@ -168,38 +121,33 @@ class EnergyPlate extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-            decoration: BoxDecoration(
-              color: Palette.well,
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(color: Palette.lineBar),
-            ),
+          Stat(
+            label: 'енергія',
+            align: CrossAxisAlignment.end,
+            shadows: true,
+            // Two styles in one figure, so the gauge passes a child rather
+            // than a string: the points stand out, the cap stays quiet.
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                Text(
-                  'ЕНЕРГІЯ',
-                  style: AppText.body(
-                    8.5,
-                    weight: FontWeight.w700,
-                    color: Palette.tech,
-                    letterSpacing: 1.6,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '${sim.energy.value}',
+                _EnergyCount(
+                  value: sim.energy.value,
                   style: AppText.display(
-                    16,
+                    Stat.valueSize,
                     weight: FontWeight.w700,
                     color: spent ? Palette.textFaint : Palette.textDim,
+                    shadows: true,
                   ),
                 ),
                 Text(
                   ' / ${sim.energyCap}',
-                  style: AppText.display(10.5, color: Palette.textFaint),
+                  style: AppText.display(
+                    9.5,
+                    color: Palette.textFaint,
+                    shadows: true,
+                  ),
                 ),
               ],
             ),
@@ -226,6 +174,61 @@ class EnergyPlate extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The energy figure, flinching whenever it moves.
+///
+/// A swell when a point lands, a shorter dip when a strike spends one, so the
+/// two directions are told apart without reading the number. Transform.scale
+/// is paint only, so the plate never resizes and the row never shifts; and
+/// the pulse rides its own controller rather than a keyed tween, because at
+/// ten strikes a second the changes outrun the animation and a restart from
+/// rest is what keeps that legible instead of jittery.
+class _EnergyCount extends StatefulWidget {
+  const _EnergyCount({required this.value, required this.style});
+
+  final int value;
+  final TextStyle style;
+
+  @override
+  State<_EnergyCount> createState() => _EnergyCountState();
+}
+
+class _EnergyCountState extends State<_EnergyCount>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 170),
+  );
+
+  /// How far and which way the current pulse swells.
+  double _swell = 0;
+
+  @override
+  void didUpdateWidget(_EnergyCount oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value == oldWidget.value) return;
+    _swell = widget.value > oldWidget.value ? 0.15 : -0.1;
+    _pulse.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (context, child) => Transform.scale(
+        scale: 1 + _swell * math.sin(math.pi * _pulse.value),
+        child: child,
+      ),
+      child: Text('${widget.value}', style: widget.style),
     );
   }
 }

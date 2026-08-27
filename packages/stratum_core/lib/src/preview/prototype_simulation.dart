@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../big_double.dart';
 import '../random_source.dart';
 import '../reactive_graph.dart';
@@ -71,33 +73,34 @@ class CycleOutcome {
 /// What an absence paid out.
 class OfflineGain {
   const OfflineGain({
+    required this.seconds,
     required this.cycles,
     required this.efficiency,
-    required this.ore,
-    required this.crystals,
-    required this.quantonium,
-    required this.ores,
+    required this.gained,
   });
 
   static const OfflineGain none = OfflineGain(
+    seconds: 0,
     cycles: 0,
     efficiency: 0,
-    ore: BigDouble.zero,
-    crystals: BigDouble.zero,
-    quantonium: BigDouble.zero,
-    ores: {},
+    gained: {},
   );
 
+  /// How long the player was away.
+  final double seconds;
+
+  /// The same span counted in drill cycles, for a readout that speaks in
+  /// heartbeats rather than in seconds.
   final int cycles;
+
   final double efficiency;
-  final BigDouble ore;
-  final BigDouble crystals;
-  final BigDouble quantonium;
 
-  /// The chance ores that were unlocked over the absence.
-  final Map<ResourceId, BigDouble> ores;
+  /// Everything earned, by resource. One flat map for the same reason the
+  /// stockpile is one: a resource added later is an entry here, not a new
+  /// field wired into every place that shows the haul.
+  final Map<ResourceId, BigDouble> gained;
 
-  bool get isEmpty => cycles <= 0;
+  bool get isEmpty => gained.isEmpty;
 }
 
 /// A provisional model of the drilling loop, carrying the prototype's numbers.
@@ -150,12 +153,21 @@ class PrototypeSimulation {
     hitsToBreak = Computed(() {
       // Counted at the strike's power, not the rig's: the readout answers
       // the finger on the rock, and the drill's own blow is on its card.
+      // Each blow is power plus the structural share of what still stands,
+      // so the count follows the geometric shrink, not plain division.
       final remaining = layerHp.value;
       final perHit = strikePower;
       if (perHit.isZero) return 1;
-      final estimate = (remaining / perHit).ceil().toDouble();
+      final ratio = (remaining / perHit) * BigDouble.fromNum(structuralShare);
+      final estimate =
+          ((BigDouble.one + ratio).ln() / -math.log(1 - structuralShare))
+              .ceilToDouble();
       return estimate < 1 ? 1 : estimate.toInt();
     }, name: 'hits to break');
+    bankableData = Computed(() {
+      final due = walletEarned - dataBanked.value;
+      return due > BigDouble.zero ? due : BigDouble.zero;
+    }, name: 'bankable data');
 
     _resetLayer();
   }
@@ -174,6 +186,7 @@ class PrototypeSimulation {
   Signal<BigDouble> get regolith => stock.signal(ResourceId.regolith);
   Signal<BigDouble> get crystals => stock.signal(ResourceId.crystals);
   Signal<BigDouble> get quantonium => stock.signal(ResourceId.quantonium);
+  Signal<BigDouble> get credits => stock.signal(ResourceId.credits);
   Signal<BigDouble> get samples => stock.signal(ResourceId.samples);
   Signal<BigDouble> get capsules => stock.signal(ResourceId.capsules);
   Signal<BigDouble> get cores => stock.signal(ResourceId.cores);
@@ -201,6 +214,40 @@ class PrototypeSimulation {
   final Signal<int> discountLevel = Signal(0, name: 'discount level');
   final Signal<int> quantoniumLevel = Signal(0, name: 'quantonium level');
 
+  /// Raw data of the current simulation. Feeds the collapse gate; a restart
+  /// resets it.
+  final Signal<BigDouble> rawData = Signal(BigDouble.zero, name: 'raw data');
+
+  /// Raw data of the whole cycle, across restarts. Feeds the wallet
+  /// function; only a collapse resets it.
+  final Signal<BigDouble> cycleData = Signal(
+    BigDouble.zero,
+    name: 'cycle data',
+  );
+
+  /// What the wallet function has already paid out this cycle. Banking is a
+  /// difference, so restarting sooner or later never changes a cycle's total.
+  final Signal<BigDouble> dataBanked = Signal(
+    BigDouble.zero,
+    name: 'data banked',
+  );
+
+  /// Banked data not yet spent on the simulation tree.
+  final Signal<BigDouble> dataWallet = Signal(
+    BigDouble.zero,
+    name: 'data wallet',
+  );
+
+  /// Purchased levels of the wallet exponent. Buying is not wired up yet.
+  final Signal<int> dataExponentLevel = Signal(0, name: 'data exponent level');
+
+  /// Collapses performed, ever.
+  final Signal<int> collapses = Signal(0, name: 'collapses');
+
+  /// Wall-clock epoch ms the cycle began, for the drift formula. Zero means
+  /// not stamped yet: the app stamps it, keeping DateTime out of the core.
+  final Signal<int> cycleStartMs = Signal(0, name: 'cycle start');
+
   /// Damage already taken by the current layer, kept between cycles.
   final Signal<BigDouble> layerHp = Signal(BigDouble.zero, name: 'layer hp');
   final Signal<BigDouble> layerHpMax = Signal(
@@ -215,6 +262,7 @@ class PrototypeSimulation {
   late final Computed<BigDouble> regolithPerCycle;
   late final Computed<BigDouble> drillCost;
   late final Computed<int> hitsToBreak;
+  late final Computed<BigDouble> bankableData;
 
   static const int energyCapBase = 100;
 
@@ -238,6 +286,12 @@ class PrototypeSimulation {
   /// The prototype caps damage carry-over here, so one enormous hit cannot
   /// tunnel through an unbounded number of layers in a single cycle.
   static const int maxLayersPerCycle = 25;
+
+  /// The share of a layer's REMAINING hp every blow collapses on top of its
+  /// own power: crumbling structure, not extra muscle. Off the remainder
+  /// rather than the maximum, so a wall costs log-of-overmatch blows and the
+  /// kill itself always belongs to the blow's power. PROVISIONAL.
+  static const double structuralShare = 0.0002;
 
   static const int thickEvery = 25;
 
@@ -336,55 +390,149 @@ class PrototypeSimulation {
     return chance > 0.5 ? 0.5 : chance;
   }
 
+  /// The wallet exponent and its upgrade track. Data is counted in
+  /// measurements rather than in tonnes, so the gross it compresses grows
+  /// with play instead of exploding with the economy -- which is why the
+  /// exponent can be this gentle and still keep the wallet in readable
+  /// numbers. Each purchased step multiplies a cycle's whole earnings by
+  /// gross^step, so it stays capped. PROVISIONAL.
+  static const double dataExponentBase = 0.25;
+  static const double dataExponentStep = 0.01;
+  static const double dataExponentMax = 0.35;
+
+  /// The oversaturation gate: one run's raw data reaching this allows a
+  /// collapse. Sized against the accrual below so a first collapse is days
+  /// of play, not minutes. PROVISIONAL.
+  static final BigDouble collapseThresholdBase = BigDouble.fromNum(3e8);
+
+  /// What the gate is multiplied by per collapse already performed. Later
+  /// cycles reach far deeper far sooner, and data accrues with depth, so a
+  /// fixed gate would fall in hours by the fifth cycle. PROVISIONAL.
+  static const double collapseThresholdGrowth = 4;
+
+  /// Drift: the collapse threshold melts by this factor per wall-clock day,
+  /// online and offline alike, with no floor.
+  static const double collapseDriftPerDay = 0.97;
+
+  int get simulationNumber => restarts.value + 1;
+
+  int get cycleNumber => collapses.value + 1;
+
+  double get dataExponent {
+    final exponent =
+        dataExponentBase + dataExponentStep * dataExponentLevel.value;
+    return exponent > dataExponentMax ? dataExponentMax : exponent;
+  }
+
+  /// Everything the wallet function has earned over the cycle so far.
+  BigDouble get walletEarned => cycleData.value.isZero
+      ? BigDouble.zero
+      : cycleData.value.pow(dataExponent);
+
+  /// The collapse threshold at [nowMs], melted by drift since the cycle
+  /// began. A zero start means the app has not stamped the cycle yet, and a
+  /// clock wound backwards counts as no time passed.
+  BigDouble collapseThreshold(int nowMs) {
+    final base =
+        collapseThresholdBase *
+        BigDouble.fromNum(collapseThresholdGrowth)
+            .pow(collapses.value.toDouble());
+    final start = cycleStartMs.value;
+    if (start <= 0 || nowMs <= start) return base;
+    final days = (nowMs - start) / Duration.millisecondsPerDay;
+    return base *
+        BigDouble.fromNum(math.pow(collapseDriftPerDay, days).toDouble());
+  }
+
+  /// Whether one run's raw data has oversaturated the simulation.
+  bool collapseReady(int nowMs) =>
+      rawData.value.gteWithTolerance(collapseThreshold(nowMs));
+
+  /// One haul as MEASUREMENTS rather than as tonnes: how many typical drops
+  /// of its kind this is, over how often a drop of that kind is seen.
+  ///
+  /// Normalising against the depth's own drop is what keeps the data honest.
+  /// Amounts inflate exponentially with depth -- regolith alone is 1.03^m --
+  /// so counting them raw made a strike at 400 m worth tens of thousands of
+  /// strikes at the surface, and any fixed collapse gate fell in minutes.
+  /// A sighting is a sighting; what makes a deep one worth more is the depth
+  /// factor in [_recordData], not the tonnage. Dividing by the chance keeps
+  /// the rarer lane worth more per sighting, so every lane's expected
+  /// contribution per strike comes out at exactly one.
+  BigDouble _information(BigDouble amount, BigDouble typical, double chance) {
+    if (typical.isZero) return BigDouble.zero;
+    return amount / typical / BigDouble.fromNum(chance);
+  }
+
+  /// Books measurements as data at the depth they were taken.
+  ///
+  /// The depth factor is floored at one metre so the surface still counts.
+  void _recordData(BigDouble weighted) {
+    if (weighted.isZero) return;
+    final gained = weighted * BigDouble.fromNum(layer.value + 1);
+    rawData.value = rawData.value + gained;
+    cycleData.value = cycleData.value + gained;
+  }
+
   /// The offline throttle: absence produces at a quarter of live pace.
   static const double offlineEfficiency = 0.25;
 
   /// Settles an absence as one formula over the whole span -- never a step
   /// replay.
   ///
+  /// An absence pays [efficiency] of what the same stretch of playing would
+  /// have paid, off the very [yieldPerSecond] the warehouse quotes: both
+  /// lanes, at the cadences handed in. One source rather than two, so a new
+  /// ore joins the loot table, the readout and the absence in a single row of
+  /// [oreTable] instead of in three places that can drift apart.
+  ///
   /// Chance drops arrive at their expected value instead of being rolled:
   /// thousands of draws would drain the substreams and shift every roll that
   /// follows a comeback, turning parity tests red. Depth does not move --
   /// drilling is the online game; what the store earns while away is ore and
-  /// minerals at the current face.
+  /// minerals at the current face, which is also why break payouts are not
+  /// part of the rate.
   OfflineGain claimOffline({
-    required int cycles,
+    required double seconds,
+    required double energyPerSecond,
+    required double cycleSeconds,
     double efficiency = offlineEfficiency,
   }) {
-    if (cycles <= 0) return OfflineGain.none;
-    final scale = BigDouble.fromNum(cycles) * BigDouble.fromNum(efficiency);
-    // The cycle's whole income is its strike, so the expectation is the
-    // strike's guaranteed share.
-    final ore =
-        regolithPerCycle.value * BigDouble.fromNum(strikeShareOfRig) * scale;
-    final crystals =
-        crystalDropAt(layer.value) * BigDouble.fromNum(crystalChance) * scale;
-    final quantonium =
-        BigDouble.fromNum(
-          quantoniumDropAt(layer.value) * strikeQuantoniumChance,
-        ) *
-        scale;
-    final ores = <ResourceId, BigDouble>{
-      for (final row in oreTable)
-        if (layer.value >= row.unlockAt)
-          row.id:
-              oreDropAt(layer.value) * BigDouble.fromNum(row.chance) * scale,
-    };
+    if (seconds <= 0 || efficiency <= 0) return OfflineGain.none;
+    final span = BigDouble.fromNum(seconds * efficiency);
+    final gained = <ResourceId, BigDouble>{};
+    for (final id in ResourceId.values) {
+      final rate = yieldPerSecond(
+        id,
+        energyPerSecond: energyPerSecond,
+        cycleSeconds: cycleSeconds,
+      );
+      if (rate.isZero) continue;
+      gained[id] = rate * span;
+    }
+    if (gained.isEmpty) return OfflineGain.none;
+
+    // Every lane that pays expects one sighting per strike, so the data an
+    // absence books is the strikes it stands for times the lanes open.
+    final strikesPerSecond =
+        energyPerSecond / strikeCost +
+        (cycleSeconds > 0 ? 1 / cycleSeconds : 0);
+
     batch(() {
-      stock.add(ResourceId.regolith, ore);
-      stock.add(ResourceId.crystals, crystals);
-      stock.add(ResourceId.quantonium, quantonium);
-      for (final entry in ores.entries) {
+      for (final entry in gained.entries) {
         stock.add(entry.key, entry.value);
       }
+      _recordData(
+        BigDouble.fromNum(
+          gained.length * strikesPerSecond * seconds * efficiency,
+        ),
+      );
     });
     return OfflineGain(
-      cycles: cycles,
+      seconds: seconds,
+      cycles: cycleSeconds > 0 ? (seconds / cycleSeconds).floor() : 0,
       efficiency: efficiency,
-      ore: ore,
-      crystals: crystals,
-      quantonium: quantonium,
-      ores: ores,
+      gained: gained,
     );
   }
 
@@ -481,6 +629,58 @@ class PrototypeSimulation {
     });
   }
 
+  /// What one strike is expected to bring out of the face: the drop at this
+  /// depth times how often the lane pays. A locked ore is worth nothing.
+  BigDouble expectedPerStrike(ResourceId id) {
+    switch (id) {
+      case ResourceId.regolith:
+        return _strikeRegolithMean;
+      case ResourceId.crystals:
+        return crystalDropAt(layer.value) * BigDouble.fromNum(crystalChance);
+      case ResourceId.quantonium:
+        return quantoniumDropAt(layer.value).big *
+            BigDouble.fromNum(strikeQuantoniumChance);
+      default:
+        for (final row in oreTable) {
+          if (row.id != id) continue;
+          if (layer.value < row.unlockAt) return BigDouble.zero;
+          return oreDropAt(layer.value) * BigDouble.fromNum(row.chance);
+        }
+        return BigDouble.zero;
+    }
+  }
+
+  /// What one drill cycle extracts on its OWN, beyond the strike it throws.
+  ///
+  /// Zero throughout: extraction belongs to strikes alone. The term is kept
+  /// because the typed drills land exactly here -- a drill that mines its own
+  /// specified resource fills this in and nothing else has to move.
+  BigDouble expectedPerCycle(ResourceId id) => BigDouble.zero;
+
+  /// The average yield of one resource per second at the current face.
+  ///
+  /// Both lanes throw the same strike, so both are counted in strikes: the
+  /// hand as fast as energy can pay for one ([energyPerSecond] over
+  /// [strikeCost]), the rig once per cycle. Crits, echoes and break payouts
+  /// are deliberately left out -- they are bonuses on top, so this reads as
+  /// the floor rather than as a promise, and it stays a steady number instead
+  /// of one that twitches with luck.
+  ///
+  /// The two cadences are passed in rather than read here: how often the
+  /// engines fire is the app's business, and the core owns no timers.
+  BigDouble yieldPerSecond(
+    ResourceId id, {
+    required double energyPerSecond,
+    required double cycleSeconds,
+  }) {
+    final perStrike = expectedPerStrike(id);
+    final byHand = perStrike * BigDouble.fromNum(energyPerSecond / strikeCost);
+    if (cycleSeconds <= 0) return byHand;
+    final byRig =
+        (expectedPerCycle(id) + perStrike) / BigDouble.fromNum(cycleSeconds);
+    return byHand + byRig;
+  }
+
   /// One manual blow at the face: spends energy, deals [strikePower], and
   /// takes the loot a strike is worth.
   ///
@@ -520,6 +720,9 @@ class PrototypeSimulation {
   }) {
     final loot = <ResourceId, BigDouble>{};
 
+    // Measurements, not tonnage -- see [_information].
+    var weighted = BigDouble.zero;
+
     // The one crit in the game. Rolled here so the loot scales in place; the
     // caller reads the flag to scale the blow itself the same way.
     final critical = random
@@ -538,6 +741,7 @@ class PrototypeSimulation {
         _strikeRegolithMean * BigDouble.fromNum(spread) * multiplier;
     stock.add(ResourceId.regolith, regolith);
     loot[ResourceId.regolith] = regolith;
+    weighted += _information(regolith, _strikeRegolithMean, 1);
 
     for (final row in oreTable) {
       if (layer.value < row.unlockAt) continue;
@@ -545,6 +749,7 @@ class PrototypeSimulation {
         final drop = oreDropAt(layer.value) * multiplier;
         stock.add(row.id, drop);
         loot[row.id] = drop;
+        weighted += _information(drop, oreDropAt(layer.value), row.chance);
       }
     }
 
@@ -552,6 +757,7 @@ class PrototypeSimulation {
       final drop = crystalDropAt(layer.value) * multiplier;
       stock.add(ResourceId.crystals, drop);
       loot[ResourceId.crystals] = drop;
+      weighted += _information(drop, crystalDropAt(layer.value), crystalChance);
     }
 
     // Named apart from the cycle's own anti-brick stream: the loot glint and
@@ -562,8 +768,14 @@ class PrototypeSimulation {
       final drop = quantoniumDropAt(layer.value).big * multiplier;
       stock.add(ResourceId.quantonium, drop);
       loot[ResourceId.quantonium] = drop;
+      weighted += _information(
+        drop,
+        quantoniumDropAt(layer.value).big,
+        strikeQuantoniumChance,
+      );
     }
 
+    _recordData(weighted);
     return (critical: critical, loot: loot);
   }
 
@@ -584,10 +796,13 @@ class PrototypeSimulation {
         ? quantoniumDropAt(layer.value)
         : 0;
 
+    // The cycle's blow is the rig's power plus the SAME strike a click
+    // throws -- a full strike, damage and loot alike, not loot only. One
+    // blow, so the structural share is collapsed once, and the crit
+    // multiplies the whole of it.
+    final blow = power.value + strikePower;
     final struck = _applyDamage(
-      rolled.critical
-          ? power.value * BigDouble.fromNum(strikeCritPower)
-          : power.value,
+      rolled.critical ? blow * BigDouble.fromNum(strikeCritPower) : blow,
     );
     final broken = struck.broken;
     final thickBroken = struck.thickBroken;
@@ -610,7 +825,11 @@ class PrototypeSimulation {
 
   /// Drives [damage] into the face, carrying overflow into deeper layers.
   ({int broken, int thickBroken}) _applyDamage(BigDouble damage) {
-    var remaining = damage;
+    // Every blow also collapses a share of the structure still standing: the
+    // fuller the layer, the more there is to shake apart. Deep walls become
+    // finite -- the hit count grows with the log of the overmatch -- while a
+    // blow that already outmatches the rock barely notices the term.
+    var remaining = damage + layerHp.value * BigDouble.fromNum(structuralShare);
     var broken = 0;
     var thickBroken = 0;
     while (remaining > BigDouble.zero && broken < maxLayersPerCycle) {
@@ -629,25 +848,34 @@ class PrototypeSimulation {
   /// Returns whether the broken layer was a thick one.
   bool _breakLayer() {
     final thick = isThick(layer.value);
+    // Guaranteed payouts are certain observations, so they enter the data at
+    // weight one -- and before the depth moves off the layer they came from.
+    var payout = BigDouble.zero;
     if (thick) {
       final bonus = BigDouble.fromNum(thickSpan);
-      stock.add(ResourceId.regolith, regolithPerCycle.value * bonus);
-      stock.add(ResourceId.crystals, crystalDropAt(layer.value) * bonus);
+      final regolith = regolithPerCycle.value * bonus;
+      final crystals = crystalDropAt(layer.value) * bonus;
+      final quantonium = (quantoniumDropAt(layer.value) * thickSpan).big;
+      stock.add(ResourceId.regolith, regolith);
+      stock.add(ResourceId.crystals, crystals);
+      payout +=
+          _information(regolith, _strikeRegolithMean, 1) +
+          _information(crystals, crystalDropAt(layer.value), 1) +
+          _information(quantonium, quantoniumDropAt(layer.value).big, 1);
       for (final row in oreTable) {
         if (layer.value < row.unlockAt) continue;
-        stock.add(row.id, oreDropAt(layer.value) * bonus);
+        final drop = oreDropAt(layer.value) * bonus;
+        stock.add(row.id, drop);
+        payout += _information(drop, oreDropAt(layer.value), 1);
       }
-      stock.add(
-        ResourceId.quantonium,
-        (quantoniumDropAt(layer.value) * thickSpan).big,
-      );
+      stock.add(ResourceId.quantonium, quantonium);
       stock.add(ResourceId.samples, BigDouble.one);
     } else {
-      stock.add(
-        ResourceId.regolith,
-        regolithPerCycle.value * BigDouble.fromNum(1.5),
-      );
+      final regolith = regolithPerCycle.value * BigDouble.fromNum(1.5);
+      stock.add(ResourceId.regolith, regolith);
+      payout = _information(regolith, _strikeRegolithMean, 1);
     }
+    _recordData(payout);
 
     layer.value = nextLayer(layer.value);
     _resetLayer();
@@ -701,6 +929,15 @@ class PrototypeSimulation {
     'drillPower': drillPowerLevel.value,
     'modules': modules.value,
     'restarts': restarts.value,
+    'collapses': collapses.value,
+    'data': {
+      'raw': rawData.value.toJson(),
+      'gross': cycleData.value.toJson(),
+      'banked': dataBanked.value.toJson(),
+      'wallet': dataWallet.value.toJson(),
+      'exponent': dataExponentLevel.value,
+      'cycleStartMs': cycleStartMs.value,
+    },
     'energy': energy.value,
     'strikes': {
       'power': strikeLevel.value,
@@ -729,6 +966,23 @@ class PrototypeSimulation {
     drillPowerLevel.value = _readInt(json['drillPower'], 0);
     modules.value = _readInt(json['modules'], 0);
     restarts.value = _readInt(json['restarts'], 0);
+    collapses.value = _readInt(json['collapses'], 0);
+    final data = json['data'];
+    if (data is Map) {
+      rawData.value = _readBig(data['raw']);
+      cycleData.value = _readBig(data['gross']);
+      dataBanked.value = _readBig(data['banked']);
+      dataWallet.value = _readBig(data['wallet']);
+      dataExponentLevel.value = _readInt(data['exponent'], 0);
+      cycleStartMs.value = _readInt(data['cycleStartMs'], 0);
+    } else {
+      rawData.value = BigDouble.zero;
+      cycleData.value = BigDouble.zero;
+      dataBanked.value = BigDouble.zero;
+      dataWallet.value = BigDouble.zero;
+      dataExponentLevel.value = 0;
+      cycleStartMs.value = 0;
+    }
     final strikes = json['strikes'];
     if (strikes is Map) {
       strikeLevel.value = _readInt(strikes['power'], 0);
@@ -771,6 +1025,9 @@ class PrototypeSimulation {
 
   static int _readInt(Object? value, int fallback) =>
       value is int ? value : fallback;
+
+  static BigDouble _readBig(Object? value) =>
+      value is String ? BigDouble.parse(value) : BigDouble.zero;
 
   /// The next drill-count milestone that doubles power, or null past the last.
   int? get nextMilestone {

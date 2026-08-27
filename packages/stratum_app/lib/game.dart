@@ -33,6 +33,10 @@ class Notice {
   /// For [NoticeKind.gain]: which resource the card is about.
   final ResourceId? resource;
 
+  /// Bumped on every in-place refresh, so the card can visibly flinch when
+  /// its number moves without growing a new card.
+  int revision = 0;
+
   /// Set shortly before removal, so the card can fade instead of popping.
   bool leaving = false;
 
@@ -120,8 +124,25 @@ class Game extends ChangeNotifier {
   /// A gap in the chain is an error rather than a silent skip -- see
   /// [SaveCodec].
   static final SaveCodec codec = SaveCodec(
-    currentVersion: 3,
+    currentVersion: 5,
     migrations: [
+      // v4 -> v5: data is counted in measurements now, not in tonnes. The
+      // old accumulators are in units a thousandfold larger, and keeping
+      // them would leave the collapse gate permanently open, so they are
+      // dropped and start over -- nothing had been spent from them yet.
+      SaveMigration(
+        fromVersion: 4,
+        apply: (sections) {
+          final run = sections['run'];
+          if (run is! Map) return sections;
+          final out = Map<String, Object?>.from(run)..remove('data');
+          return {...sections, 'run': out};
+        },
+      ),
+      // v3 -> v4: measurement data arrived (raw, cycle gross, wallet).
+      // Purely additive -- absent keys fall back to fresh accumulators -- so
+      // the bump only fences old builds off saves they cannot keep whole.
+      SaveMigration(fromVersion: 3, apply: (sections) => sections),
       // v2 -> v3: forcing is gone; its charge gauge became energy.
       SaveMigration(
         fromVersion: 2,
@@ -262,6 +283,7 @@ class Game extends ChangeNotifier {
     if (restored && _restoredAt != null) {
       _settleAbsence(DateTime.now().difference(_restoredAt!));
     }
+    _stampCycleStart();
     _ready = true;
     _played.start();
     drill.start();
@@ -312,10 +334,19 @@ class Game extends ChangeNotifier {
         NoticeKind.success,
       );
     }
+    _stampCycleStart();
     _muteGains = false;
     _syncEnergyLoop();
     notifyListeners();
     return true;
+  }
+
+  /// The drift formula needs to know when the cycle began. A fresh game and
+  /// a save from before measurement data existed carry no stamp, so one is
+  /// taken here; the core stays free of DateTime.
+  void _stampCycleStart() {
+    if (sim.cycleStartMs.value != 0) return;
+    sim.cycleStartMs.value = DateTime.now().millisecondsSinceEpoch;
   }
 
   /// Returns whether the text was a save this build can read.
@@ -462,9 +493,12 @@ class Game extends ChangeNotifier {
   /// Pays out an absence and decides whether it deserves a window.
   void _settleAbsence(Duration away) {
     if (away <= Duration.zero) return;
-    final cycles = away.inMicroseconds ~/ baseRate.interval.inMicroseconds;
     _muteGains = true;
-    final gain = sim.claimOffline(cycles: cycles);
+    final gain = sim.claimOffline(
+      seconds: away.inMicroseconds / 1e6,
+      energyPerSecond: energyPerSecond,
+      cycleSeconds: cycleSeconds,
+    );
     _muteGains = false;
     if (gain.isEmpty) return;
     if (away >= offlineNoticeThreshold) {
@@ -506,6 +540,7 @@ class Game extends ChangeNotifier {
       for (final live in notices) {
         if (live.key == key && !live.leaving) {
           live.text = text;
+          live.revision++;
           _armLife(live);
           notifyListeners();
           return;
@@ -620,8 +655,7 @@ class Game extends ChangeNotifier {
   /// never to an unbounded list.
   static const int _maxFloats = 12;
 
-  /// Bumped whenever the scene should flash for a critical or a broken layer.
-  final ValueNotifier<int> criticalFlashes = ValueNotifier(0);
+  /// Bumped whenever the scene should flash for a broken layer.
   final ValueNotifier<int> breakFlashes = ValueNotifier(0);
 
   /// Bumped for every blow the face takes -- manual or the drill's own -- so
@@ -630,6 +664,20 @@ class Game extends ChangeNotifier {
 
   /// The heartbeat as it currently stands.
   String get tickInterval => secondsLabel(drill.rate.interval);
+
+  /// The two cadences the yield rate is built from. They live here because
+  /// the engines do; the core is handed them rather than owning a clock.
+  double get cycleSeconds => drill.rate.interval.inMicroseconds / 1e6;
+
+  double get energyPerSecond =>
+      sim.energyPerRegen / (energyRate.interval.inMicroseconds / 1e6);
+
+  /// What the store gains of [id] per second, hand and rig together.
+  BigDouble yieldPerSecond(ResourceId id) => sim.yieldPerSecond(
+    id,
+    energyPerSecond: energyPerSecond,
+    cycleSeconds: cycleSeconds,
+  );
 
   /// How long one point of energy takes, for the gauge to say so out loud.
   static String get energyInterval => secondsLabel(energyRate.interval);
@@ -723,17 +771,20 @@ class Game extends ChangeNotifier {
     floats.removeWhere((f) => f.id == id);
   }
 
-  /// The strike's crit, said the same way for both lanes: a flash and a
-  /// stamp over the face.
+  /// The strike's crit, said the same way for both lanes: one quiet word
+  /// over the face.
+  ///
+  /// No wash of colour behind it. A crit is a common event -- one strike in
+  /// twenty, and the hand throws ten a second -- so a full-scene flash was
+  /// firing several times a second over the thing the player is watching.
   void _reportCrit() {
-    criticalFlashes.value = criticalFlashes.value + 1;
     if (_hidden || _background) return;
     _addFloat(
-      text: 'КРИТ ×${PrototypeSimulation.strikeCritPower.toStringAsFixed(2)}',
-      color: 0xFFFFD782,
+      text: 'крит',
+      color: 0xB3FFD782,
       left: 96 + (hitShakes.value * 37 % 150).toDouble(),
       top: 118 + (hitShakes.value * 17 % 46).toDouble(),
-      size: 20,
+      size: 11,
     );
   }
 
@@ -796,7 +847,6 @@ class Game extends ChangeNotifier {
     _lifecycle.dispose();
     drill.dispose();
     energyLoop.dispose();
-    criticalFlashes.dispose();
     breakFlashes.dispose();
     hitShakes.dispose();
     super.dispose();

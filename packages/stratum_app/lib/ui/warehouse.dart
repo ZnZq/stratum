@@ -52,7 +52,7 @@ class WarehouseSheet extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(14, 4, 14, 16),
                     children: [
                       for (final shelf in ResourceShelf.values)
-                        _Shelf(shelf: shelf, sim: sim),
+                        _Shelf(shelf: shelf, game: game),
                     ],
                   ),
                 ),
@@ -104,10 +104,10 @@ class _Header extends StatelessWidget {
 }
 
 class _Shelf extends StatelessWidget {
-  const _Shelf({required this.shelf, required this.sim});
+  const _Shelf({required this.shelf, required this.game});
 
   final ResourceShelf shelf;
-  final PrototypeSimulation sim;
+  final Game game;
 
   @override
   Widget build(BuildContext context) {
@@ -137,38 +137,38 @@ class _Shelf extends StatelessWidget {
             ],
           ),
         ),
-        for (final id in resourcesOn(shelf)) _Row(id: id, sim: sim),
+        for (final id in resourcesOn(shelf)) _Row(id: id, game: game),
       ],
     );
   }
 }
 
 class _Row extends StatelessWidget {
-  const _Row({required this.id, required this.sim});
+  const _Row({required this.id, required this.game});
 
   final ResourceId id;
-  final PrototypeSimulation sim;
+  final Game game;
 
-  /// What the player can expect this resource to do next, in its own terms.
+  /// The average income of this resource, in its own terms.
   ///
-  /// Only the two that the drill produces have a rate worth quoting; the rest
-  /// arrive on events, and their note already says which.
-  String? get _income => switch (id) {
-    ResourceId.regolith => '+${sim.regolithPerCycle.value} / цикл',
-    ResourceId.cuprite || ResourceId.ferrite || ResourceId.silicite =>
-      sim.oreUnlocked(id)
-          ? '+${PrototypeSimulation.oreDropAt(sim.layer.value)} за успіх'
-          : 'глибше',
-    ResourceId.crystals =>
-      '${(sim.crystalChance * 100).round()}% · '
-          '+${PrototypeSimulation.crystalDropAt(sim.layer.value)}',
-    _ => null,
-  };
+  /// A rate per second rather than per cycle: both lanes throw the same
+  /// strike at different cadences, so seconds are the only unit that can hold
+  /// the hand and the rig in one number. Lanes that pay on events instead of
+  /// on strikes have no rate to quote and say nothing.
+  String? get _income {
+    final sim = game.sim;
+    if (id case ResourceId.cuprite || ResourceId.ferrite || ResourceId.silicite
+        when !sim.oreUnlocked(id)) {
+      return 'глибше';
+    }
+    final rate = game.yieldPerSecond(id);
+    return rate.isZero ? null : '$rate / с';
+  }
 
   @override
   Widget build(BuildContext context) {
     final style = resourceStyles[id]!;
-    final held = sim.stock.amount(id);
+    final held = game.sim.stock.amount(id);
     final empty = held.isZero;
 
     return Padding(

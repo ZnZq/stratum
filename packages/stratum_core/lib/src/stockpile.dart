@@ -27,6 +27,10 @@ enum ResourceId {
   /// breaking a layer -- the anti-brick rule.
   quantonium,
 
+  /// What mined resources sell for. Buys rig upgrades; a Restart wipes it.
+  /// No income yet -- selling is its own step.
+  credits,
+
   /// One per first break of a thick layer within a simulation.
   samples,
 

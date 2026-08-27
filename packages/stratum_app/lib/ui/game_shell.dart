@@ -6,6 +6,7 @@ import 'package:stratum_core/stratum_core.dart';
 import '../game.dart';
 import 'console_menu.dart';
 import 'drill_screen.dart';
+import 'home_screen.dart';
 import 'navigation.dart';
 import 'notices.dart';
 import 'offline_window.dart';
@@ -151,6 +152,8 @@ class _GameShellState extends State<GameShell> {
                               // islands laid on it, so whatever ends up here shows
                               // around their edges instead of being covered.
                               const Positioned.fill(child: ShellBackdrop()),
+                              if (_screen == null)
+                                Positioned.fill(child: HomeScreen(game: _game)),
                               if (_screen case final screen?)
                                 Positioned.fill(
                                   child: _Island(

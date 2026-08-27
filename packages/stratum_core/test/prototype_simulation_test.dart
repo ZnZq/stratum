@@ -169,20 +169,34 @@ void main() {
   });
 
   group('an absence', () {
-    test('pays expected value at offline pace and leaves depth alone', () {
+    test('pays a share of the live rate and leaves depth alone', () {
       final sim = _played(30);
       final layerBefore = sim.layer.value;
       final oreBefore = sim.regolith.value;
+      final rate = sim.yieldPerSecond(
+        ResourceId.regolith,
+        energyPerSecond: 6,
+        cycleSeconds: 4,
+      );
       final expectedOre =
-          sim.regolithPerCycle.value *
-          BigDouble.fromNum(PrototypeSimulation.strikeShareOfRig) *
-          BigDouble.fromNum(100) *
+          rate *
+          BigDouble.fromNum(400) *
           BigDouble.fromNum(PrototypeSimulation.offlineEfficiency);
 
-      final gain = sim.claimOffline(cycles: 100);
+      final gain = sim.claimOffline(
+        seconds: 400,
+        energyPerSecond: 6,
+        cycleSeconds: 4,
+      );
 
-      expect(gain.cycles, 100);
-      expect('${gain.ore}', '$expectedOre');
+      expect(
+        gain.cycles,
+        100,
+        reason:
+            'four hundred seconds of four-second '
+            'heartbeats',
+      );
+      expect('${gain.gained[ResourceId.regolith]}', '$expectedOre');
       expect('${sim.regolith.value}', '${oreBefore + expectedOre}');
       expect(
         sim.layer.value,
@@ -191,9 +205,56 @@ void main() {
       );
     });
 
+    test('is exactly the offline share of the same span played', () {
+      final sim = _played(30);
+      const seconds = 900.0;
+
+      final gain = sim.claimOffline(
+        seconds: seconds,
+        energyPerSecond: 6,
+        cycleSeconds: 4,
+      );
+
+      for (final entry in gain.gained.entries) {
+        final online =
+            sim
+                .yieldPerSecond(entry.key, energyPerSecond: 6, cycleSeconds: 4)
+                .toDouble() *
+            seconds;
+        expect(
+          entry.value.toDouble() / online,
+          closeTo(PrototypeSimulation.offlineEfficiency, 1e-9),
+          reason:
+              'every lane is throttled by the same quarter, no lane '
+              'quietly on its own schedule',
+        );
+      }
+    });
+
+    test('a still hand while away is paid as the rig alone', () {
+      final sim = _played(30);
+
+      final idle = sim.claimOffline(
+        seconds: 400,
+        energyPerSecond: 0,
+        cycleSeconds: 4,
+      );
+      final rigRate = sim.yieldPerSecond(
+        ResourceId.regolith,
+        energyPerSecond: 0,
+        cycleSeconds: 4,
+      );
+
+      expect(
+        '${idle.gained[ResourceId.regolith]}',
+        '${rigRate * BigDouble.fromNum(400) * BigDouble.fromNum(PrototypeSimulation.offlineEfficiency)}',
+      );
+    });
+
     test('does not touch the roll streams', () {
       final mirror = _played(20);
-      final away = _played(20)..claimOffline(cycles: 5000);
+      final away = _played(20)
+        ..claimOffline(seconds: 20000, energyPerSecond: 6, cycleSeconds: 4);
 
       final expected = [for (var i = 0; i < 8; i++) mirror.tick().critical];
       final actual = [for (var i = 0; i < 8; i++) away.tick().critical];
@@ -207,12 +268,22 @@ void main() {
       );
     });
 
-    test('zero or negative cycles pay nothing', () {
+    test('no time away pays nothing', () {
       final sim = _played(10);
       final before = '${sim.regolith.value}';
 
-      expect(sim.claimOffline(cycles: 0).isEmpty, isTrue);
-      expect(sim.claimOffline(cycles: -3).isEmpty, isTrue);
+      expect(
+        sim
+            .claimOffline(seconds: 0, energyPerSecond: 6, cycleSeconds: 4)
+            .isEmpty,
+        isTrue,
+      );
+      expect(
+        sim
+            .claimOffline(seconds: -3, energyPerSecond: 6, cycleSeconds: 4)
+            .isEmpty,
+        isTrue,
+      );
       expect('${sim.regolith.value}', before);
     });
   });

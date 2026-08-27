@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <linearGradient id="creditFace" x1="8" y1="3" x2="25" y2="21" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFE6A8"/>
+      <stop offset="0.45" stop-color="#F0BB5B"/>
+      <stop offset="1" stop-color="#B9822C"/>
+    </linearGradient>
+    <linearGradient id="creditBar" x1="6" y1="19" x2="26" y2="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C6913A"/>
+      <stop offset="1" stop-color="#7E561B"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="5.5" y="24" width="21" height="4.6" rx="2.1" fill="url(#creditBar)"/>
+  <rect x="5.5" y="24" width="21" height="1.5" rx="0.75" fill="#E4B667" opacity="0.75"/>
+
+  <rect x="7" y="19.6" width="18" height="4.6" rx="2.1" fill="url(#creditBar)"/>
+  <rect x="7" y="19.6" width="18" height="1.5" rx="0.75" fill="#F0C476" opacity="0.8"/>
+
+  <polygon points="10.6,3.2 21.4,3.2 24.6,6.4 24.6,15.2 21.4,18.4 10.6,18.4 7.4,15.2 7.4,6.4"
+           fill="url(#creditFace)" stroke="#7A5518" stroke-width="1.1" stroke-linejoin="round"/>
+  <polygon points="11.6,5.6 20.4,5.6 22.4,7.6 22.4,14 20.4,16 11.6,16 9.6,14 9.6,7.6"
+           fill="none" stroke="#8C6320" stroke-width="1" stroke-linejoin="round" opacity="0.75"/>
+  <path d="M13.2 8.4 H18.8 M13.2 11 H18.8 M13.2 13.6 H16.4"
+        stroke="#7A5518" stroke-width="1.35" stroke-linecap="round" opacity="0.85"/>
+  <path d="M10.9 4.4 H21.1" stroke="#FFF3D2" stroke-width="1.1" stroke-linecap="round" opacity="0.85"/>
+</svg>

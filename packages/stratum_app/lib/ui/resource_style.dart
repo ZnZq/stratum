@@ -36,14 +36,14 @@ typedef ResourceStyle = ({
 const Map<ResourceId, ResourceStyle> resourceStyles = {
   ResourceId.regolith: (
     label: 'Реголіт',
-    note: 'перемелена порода · кожен цикл',
+    note: 'перемелена порода · кожен удар',
     icon: Ti.grain,
     colour: Palette.ore,
     shelf: ResourceShelf.extracted,
   ),
   ResourceId.cuprite: (
     label: 'Куприт',
-    note: 'мідна руда · шанс за цикл',
+    note: 'мідна руда · шанс з удару',
     icon: Ti.circles,
     colour: Palette.cuprite,
     shelf: ResourceShelf.extracted,
@@ -64,16 +64,23 @@ const Map<ResourceId, ResourceStyle> resourceStyles = {
   ),
   ResourceId.crystals: (
     label: 'Кристали',
-    note: 'шанс за цикл, більші з глибиною',
+    note: 'шанс з удару, більші з глибиною',
     icon: Ti.diamond,
     colour: Palette.crystal,
     shelf: ResourceShelf.extracted,
   ),
   ResourceId.quantonium: (
     label: 'Квантоніум',
-    note: 'шанс за цикл · поріг перезапуску',
+    note: 'рідкісний шанс з удару · застосування згодом',
     icon: Ti.atom2,
     colour: Palette.quantonium,
+    shelf: ResourceShelf.currency,
+  ),
+  ResourceId.credits: (
+    label: 'Кредити',
+    note: 'з продажу видобутого · покращення рига',
+    icon: Ti.stack2,
+    colour: Palette.gold,
     shelf: ResourceShelf.currency,
   ),
   ResourceId.capsules: (
@@ -115,6 +122,7 @@ const Map<ResourceId, String> resourceSvgs = {
   ResourceId.silicite: 'assets/icons/silicite.svg',
   ResourceId.crystals: 'assets/icons/crystals.svg',
   ResourceId.quantonium: 'assets/icons/quantonium.svg',
+  ResourceId.credits: 'assets/icons/credits.svg',
   ResourceId.samples: 'assets/icons/samples.svg',
   ResourceId.capsules: 'assets/icons/capsules.svg',
   ResourceId.cores: 'assets/icons/cores.svg',

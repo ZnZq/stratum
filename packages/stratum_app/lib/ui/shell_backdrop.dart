@@ -6,12 +6,12 @@ import 'package:flutter/widgets.dart';
 
 import 'tokens.dart';
 
-/// The shell the screens are laid on, standing in until it is designed.
+/// The shell the screens are laid on.
 ///
 /// Deliberately empty of content and not empty of life: a flat fill behind a
 /// floating island reads as a rendering fault, while a slow field reads as a
-/// room the islands are in. Whatever the main screen becomes, it replaces the
-/// mark in the middle, not this.
+/// room the islands are in. The content of the shell state is [HomeScreen],
+/// laid over this.
 class ShellBackdrop extends StatefulWidget {
   const ShellBackdrop({super.key});
 
@@ -52,31 +52,6 @@ class _ShellBackdropState extends State<ShellBackdrop>
         fit: StackFit.expand,
         children: [
           RepaintBoundary(child: CustomPaint(painter: _ShellPainter(_time))),
-          Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'STRATUM',
-                  style: AppText.display(
-                    22,
-                    weight: FontWeight.w700,
-                    color: const Color(0x2E7FD9C4),
-                    letterSpacing: 10,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'головний екран · згодом',
-                  style: AppText.body(
-                    10,
-                    color: const Color(0x38A0ADC1),
-                    letterSpacing: 2,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );

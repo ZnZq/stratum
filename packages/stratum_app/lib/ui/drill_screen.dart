@@ -41,18 +41,6 @@ class DrillScreen extends StatelessWidget {
               ),
             ),
           ),
-          Flash(
-            trigger: game.criticalFlashes,
-            duration: const Duration(milliseconds: 500),
-            peak: 1,
-            decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment(0, -0.5),
-                radius: 0.7,
-                colors: [Color(0x80EF9F27), Color(0x00EF9F27)],
-              ),
-            ),
-          ),
           Positioned(left: 0, right: 0, bottom: 0, child: Deck(game: game)),
         ],
       ),

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/widgets.dart';
 
 import '../game.dart';
@@ -80,7 +82,9 @@ class _NoticeCard extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 4),
           padding: const EdgeInsets.fromLTRB(7, 3, 9, 3),
           decoration: BoxDecoration(
-            color: Palette.bar,
+            // The plate alone is translucent, not the card: the rock keeps
+            // showing through while the figures stay at full strength.
+            color: const Color(0xD11E2834),
             borderRadius: const BorderRadius.only(
               topRight: Radius.circular(8),
               bottomRight: Radius.circular(8),
@@ -98,25 +102,39 @@ class _NoticeCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (notice.kind == NoticeKind.gain)
-                ResourceIcon(notice.resource!, size: 15)
+                ResourceIcon(notice.resource!, size: 19)
               else
-                Icon(icon, size: 11, color: colour),
+                Icon(icon, size: 13, color: colour),
               const SizedBox(width: 6),
               if (notice.text.contains('\n'))
-                // A gain card: the streak loud, the stockpile total under it
-                // in a smaller, quieter line. Tight line heights keep the two
-                // rows barely taller than one.
+                // A gain card: the streak loud, the stockpile total
+                // under it in a smaller, quieter line. Tight line
+                // heights keep the two rows barely taller than one.
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      notice.text.split('\n').first,
-                      style: AppText.display(
-                        10,
-                        weight: FontWeight.w700,
-                        color: colour,
-                        height: 1,
+                    // Only the streak reacts to a refresh: a brief
+                    // swell of the glyphs and back. Transform.scale is
+                    // paint only, so neither the card nor the total
+                    // line under it moves.
+                    TweenAnimationBuilder<double>(
+                      key: ValueKey(notice.revision),
+                      tween: Tween(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 170),
+                      builder: (context, t, child) => Transform.scale(
+                        scale: 1 + 0.15 * math.sin(math.pi * t),
+                        alignment: Alignment.centerLeft,
+                        child: child,
+                      ),
+                      child: Text(
+                        notice.text.split('\n').first,
+                        style: AppText.display(
+                          10,
+                          weight: FontWeight.w700,
+                          color: colour,
+                          height: 1,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 1),

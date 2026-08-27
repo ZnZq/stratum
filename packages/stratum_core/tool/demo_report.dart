@@ -33,11 +33,19 @@ void main(List<String> args) {
       depth += power / (5 * _densityAt(depth));
 
       final affordable = BigDouble.affordGeometricSeries(
-        ore, 15.big, 1.13.big, drills.big);
+        ore,
+        15.big,
+        1.13.big,
+        drills.big,
+      );
       if (affordable > BigDouble.zero) {
         final count = affordable.toDouble().floor();
         ore -= BigDouble.sumGeometricSeries(
-            count.big, 15.big, 1.13.big, drills.big);
+          count.big,
+          15.big,
+          1.13.big,
+          drills.big,
+        );
         drills += count;
       }
 
