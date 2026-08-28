@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Chakra+Petch:wght@600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: Manrope, system-ui, sans-serif; background: #141B26; }
+    a { color: #EF9F27; } a:hover { color: #FFD782; }
+    .num { font-family: 'Chakra Petch', Consolas, monospace; }
+    .cap { font-weight: 700; letter-spacing: 1.6px; font-size: 8.5px; color: #7FD9C4; text-transform: uppercase; }
+    .rule { height: 1px; background: #2E3A48; }
+    @keyframes plunge2 {
+      0%, 8%   { transform: translateY(0); }
+      16%      { transform: translateY(8px); }
+      70%      { transform: translateY(10px); }
+      82%,100% { transform: translateY(0); }
+    }
+    .rig2 { animation: plunge2 2.4s cubic-bezier(.4,0,.3,1) infinite; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 720px; background: #141B26; position: relative; overflow: hidden;">
+
+  <div style="height: 48px; display: flex; align-items: center; gap: 14px; padding: 0 12px; box-sizing: border-box;">
+    <span class="num" style="color: #D3D1C7; font-size: 13px; font-weight: 700;">◆ 5.96b</span>
+    <span class="num" style="color: #E8A06A; font-size: 13px; font-weight: 700;">◆ 169k</span>
+    <span class="num" style="color: #9FD8FF; font-size: 13px; font-weight: 700;">◆ 21.9m</span>
+  </div>
+
+  <!-- the island loses 40px to the extra nav row -->
+  <div style="position: absolute; left: 8px; right: 8px; top: 48px; bottom: 134px;
+              background: #1D2734; border: 1px solid #3C4A5C; border-radius: 18px; overflow: hidden;
+              display: flex; flex-direction: column;">
+
+    <div style="position: relative; height: 108px; background: linear-gradient(#1A222F, #202B3A); flex: none;">
+      <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 36px; background: linear-gradient(#4A5163, #2F3746);"></div>
+      <div style="position: absolute; left: 0; right: 0; bottom: 36px; height: 1px; background: rgba(168,196,224,.2);"></div>
+      <div style="position: absolute; left: 50%; bottom: 6px; width: 150px; height: 26px; margin-left: -75px;
+                  border: 1px dashed rgba(255,215,130,.45); border-radius: 50%;"></div>
+      <div class="rig2" style="position: absolute; left: 50%; top: 12px; margin-left: -9px; width: 18px;">
+        <div style="height: 11px; background: #283442; border: 1px solid #3C4A5C; border-radius: 3px; margin: 0 -4px;"></div>
+        <div style="height: 48px; background: repeating-linear-gradient(-24deg,#6B7789 0 3px,#9AA6B8 3px 6px,#C3CAD6 6px 8px,#6B7789 8px 11px);"></div>
+        <div style="width: 0; height: 0; margin: 0 -1px; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 15px solid #EF9F27;"></div>
+      </div>
+      <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 24px; background: linear-gradient(rgba(29,39,52,0), #1D2734);"></div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 10px 14px 9px;">
+      <div>
+        <div class="cap">за цикл</div>
+        <div class="num" style="font-size: 13px; font-weight: 700; color: #D3D1C7;">148.2k</div>
+      </div>
+      <div>
+        <div class="cap">цикл</div>
+        <div class="num" style="font-size: 13px; font-weight: 700; color: #7FD9C4;">2.41 с</div>
+      </div>
+      <div>
+        <div class="cap">шкода</div>
+        <div class="num" style="font-size: 13px; font-weight: 700; color: #FFD782;">1.22m</div>
+      </div>
+    </div>
+
+    <div class="rule"></div>
+
+    <div style="flex: 1; display: flex; flex-direction: column;">
+      <div style="flex: 1; padding: 9px 14px; display: flex; align-items: center; gap: 10px;">
+        <div style="width: 30px; height: 30px; border-radius: 9px; background: #1A222F; border: 1px solid #2E3A48; flex: none;"></div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="font-size: 8.5px; font-weight: 700; letter-spacing: 1.6px; color: #7FD9C4;">РАДІУС</span>
+            <span style="flex: 1"></span>
+            <span class="num" style="font-size: 9.5px; color: #7C8A9C;">64</span>
+          </div>
+          <div style="display: flex; align-items: baseline; margin-top: 3px;">
+            <span style="font-size: 9.5px; color: #D6DDE9;">площа вибою</span>
+            <span style="flex: 1"></span>
+            <span class="num" style="font-size: 11px; font-weight: 700; color: #FFD782;">12.9k м²</span>
+          </div>
+        </div>
+        <div style="width: 104px; flex: none; padding: 7px 0; border-radius: 10px; text-align: center; background: #3B3120; border: 1px solid #3C4A5C;">
+          <span class="num" style="font-size: 11.5px; font-weight: 700; color: #FFD782;">≋ 88.4m</span>
+        </div>
+      </div>
+      <div class="rule"></div>
+      <div style="flex: 1; padding: 9px 14px; display: flex; align-items: center; gap: 10px;">
+        <div style="width: 30px; height: 30px; border-radius: 9px; background: #1A222F; border: 1px solid #2E3A48; flex: none;"></div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="font-size: 8.5px; font-weight: 700; letter-spacing: 1.6px; color: #7FD9C4;">ПРИВІД</span>
+            <span style="flex: 1"></span>
+            <span class="num" style="font-size: 9.5px; color: #7C8A9C;">51</span>
+          </div>
+          <div style="display: flex; align-items: baseline; margin-top: 3px;">
+            <span style="font-size: 9.5px; color: #D6DDE9;">інтервал циклу</span>
+            <span style="flex: 1"></span>
+            <span class="num" style="font-size: 11px; font-weight: 700; color: #FFD782;">2.41 с</span>
+          </div>
+        </div>
+        <div style="width: 104px; flex: none; padding: 7px 0; border-radius: 10px; text-align: center; background: #3B3120; border: 1px solid #3C4A5C;">
+          <span class="num" style="font-size: 11.5px; font-weight: 700; color: #FFD782;">≋ 41.7m</span>
+        </div>
+      </div>
+      <div class="rule"></div>
+      <div style="flex: 1; padding: 9px 14px; display: flex; align-items: center; gap: 10px;">
+        <div style="width: 30px; height: 30px; border-radius: 9px; background: #1A222F; border: 1px solid #2E3A48; flex: none;"></div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="font-size: 8.5px; font-weight: 700; letter-spacing: 1.6px; color: #7FD9C4;">ДОЛОТО</span>
+            <span style="flex: 1"></span>
+            <span class="num" style="font-size: 9.5px; color: #7C8A9C;">128</span>
+          </div>
+          <div style="display: flex; align-items: baseline; margin-top: 3px;">
+            <span style="font-size: 9.5px; color: #D6DDE9;">шкода за цикл</span>
+            <span style="flex: 1"></span>
+            <span class="num" style="font-size: 11px; font-weight: 700; color: #FFD782;">1.22m</span>
+          </div>
+        </div>
+        <div style="width: 104px; flex: none; padding: 7px 0; border-radius: 10px; text-align: center; background: #283442; border: 1px solid #2E3A48;">
+          <span class="num" style="font-size: 11.5px; font-weight: 700; color: #7C8A9C;">≋ 2.04b</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- THE THIRD LAYER: drills, above the screens, above the sections -->
+  <div style="position: absolute; left: 8px; right: 8px; bottom: 92px; height: 36px;
+              display: flex; align-items: center; gap: 5px;">
+    <div style="flex: 1; text-align: center; padding: 6px 0; border-radius: 9px; background: #3B3120; border: 1px solid #EF9F27;">
+      <span style="font-size: 8.5px; font-weight: 800; color: #FFD782;">РЕГОЛІТ</span>
+    </div>
+    <div style="flex: 1; text-align: center; padding: 6px 0; border-radius: 9px; background: #232E3C; border: 1px solid #2E3A48;">
+      <span style="font-size: 8.5px; font-weight: 600; color: #E8A06A;">КУПРИТ</span>
+    </div>
+    <div style="flex: 1; text-align: center; padding: 6px 0; border-radius: 9px; background: #232E3C; border: 1px solid #2E3A48; opacity: .45;">
+      <span style="font-size: 8.5px; font-weight: 600; color: #AABBD0;">ФЕРИТ</span>
+    </div>
+    <div style="flex: 1; text-align: center; padding: 6px 0; border-radius: 9px; background: #232E3C; border: 1px solid #2E3A48; opacity: .45;">
+      <span style="font-size: 8.5px; font-weight: 600; color: #EDE2C8;">СИЛІЦИТ</span>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 46px; height: 44px; display: flex; align-items: center; padding: 0 8px; box-sizing: border-box; gap: 6px;">
+    <div style="flex: 1; text-align: center; padding: 5px 0; border-radius: 10px; background: #232E3C; border: 1px solid #2E3A48;">
+      <div style="font-size: 9px; font-weight: 600; color: #D6DDE9;">Шахта</div>
+    </div>
+    <div style="flex: 1; text-align: center; padding: 5px 0; border-radius: 10px; background: #232E3C; border: 1px solid #2E3A48;">
+      <div style="font-size: 9px; font-weight: 600; color: #D6DDE9;">Маніпулятор</div>
+    </div>
+    <div style="flex: 1; text-align: center; padding: 5px 0; border-radius: 10px; background: #3B3120; border: 1px solid #EF9F27;">
+      <div style="font-size: 9px; font-weight: 800; color: #FFD782;">Бури</div>
+    </div>
+    <div style="flex: 1; text-align: center; padding: 5px 0; border-radius: 10px; background: #232E3C; border: 1px solid #2E3A48;">
+      <div style="font-size: 9px; font-weight: 600; color: #D6DDE9;">Планети</div>
+    </div>
+  </div>
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 46px; display: flex; align-items: center; justify-content: space-around;">
+    <div style="width: 46px; height: 32px; border-radius: 10px; background: #3B3120; border: 1px solid #EF9F27;"></div>
+    <div style="width: 46px; height: 32px;"></div>
+    <div style="width: 46px; height: 32px;"></div>
+    <div style="width: 46px; height: 32px;"></div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

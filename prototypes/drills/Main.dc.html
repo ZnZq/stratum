@@ -1,0 +1,278 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Chakra+Petch:wght@600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: Manrope, system-ui, sans-serif; background: #141B26; }
+    a { color: #EF9F27; } a:hover { color: #FFD782; }
+    .num { font-family: 'Chakra Petch', Consolas, monospace; }
+    .cap { font-weight: 700; letter-spacing: 1.6px; font-size: 8.5px; color: #7FD9C4; text-transform: uppercase; }
+    .rule { height: 1px; background: #2E3A48; }
+
+    /* The bit works the rock the way the manipulator's does: a stroke down,
+       a beat of grinding, a lift. */
+    @keyframes plunge {
+      0%, 8%   { transform: translateY(0); }
+      16%      { transform: translateY(9px); }
+      70%      { transform: translateY(11px); }
+      82%,100% { transform: translateY(0); }
+    }
+    @keyframes flutes { to { background-position-y: 22px; } }
+    @keyframes heat {
+      0%, 12%  { opacity: 0; transform: scale(.6); }
+      22%      { opacity: .95; transform: scale(1.1); }
+      70%      { opacity: .7; transform: scale(1); }
+      84%,100% { opacity: 0; transform: scale(.6); }
+    }
+    @keyframes sweep { to { transform: rotate(360deg); } }
+    .rig { animation: plunge 2.4s cubic-bezier(.4,0,.3,1) infinite; }
+    .pipe {
+      background-image: repeating-linear-gradient(-24deg,
+        #6B7789 0 3px, #9AA6B8 3px 6px, #C3CAD6 6px 8px, #6B7789 8px 11px);
+      background-size: 100% 22px;
+      animation: flutes .5s linear infinite;
+    }
+    .heat { animation: heat 2.4s ease-in-out infinite; }
+    .sweep { animation: sweep 6s linear infinite; transform-origin: 50% 50%; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 720px; background: #141B26; position: relative; overflow: hidden;">
+
+  <!-- resource strip -->
+  <div style="height: 48px; display: flex; align-items: center; gap: 14px; padding: 0 12px; box-sizing: border-box;">
+    <span class="num" style="color: #D3D1C7; font-size: 13px; font-weight: 700;">◆ 5.96b</span>
+    <span class="num" style="color: #E8A06A; font-size: 13px; font-weight: 700;">◆ 169k</span>
+    <span class="num" style="color: #9FD8FF; font-size: 13px; font-weight: 700;">◆ 21.9m</span>
+    <span style="flex: 1"></span>
+    <span class="num" style="color: #7C8A9C; font-size: 13px;">⌄</span>
+  </div>
+
+  <!-- island -->
+  <div style="position: absolute; left: 8px; right: 8px; top: 48px; bottom: 94px;
+              background: #1D2734; border: 1px solid #3C4A5C; border-radius: 18px; overflow: hidden;
+              display: flex; flex-direction: column;">
+
+    <!-- the drill at work: full-bleed band, dissolving into the panel -->
+    <div style="position: relative; height: 116px; background: linear-gradient(#1A222F, #202B3A); flex: none;">
+      <div class="sweep" style="position: absolute; left: 50%; top: -60px; width: 240px; height: 240px; margin-left: -120px;
+                                background: radial-gradient(circle at 50% 50%, rgba(127,217,196,.055), rgba(0,0,0,0) 62%);"></div>
+
+      <!-- rock face -->
+      <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 40px;
+                  background: linear-gradient(#4A5163, #2F3746);"></div>
+      <div style="position: absolute; left: 0; right: 0; bottom: 40px; height: 1px; background: rgba(168,196,224,.2);"></div>
+
+      <!-- the sweep circle: what the radius actually covers, drawn on the face -->
+      <div style="position: absolute; left: 50%; bottom: 6px; width: 168px; height: 28px; margin-left: -84px;
+                  border: 1px dashed rgba(255,215,130,.45); border-radius: 50%;"></div>
+      <div style="position: absolute; left: 50%; bottom: 12px; width: 86px; height: 15px; margin-left: -43px;
+                  border: 1px solid rgba(255,215,130,.25); border-radius: 50%;"></div>
+
+      <div class="rig" style="position: absolute; left: 50%; top: 10px; margin-left: -9px; width: 18px;">
+        <div style="height: 12px; background: #283442; border: 1px solid #3C4A5C; border-radius: 3px; margin: 0 -4px;"></div>
+        <div class="pipe" style="height: 52px; border-left: 1px solid #4A5568; border-right: 1px solid #4A5568;"></div>
+        <div style="width: 0; height: 0; margin: 0 -1px;
+                    border-left: 10px solid transparent; border-right: 10px solid transparent;
+                    border-top: 16px solid #EF9F27;"></div>
+        <div class="heat" style="position: absolute; left: 50%; top: 60px; width: 54px; height: 54px; margin-left: -27px;
+                    background: radial-gradient(circle, rgba(255,190,90,.55), rgba(239,159,39,0) 65%);"></div>
+      </div>
+
+      <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 26px;
+                  background: linear-gradient(rgba(29,39,52,0), #1D2734);"></div>
+    </div>
+
+    <!-- which drill you are looking at: in-screen, not a third nav row -->
+    <div style="display: flex; gap: 6px; padding: 2px 12px 0;">
+      <div style="flex: 1; text-align: center; padding: 5px 0; border-radius: 9px;
+                  background: #3B3120; border: 1px solid #EF9F27;">
+        <div style="font-size: 8.5px; font-weight: 800; color: #FFD782;">РЕГОЛІТ</div>
+      </div>
+      <div style="flex: 1; text-align: center; padding: 5px 0; border-radius: 9px;
+                  background: #232E3C; border: 1px solid #2E3A48;">
+        <div style="font-size: 8.5px; font-weight: 600; color: #E8A06A;">КУПРИТ</div>
+      </div>
+      <div style="flex: 1; text-align: center; padding: 5px 0; border-radius: 9px;
+                  background: #232E3C; border: 1px solid #2E3A48; opacity: .45;">
+        <div style="font-size: 8.5px; font-weight: 600; color: #AABBD0;">ФЕРИТ</div>
+      </div>
+      <div style="flex: 1; text-align: center; padding: 5px 0; border-radius: 9px;
+                  background: #232E3C; border: 1px solid #2E3A48; opacity: .45;">
+        <div style="font-size: 8.5px; font-weight: 600; color: #EDE2C8;">СИЛІЦИТ</div>
+      </div>
+    </div>
+
+    <!-- what this drill is worth, in the screen's own readout style -->
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 12px 14px 10px;">
+      <div>
+        <div class="cap">за цикл</div>
+        <div class="num" style="font-size: 13px; font-weight: 700; color: #D3D1C7;">148.2k</div>
+      </div>
+      <div>
+        <div class="cap">цикл</div>
+        <div class="num" style="font-size: 13px; font-weight: 700; color: #7FD9C4;">2.41 с</div>
+      </div>
+      <div>
+        <div class="cap">шкода</div>
+        <div class="num" style="font-size: 13px; font-weight: 700; color: #FFD782;">1.22m</div>
+      </div>
+    </div>
+
+    <div class="rule"></div>
+
+    <!-- upgrades: one flat list, no cards inside cards -->
+    <div style="flex: 1; display: flex; flex-direction: column;">
+
+      <div style="flex: 1; padding: 9px 14px 10px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 30px; height: 30px; border-radius: 9px; background: #1A222F; border: 1px solid #2E3A48;
+                      display: flex; align-items: center; justify-content: center; flex: none;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8794A6" stroke-width="1.6">
+              <circle cx="12" cy="12" r="8"/><path d="M12 12 L19 9" stroke="#FFD782"/><circle cx="12" cy="12" r="1.6" fill="#FFD782" stroke="none"/>
+            </svg>
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; align-items: baseline; gap: 7px;">
+              <span style="font-size: 8.5px; font-weight: 700; letter-spacing: 1.6px; color: #7FD9C4;">РАДІУС</span>
+              <span class="num" style="font-size: 9.5px; color: #7C8A9C;">+1 м / рів.</span>
+              <span style="flex: 1"></span>
+              <span class="num" style="font-size: 9.5px; font-weight: 600; color: #7C8A9C;">64</span>
+            </div>
+            <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 3px;">
+              <span style="font-size: 9.5px; color: #D6DDE9;">площа вибою</span>
+              <span style="flex: 1"></span>
+              <span class="num" style="font-size: 11px; font-weight: 700; color: #FFD782;">12.9k м²</span>
+            </div>
+          </div>
+          <div style="width: 104px; flex: none; padding: 7px 0; border-radius: 10px; text-align: center;
+                      background: #3B3120; border: 1px solid #3C4A5C;">
+            <span class="num" style="font-size: 11.5px; font-weight: 700; color: #FFD782;">≋ 88.4m</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rule"></div>
+
+      <div style="flex: 1; padding: 9px 14px 10px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 30px; height: 30px; border-radius: 9px; background: #1A222F; border: 1px solid #2E3A48;
+                      display: flex; align-items: center; justify-content: center; flex: none;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8794A6" stroke-width="1.6">
+              <circle cx="12" cy="12" r="8"/><path d="M12 7.5 V12 L15 14" stroke="#FFD782"/>
+            </svg>
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; align-items: baseline; gap: 7px;">
+              <span style="font-size: 8.5px; font-weight: 700; letter-spacing: 1.6px; color: #7FD9C4;">ПРИВІД</span>
+              <span class="num" style="font-size: 9.5px; color: #7C8A9C;">−2% / рів.</span>
+              <span style="flex: 1"></span>
+              <span class="num" style="font-size: 9.5px; font-weight: 600; color: #7C8A9C;">51</span>
+            </div>
+            <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 3px;">
+              <span style="font-size: 9.5px; color: #D6DDE9;">інтервал циклу</span>
+              <span style="flex: 1"></span>
+              <span class="num" style="font-size: 11px; font-weight: 700; color: #FFD782;">2.41 с</span>
+            </div>
+          </div>
+          <div style="width: 104px; flex: none; padding: 7px 0; border-radius: 10px; text-align: center;
+                      background: #3B3120; border: 1px solid #3C4A5C;">
+            <span class="num" style="font-size: 11.5px; font-weight: 700; color: #FFD782;">≋ 41.7m</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rule"></div>
+
+      <div style="flex: 1; padding: 9px 14px 10px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 30px; height: 30px; border-radius: 9px; background: #1A222F; border: 1px solid #2E3A48;
+                      display: flex; align-items: center; justify-content: center; flex: none;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8794A6" stroke-width="1.6">
+              <path d="M12 3 V21" /><path d="M8 8 L12 3 L16 8" stroke="#FFD782"/>
+            </svg>
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; align-items: baseline; gap: 7px;">
+              <span style="font-size: 8.5px; font-weight: 700; letter-spacing: 1.6px; color: #7FD9C4;">ДОЛОТО</span>
+              <span class="num" style="font-size: 9.5px; color: #7C8A9C;">×1.055 / рів.</span>
+              <span style="flex: 1"></span>
+              <span class="num" style="font-size: 9.5px; font-weight: 600; color: #7C8A9C;">128</span>
+            </div>
+            <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 3px;">
+              <span style="font-size: 9.5px; color: #D6DDE9;">шкода за цикл</span>
+              <span style="flex: 1"></span>
+              <span class="num" style="font-size: 11px; font-weight: 700; color: #FFD782;">1.22m</span>
+            </div>
+          </div>
+          <div style="width: 104px; flex: none; padding: 7px 0; border-radius: 10px; text-align: center;
+                      background: #283442; border: 1px solid #2E3A48;">
+            <span class="num" style="font-size: 11.5px; font-weight: 700; color: #7C8A9C;">≋ 2.04b</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rule"></div>
+
+      <div style="flex: 1; padding: 9px 14px 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 30px; height: 30px; border-radius: 9px; background: #1A222F; border: 1px solid #2E3A48;
+                      display: flex; align-items: center; justify-content: center; flex: none;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8794A6" stroke-width="1.6">
+              <path d="M13 3 L6 13 H11 L10 21 L18 10 H13 Z" fill="#FFD782" stroke="none"/>
+            </svg>
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; align-items: baseline; gap: 7px;">
+              <span style="font-size: 8.5px; font-weight: 700; letter-spacing: 1.6px; color: #7FD9C4;">КАЛІБРУВАННЯ</span>
+              <span class="num" style="font-size: 9.5px; color: #7C8A9C;">+0.2% / рів.</span>
+              <span style="flex: 1"></span>
+              <span class="num" style="font-size: 9.5px; font-weight: 600; color: #7C8A9C;">18</span>
+            </div>
+            <div style="display: flex; align-items: baseline; gap: 12px; margin-top: 3px;">
+              <span style="font-size: 9.5px; color: #D6DDE9;">крит <b class="num" style="color:#FFD782">8.6%</b> ×<b class="num" style="color:#FFD782">1.20</b></span>
+              <span style="font-size: 9.5px; color: #D6DDE9;">ехо <b class="num" style="color:#FFD782">3.1%</b></span>
+            </div>
+          </div>
+          <div style="width: 104px; flex: none; padding: 7px 0; border-radius: 10px; text-align: center;
+                      background: #3B3120; border: 1px solid #3C4A5C;">
+            <span class="num" style="font-size: 11.5px; font-weight: 700; color: #FFD782;">≋ 6.10m</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- navigation, unchanged: two levels -->
+  <div style="position: absolute; left: 0; right: 0; bottom: 46px; height: 44px; display: flex; align-items: center; padding: 0 8px; box-sizing: border-box; gap: 6px;">
+    <div style="flex: 1; text-align: center; padding: 5px 0; border-radius: 10px; background: #232E3C; border: 1px solid #2E3A48;">
+      <div style="font-size: 9px; font-weight: 600; color: #D6DDE9;">Шахта</div>
+    </div>
+    <div style="flex: 1; text-align: center; padding: 5px 0; border-radius: 10px; background: #232E3C; border: 1px solid #2E3A48;">
+      <div style="font-size: 9px; font-weight: 600; color: #D6DDE9;">Маніпулятор</div>
+    </div>
+    <div style="flex: 1; text-align: center; padding: 5px 0; border-radius: 10px; background: #3B3120; border: 1px solid #EF9F27;">
+      <div style="font-size: 9px; font-weight: 800; color: #FFD782;">Бури</div>
+    </div>
+    <div style="flex: 1; text-align: center; padding: 5px 0; border-radius: 10px; background: #232E3C; border: 1px solid #2E3A48;">
+      <div style="font-size: 9px; font-weight: 600; color: #D6DDE9;">Планети</div>
+    </div>
+  </div>
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 46px; display: flex; align-items: center; justify-content: space-around;">
+    <div style="width: 46px; height: 32px; border-radius: 10px; background: #3B3120; border: 1px solid #EF9F27;"></div>
+    <div style="width: 46px; height: 32px; border-radius: 10px;"></div>
+    <div style="width: 46px; height: 32px; border-radius: 10px;"></div>
+    <div style="width: 46px; height: 32px; border-radius: 10px;"></div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

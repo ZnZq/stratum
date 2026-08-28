@@ -882,6 +882,12 @@ class Game extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Buys levels on one of a drill's three tracks.
+  void upgradeDrill(DrillId id, DrillPart part, {int levels = 1}) {
+    if (sim.upgradeDrill(id, part, levels: levels) == 0) return;
+    notifyListeners();
+  }
+
   /// Rebuilds a part into its next mark. Returns the mark it now carries, so
   /// the caller can show what just happened; null when it was not ready.
   int? evolveArm(ArmPart part) {

@@ -1,0 +1,236 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Chakra+Petch:wght@600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: Manrope, system-ui, sans-serif; background: #141B26; }
+    a { color: #EF9F27; } a:hover { color: #FFD782; }
+    .num { font-family: 'Chakra Petch', Consolas, monospace; }
+    .cap { font-weight: 700; letter-spacing: 1.6px; font-size: 8.5px; color: #7FD9C4; text-transform: uppercase; }
+    .h { font-size: 15px; font-weight: 800; color: #F1F3F8; letter-spacing: .2px; }
+    .p { font-size: 11.5px; line-height: 1.55; color: #D6DDE9; }
+    .q { font-size: 10.5px; line-height: 1.5; color: #A0ADC1; }
+    .f { font-family: 'Chakra Petch', Consolas, monospace; font-size: 12px; color: #FFD782; }
+    .rule { height: 1px; background: #2E3A48; }
+    .pick { color: #7FD9C4; font-weight: 700; }
+  </style>
+</helmet>
+
+<div style="width: 640px; background: #141B26; padding: 26px 28px 30px; box-sizing: border-box;
+            display: flex; flex-direction: column; gap: 22px;">
+
+  <div>
+    <div class="cap">бури · модель</div>
+    <div style="font-size: 22px; font-weight: 800; color: #F1F3F8; margin-top: 5px;">Що рахує бур</div>
+    <div class="q" style="margin-top: 6px;">Чотири ручки і одне обмеження, від якого залежать усі чотири:
+      HP шару росте експонентою (5·1.055<sup>м</sup>·2.5<sup>м/50</sup>). Ручка, що веде ГЛИБИНУ,
+      мусить бути експоненційною за рівень — інакше вона стає в стіну на фіксованій глибині.</div>
+  </div>
+
+  <div class="rule"></div>
+
+  <!-- 1. area -->
+  <div style="display: flex; gap: 22px; align-items: flex-start;">
+    <div style="flex: 1;">
+      <div class="h">1 · Площа вибою</div>
+      <div class="f" style="margin: 8px 0;">видобуток = щільність(глибина) × π·r²</div>
+      <div class="p">Так, +1 до радіуса відчувається тим сильніше, чим більший радіус:
+        приріст = π(2r+1), тобто росте <b>лінійно</b> з рівнем.</div>
+      <div class="q" style="margin-top: 8px;">Наслідок, який варто знати заздалегідь: сумарний видобуток
+        росте КВАДРАТИЧНО, а ціни покращень — експоненційно, тож радіус сам собою завжди
+        впирається. Це нормально: він множник на дроп, а глибинну експоненту тягне інша ручка.</div>
+      <div class="q" style="margin-top: 8px;">Щільність на м² тримає масштаб глибини там, де він уже є
+        (реголіт 1.03<sup>м</sup>), тому площу нормувати не треба — вона в метрах, а не у відсотках.</div>
+    </div>
+    <div style="width: 210px; flex: none;">
+      <div class="cap" style="margin-bottom: 8px;">приріст від +1 м</div>
+      <div style="display: flex; flex-direction: column; gap: 7px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="num" style="width: 44px; font-size: 10px; color: #7C8A9C; text-align: right;">r 5</span>
+          <div style="flex: 1; height: 9px; background: #232E3C; border-radius: 2px; overflow: hidden;">
+            <div style="width: 5.5%; height: 100%; background: #EF9F27;"></div>
+          </div>
+          <span class="num" style="width: 34px; font-size: 10px; color: #D6DDE9;">35</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="num" style="width: 44px; font-size: 10px; color: #7C8A9C; text-align: right;">r 20</span>
+          <div style="flex: 1; height: 9px; background: #232E3C; border-radius: 2px; overflow: hidden;">
+            <div style="width: 20%; height: 100%; background: #EF9F27;"></div>
+          </div>
+          <span class="num" style="width: 34px; font-size: 10px; color: #D6DDE9;">129</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="num" style="width: 44px; font-size: 10px; color: #7C8A9C; text-align: right;">r 50</span>
+          <div style="flex: 1; height: 9px; background: #232E3C; border-radius: 2px; overflow: hidden;">
+            <div style="width: 50%; height: 100%; background: #EF9F27;"></div>
+          </div>
+          <span class="num" style="width: 34px; font-size: 10px; color: #D6DDE9;">317</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="num" style="width: 44px; font-size: 10px; color: #7C8A9C; text-align: right;">r 100</span>
+          <div style="flex: 1; height: 9px; background: #232E3C; border-radius: 2px; overflow: hidden;">
+            <div style="width: 100%; height: 100%; background: #FFD782;"></div>
+          </div>
+          <span class="num" style="width: 34px; font-size: 10px; color: #FFD782;">631</span>
+        </div>
+      </div>
+      <div class="q" style="margin-top: 9px;">×18 між r 5 і r 100</div>
+    </div>
+  </div>
+
+  <div class="rule"></div>
+
+  <!-- 2. speed -->
+  <div style="display: flex; gap: 22px; align-items: flex-start;">
+    <div style="flex: 1;">
+      <div class="h">2 · Швидкість циклу</div>
+      <div class="f" style="margin: 8px 0;">інтервал = max(стеля, T₀ · (1 − p)<sup>n</sup>)</div>
+      <div class="p">Кожен рівень ріже 1% від ПОТОЧНОГО інтервалу:
+        100 → 99 → 98.01 → 97.03 → 96.06 → … Стеля 2 с.</div>
+      <div class="q" style="margin-top: 10px;"><b style="color:#F1F3F8">Трек скінченний — 390 рівнів.</b>
+        0.99<sup>n</sup> = 0.02 при n = 389.2, отже 390-й уже впирається у стелю, а всі наступні
+        не роблять нічого. Їх треба не продавати, а не клампити мовчки.</div>
+      <div class="q" style="margin-top: 8px;"><b style="color:#F1F3F8">Цінність треку задає СТЕЛЯ, не відсоток:</b>
+        T₀ / стеля = <span class="num" style="color:#FFD782">×50</span>. Це весь бюджет прискорення
+        назавжди; 1% проти 2% міняє лише те, за скільки рівнів його витратять.</div>
+      <div class="q" style="margin-top: 8px;">Звідси: типізований бур мусить <b style="color:#F1F3F8">стартувати
+        повільним</b>. При 100 с трек вартий ×50, при 4 с — ×2, і продавати нема чого.</div>
+    </div>
+    <div style="width: 210px; flex: none;">
+      <div class="cap" style="margin-bottom: 8px;">T₀ 100 с · p 1% · стеля 2 с</div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="num" style="width: 34px; font-size: 10px; color: #7C8A9C; text-align: right;">0</span>
+          <div style="flex: 1; height: 8px; background: #232E3C; border-radius: 2px; overflow: hidden;">
+            <div style="width: 100%; height: 100%; background: #85B7EB;"></div>
+          </div>
+          <span class="num" style="width: 46px; font-size: 10px; color: #D6DDE9; text-align: right;">100.0 с</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="num" style="width: 34px; font-size: 10px; color: #7C8A9C; text-align: right;">100</span>
+          <div style="flex: 1; height: 8px; background: #232E3C; border-radius: 2px; overflow: hidden;">
+            <div style="width: 36.6%; height: 100%; background: #85B7EB;"></div>
+          </div>
+          <span class="num" style="width: 46px; font-size: 10px; color: #D6DDE9; text-align: right;">36.6 с</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="num" style="width: 34px; font-size: 10px; color: #7C8A9C; text-align: right;">200</span>
+          <div style="flex: 1; height: 8px; background: #232E3C; border-radius: 2px; overflow: hidden;">
+            <div style="width: 13.4%; height: 100%; background: #85B7EB;"></div>
+          </div>
+          <span class="num" style="width: 46px; font-size: 10px; color: #D6DDE9; text-align: right;">13.4 с</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="num" style="width: 34px; font-size: 10px; color: #7C8A9C; text-align: right;">300</span>
+          <div style="flex: 1; height: 8px; background: #232E3C; border-radius: 2px; overflow: hidden;">
+            <div style="width: 4.9%; height: 100%; background: #85B7EB;"></div>
+          </div>
+          <span class="num" style="width: 46px; font-size: 10px; color: #D6DDE9; text-align: right;">4.9 с</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="num" style="width: 34px; font-size: 10px; color: #FFD782; text-align: right;">390</span>
+          <div style="flex: 1; height: 8px; background: #232E3C; border-radius: 2px; overflow: hidden;">
+            <div style="width: 2%; height: 100%; background: #FFD782;"></div>
+          </div>
+          <span class="num" style="width: 46px; font-size: 10px; color: #FFD782; text-align: right;">2.0 с</span>
+        </div>
+      </div>
+      <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #2E3A48;">
+        <div class="q">останній рівень, що щось робить</div>
+        <div class="num" style="font-size: 16px; font-weight: 700; color: #FFD782; margin-top: 3px;">390</div>
+        <div class="q" style="margin-top: 7px;">увесь трек коштує</div>
+        <div class="num" style="font-size: 16px; font-weight: 700; color: #FFD782; margin-top: 3px;">×50</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rule"></div>
+
+  <!-- 3. damage -->
+  <div>
+    <div class="h">3 · Хто б'є шар — чотири моделі</div>
+    <div class="q" style="margin: 7px 0 14px;">Питання не у формулі сили, а в тому, чиї бури взагалі
+      рухають глибину. Глибина одна на всю гру, і крива щільності зтюнена під ОДНЕ число.</div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;">
+
+      <div>
+        <div style="display: flex; align-items: baseline; gap: 8px;">
+          <span class="num" style="font-size: 13px; font-weight: 700; color: #FFD782;">A</span>
+          <span style="font-size: 12.5px; font-weight: 700; color: #F1F3F8;">Бор веде, решта збирає</span>
+          <span class="pick" style="font-size: 9px; letter-spacing: 1.2px;">РЕКОМЕНДУЮ</span>
+        </div>
+        <div class="q" style="margin-top: 5px;">Глибину рухає лише реголітовий бур — він бор. Типізовані
+          підмітають відкритий вибій за своїм ресурсом і шкоди не дають.</div>
+        <div class="q" style="margin-top: 5px; color: #7C8A9C;">Ціна: чотири бури з п'яти не беруть участі
+          в найпомітнішому числі гри.</div>
+        <div class="q" style="margin-top: 5px; color: #7FD9C4;">Плюс: крива щільності лишається зтюненою
+          під одну ручку, і покупка нового бура не стрибає глибиною.</div>
+      </div>
+
+      <div>
+        <div style="display: flex; align-items: baseline; gap: 8px;">
+          <span class="num" style="font-size: 13px; font-weight: 700; color: #A0ADC1;">B</span>
+          <span style="font-size: 12.5px; font-weight: 700; color: #F1F3F8;">Сума всіх бурів</span>
+        </div>
+        <div class="q" style="margin-top: 5px;">Кожен бур додає свою силу до шкоди по шару. Просто і
+          приємно: купив бур — глибина пішла швидше.</div>
+        <div class="q" style="margin-top: 5px; color: #7C8A9C;">Ціна: щільність доводиться тюнити під
+          КІЛЬКІСТЬ бурів, а вона змінюється деревом Перезапуску. П'ятий бур множить глибину на 5
+          в мить покупки.</div>
+      </div>
+
+      <div>
+        <div style="display: flex; align-items: baseline; gap: 8px;">
+          <span class="num" style="font-size: 13px; font-weight: 700; color: #A0ADC1;">C</span>
+          <span style="font-size: 12.5px; font-weight: 700; color: #F1F3F8;">Тиск: сила ÷ площа</span>
+          <span style="font-size: 9px; letter-spacing: 1.2px; color: #EF9F27;">ГОСТРА</span>
+        </div>
+        <div class="f" style="margin: 6px 0; font-size: 11px;">шкода = сила / (r/r₀)<sup>k</sup>,  k ≈ 0.5</div>
+        <div class="q">Ширший бор тисне слабше. Радіус більше не «завжди краще»: він торгує глибину
+          за дохід, і в грі вперше з'являється справжній вибір білда.</div>
+        <div class="q" style="margin-top: 5px; color: #7C8A9C;">Ціна: покращення з мінусом. Idle-гравці
+          таке часто читають як пастку — потрібне дуже чітке прев'ю.</div>
+      </div>
+
+      <div>
+        <div style="display: flex; align-items: baseline; gap: 8px;">
+          <span class="num" style="font-size: 13px; font-weight: 700; color: #A0ADC1;">D</span>
+          <span style="font-size: 12.5px; font-weight: 700; color: #F1F3F8;">Кожен гризе свою жилу</span>
+        </div>
+        <div class="q" style="margin-top: 5px;">Бур шкодить лише тій частці шару, що складається з його
+          ресурсу; шар ламається, коли зламані всі частки.</div>
+        <div class="q" style="margin-top: 5px; color: #7C8A9C;">Ціна: шар перестає бути одним числом HP.
+          Сейв, прев'ю «до пробиття» і структурна шкода множаться на п'ять. Найдорожча з чотирьох.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="rule"></div>
+
+  <!-- 4. the power curve -->
+  <div>
+    <div class="h">4 · Сама сила</div>
+    <div class="f" style="margin: 8px 0;">сила = база · m<sup>рівень</sup>,  m ≥ 1.055</div>
+    <div class="p">Хай хто б'є — крива сили мусить бути експоненційною з основою НЕ меншою за основу
+      щільності. Тоді стала кількість рівнів купує сталу кількість метрів, і гравець ніколи
+      не впирається в стіну, а лише в ціну.</div>
+    <div class="q" style="margin-top: 8px;">Додатковий доданок «+10 за рівень», як у Біта маніпулятора,
+      на глибині 400 м не видно взагалі: щільність там на 9 порядків більша за старт.
+      Адитивні ручки годяться для ДОХОДУ, не для глибини.</div>
+    <div class="q" style="margin-top: 8px;">Крит, ехо і сила крита — по своєму набору на бур, кожен на
+      власному підпотоці RNG (<span class="num">drill.regolith.crit</span>), інакше новий бур
+      зсуне роли всіх наступних і почервонить тести паритету.</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

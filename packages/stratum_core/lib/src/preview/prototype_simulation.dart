@@ -121,6 +121,58 @@ enum ArmPart {
   supply,
 }
 
+/// The three tracks every drill carries.
+enum DrillPart {
+  /// How wide a face the bore covers. Additive on the radius, quadratic on
+  /// the area -- the same level is worth more the wider the bore already is.
+  radius,
+
+  /// How often it cycles. Multiplicative on the interval, so the track is
+  /// finite: it ends where the interval meets the floor.
+  drive,
+
+  /// How lucky it is: the odds of a crit and of an echo, bought together.
+  calibration,
+}
+
+/// Which drill. Each works its own resource; the regolith bore is the one
+/// the player starts with.
+enum DrillId { regolith, cuprite, ferrite, silicite, crystal }
+
+/// One row of the drill table: what a drill is, before any levels.
+class DrillRow {
+  const DrillRow(this.id, this.mines, this.label, this.intervalBase);
+
+  final DrillId id;
+
+  /// The one resource this drill brings up.
+  final ResourceId mines;
+
+  final String label;
+
+  /// Seconds between cycles before the drive track touches it. A typed drill
+  /// starts SLOW on purpose: the drive track's whole lifetime value is
+  /// base / floor, so a drill that starts near the floor has nothing to sell.
+  final double intervalBase;
+}
+
+/// Where one drill stands on its three tracks.
+class DrillState {
+  DrillState(this.id);
+
+  final DrillId id;
+
+  final Signal<int> radius = Signal(0, name: 'drill radius');
+  final Signal<int> drive = Signal(0, name: 'drill drive');
+  final Signal<int> calibration = Signal(0, name: 'drill calibration');
+
+  Signal<int> levelOf(DrillPart part) => switch (part) {
+    DrillPart.radius => radius,
+    DrillPart.drive => drive,
+    DrillPart.calibration => calibration,
+  };
+}
+
 /// A provisional model of the drilling loop, carrying the prototype's numbers.
 ///
 /// PROVISIONAL. The balance reference is still undecided — the prototype's
@@ -444,7 +496,7 @@ class PrototypeSimulation {
 
   double get criticalMultiplier => 2;
 
-  double get echoChance => 0.01;
+  double get echoChance => drillEchoChance(DrillId.regolith);
 
   /// Rarer than quantonium up top and commoner far down, so the early game is
   /// ore-led and the mineral becomes the thing worth going deeper for.
@@ -635,6 +687,166 @@ class PrototypeSimulation {
   /// damage dealt and the haul taken alike.
   static const double strikeCritChance = 0.05;
   static const double strikeCritPower = 1.20;
+
+  // ------------------------------------------------------------ drills
+  //
+  // A drill is a bore of some RADIUS working the face on its own CYCLE.
+  // What it brings up is what its blow brings up, scaled by how much face
+  // it covers -- one loot table, one truth, a wider sweep.
+
+  /// The bore every drill starts with, in metres.
+  static const double drillRadiusBase = 5;
+
+  /// What one level of the radius track adds. Additive on the RADIUS, so
+  /// the area it buys grows as pi(2r+1) -- the same level is worth more the
+  /// wider the bore already is, which is the whole point of the track.
+  static const double drillRadiusPerLevel = 1;
+
+  /// What one level of the drive track cuts off the CURRENT interval. The
+  /// track is finite: it ends where the interval meets [drillIntervalFloor],
+  /// and its whole lifetime value is base / floor whatever this number is --
+  /// the percentage only sets how many levels that value is spread over.
+  static const double drillSpeedStep = 0.01;
+
+  /// No drill cycles faster than this. A floor rather than an asymptote, so
+  /// the timer can never outrun the frame.
+  static const double drillIntervalFloor = 2;
+
+  /// The calibration track: one number buying both odds.
+  static const double drillCritBase = 0.05;
+  static const double drillCritPerLevel = 0.002;
+  static const double drillCritPower = 1.20;
+  static const double drillEchoBase = 0.01;
+  static const double drillEchoPerLevel = 0.0005;
+
+  /// Every drill in the game, in the order they open.
+  ///
+  /// A table rather than a branch per drill: a new drill is a row here plus
+  /// its resource, not a new field threaded through every place that counts.
+  static const List<DrillRow> drillTable = [
+    DrillRow(DrillId.regolith, ResourceId.regolith, 'Реголітовий', 4),
+    DrillRow(DrillId.cuprite, ResourceId.cuprite, 'Купритовий', 100),
+    DrillRow(DrillId.ferrite, ResourceId.ferrite, 'Феритовий', 100),
+    DrillRow(DrillId.silicite, ResourceId.silicite, 'Силіцитовий', 100),
+    DrillRow(DrillId.crystal, ResourceId.crystals, 'Кристалічний', 100),
+  ];
+
+  static DrillRow rowFor(DrillId id) =>
+      drillTable.firstWhere((row) => row.id == id);
+
+  /// The levels each drill carries. Only the regolith drill is owned for
+  /// now; the rest wait on the restart tree.
+  final Map<DrillId, DrillState> drillState = {
+    for (final row in drillTable) row.id: DrillState(row.id),
+  };
+
+  DrillState drill(DrillId id) => drillState[id]!;
+
+  bool drillOwned(DrillId id) => id == DrillId.regolith;
+
+  /// The bore, in metres.
+  double drillRadius(DrillId id) =>
+      drillRadiusBase + drillRadiusPerLevel * drill(id).radius.value;
+
+  /// The face it covers, in square metres.
+  double drillArea(DrillId id) {
+    final r = drillRadius(id);
+    return math.pi * r * r;
+  }
+
+  /// How much more face than a fresh bore -- and so how much more its blow
+  /// brings up. Exactly 1 at level 0, which is what makes wiring it safe.
+  BigDouble drillYieldScale(DrillId id) => BigDouble.fromNum(
+    drillArea(id) / (math.pi * drillRadiusBase * drillRadiusBase),
+  );
+
+  /// Seconds between cycles, never below the floor.
+  double drillInterval(DrillId id) {
+    final base = rowFor(id).intervalBase;
+    final cut = math.pow(1 - drillSpeedStep, drill(id).drive.value).toDouble();
+    final interval = base * cut;
+    return interval < drillIntervalFloor ? drillIntervalFloor : interval;
+  }
+
+  /// The last drive level that still buys anything.
+  ///
+  /// Sold levels past this would cost real resources for nothing, so the
+  /// track simply ends here instead of clamping in silence.
+  static int drillDriveCap(DrillId id) {
+    final base = rowFor(id).intervalBase;
+    if (base <= drillIntervalFloor) return 0;
+    final n =
+        math.log(drillIntervalFloor / base) / math.log(1 - drillSpeedStep);
+    return n.ceil();
+  }
+
+  double drillCritChance(DrillId id) =>
+      drillCritBase + drillCritPerLevel * drill(id).calibration.value;
+
+  double drillEchoChance(DrillId id) =>
+      drillEchoBase + drillEchoPerLevel * drill(id).calibration.value;
+
+  static BigDouble drillCostOf(DrillPart part, int level) {
+    final base = switch (part) {
+      DrillPart.radius => 400.0,
+      DrillPart.drive => 900.0,
+      DrillPart.calibration => 2500.0,
+    };
+    final growth = switch (part) {
+      DrillPart.radius => 1.15,
+      DrillPart.drive => 1.17,
+      DrillPart.calibration => 1.22,
+    };
+    return (BigDouble.fromNum(base) *
+            BigDouble.fromNum(growth).pow(level.toDouble()))
+        .floor();
+  }
+
+  BigDouble drillUpgradeCost(DrillId id, DrillPart part) =>
+      drillCostOf(part, drill(id).levelOf(part).value);
+
+  /// Where a track stops. Radius and calibration run on; the drive track is
+  /// finite by construction.
+  int drillCap(DrillId id, DrillPart part) =>
+      part == DrillPart.drive ? drillDriveCap(id) : 1 << 30;
+
+  bool drillAtCap(DrillId id, DrillPart part) =>
+      drill(id).levelOf(part).value >= drillCap(id, part);
+
+  bool canUpgradeDrill(DrillId id, DrillPart part) =>
+      drillOwned(id) &&
+      !drillAtCap(id, part) &&
+      stock.has(ResourceId.regolith, drillUpgradeCost(id, part));
+
+  int upgradeDrill(DrillId id, DrillPart part, {int levels = 1}) => batch(() {
+    if (!drillOwned(id)) return 0;
+    final signal = drill(id).levelOf(part);
+    final cap = drillCap(id, part);
+    var bought = 0;
+    while (bought < levels && signal.value < cap) {
+      if (!stock.spend(ResourceId.regolith, drillCostOf(part, signal.value))) {
+        break;
+      }
+      signal.value = signal.value + 1;
+      bought++;
+    }
+    return bought;
+  });
+
+  int affordableDrillLevels(DrillId id, DrillPart part) {
+    var purse = stock.amount(ResourceId.regolith);
+    var level = drill(id).levelOf(part).value;
+    final cap = drillCap(id, part);
+    var count = 0;
+    while (level < cap && count < 1000) {
+      final price = drillCostOf(part, level);
+      if (purse < price) break;
+      purse -= price;
+      level++;
+      count++;
+    }
+    return count;
+  }
 
   /// The band a strike's regolith lands in.
   ///
@@ -861,6 +1073,7 @@ class PrototypeSimulation {
   ({bool critical, Map<ResourceId, BigDouble> loot}) _rollLoot({
     required String prefix,
     required BigDouble multiplier,
+    double? critChance,
   }) {
     final loot = <ResourceId, BigDouble>{};
 
@@ -871,7 +1084,7 @@ class PrototypeSimulation {
     // caller reads the flag to scale the blow itself the same way.
     final critical = random
         .stream('${prefix}loot.crit')
-        .chance(strikeCritChance);
+        .chance(critChance ?? strikeCritChance);
     if (critical) {
       multiplier = multiplier * BigDouble.fromNum(strikeCritPower);
     }
@@ -929,7 +1142,14 @@ class PrototypeSimulation {
     // only crit in the game is the strike's, and it lives inside the loot
     // roll. A drill mining its own specific resource returns with the typed
     // drills.
-    final rolled = _rollLoot(prefix: '', multiplier: BigDouble.one);
+    // The blow is the same blow; the AREA it covers is what the radius
+    // track buys, so the one loot roll is scaled rather than a second
+    // source added beside it.
+    final rolled = _rollLoot(
+      prefix: '',
+      multiplier: drillYieldScale(DrillId.regolith),
+      critChance: drillCritChance(DrillId.regolith),
+    );
     final loot = rolled.loot;
     final gained = loot[ResourceId.regolith] ?? BigDouble.zero;
     final crystalsGained = loot[ResourceId.crystals] ?? BigDouble.zero;
@@ -1083,6 +1303,14 @@ class PrototypeSimulation {
       'cycleStartMs': cycleStartMs.value,
     },
     'energy': energy.value,
+    'bores': {
+      for (final row in drillTable)
+        row.id.name: {
+          'radius': drill(row.id).radius.value,
+          'drive': drill(row.id).drive.value,
+          'calibration': drill(row.id).calibration.value,
+        },
+    },
     'arm': {
       'bit': bitLevel.value,
       'drive': driveLevel.value,
@@ -1132,6 +1360,15 @@ class PrototypeSimulation {
       dataWallet.value = BigDouble.zero;
       dataExponentLevel.value = 0;
       cycleStartMs.value = 0;
+    }
+    final bores = json['bores'];
+    for (final row in drillTable) {
+      final held = bores is Map ? bores[row.id.name] : null;
+      final state = drill(row.id);
+      for (final part in DrillPart.values) {
+        final stored = held is Map ? _readInt(held[part.name], 0) : 0;
+        state.levelOf(part).value = stored.clamp(0, drillCap(row.id, part));
+      }
     }
     final arm = json['arm'];
     if (arm is Map) {

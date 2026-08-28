@@ -5,6 +5,7 @@ import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
 import 'console_menu.dart';
+import 'drills_screen.dart';
 import 'drill_screen.dart';
 import 'game_icons.dart';
 import 'home_screen.dart';
@@ -14,7 +15,6 @@ import 'offline_window.dart';
 import 'save_menu.dart';
 import 'strikes_screen.dart';
 import 'shell_backdrop.dart';
-import 'upgrades_screen.dart';
 import 'resource_style.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
@@ -162,7 +162,7 @@ class _GameShellState extends State<GameShell> {
                                       GameScreen.drill => DrillScreen(
                                         game: _game,
                                       ),
-                                      GameScreen.upgrades => UpgradesScreen(
+                                      GameScreen.upgrades => DrillsScreen(
                                         game: _game,
                                       ),
                                       GameScreen.strikes => StrikesScreen(
