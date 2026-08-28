@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import 'navigation.dart';
+import 'game_icons.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
 
@@ -61,7 +62,11 @@ class ConsoleMenu extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(14, 13, 10, 4),
                   child: Row(
                     children: [
-                      const Icon(Ti.terminal2, size: 16, color: Palette.tech),
+                      const GameIcon(
+                        Ic.console,
+                        size: 16,
+                        colour: Palette.tech,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'КОНСОЛЬ',
@@ -114,7 +119,7 @@ class ConsoleMenu extends StatelessWidget {
                           SizedBox(
                             width: card,
                             child: _Card(
-                              icon: Ti.playerPause,
+                              icon: Ic.pause,
                               label: 'Пауза',
                               note: 'усе завмирає до повернення',
                               onTap: onPause,
@@ -123,7 +128,7 @@ class ConsoleMenu extends StatelessWidget {
                           SizedBox(
                             width: card,
                             child: _Card(
-                              icon: Ti.moon,
+                              icon: Ic.background,
                               label: 'Фоновий режим',
                               note: 'гра працює, рендер вимкнено',
                               onTap: onBackground,
@@ -151,7 +156,7 @@ class _Card extends StatelessWidget {
     required this.onTap,
   });
 
-  final IconData icon;
+  final String icon;
   final String label;
   final String note;
   final VoidCallback onTap;
@@ -183,7 +188,7 @@ class _Card extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Palette.line),
                   ),
-                  child: Icon(icon, size: 14, color: Palette.tech),
+                  child: GameIcon(icon, size: 15, colour: Palette.tech),
                 ),
                 const SizedBox(width: 8),
                 Expanded(

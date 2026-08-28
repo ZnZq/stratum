@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import 'game_icons.dart';
 import 'tokens.dart';
 
 /// One labelled readout, wherever the game shows a number.
@@ -14,10 +15,12 @@ class Stat extends StatelessWidget {
     required this.label,
     this.value,
     this.child,
+    this.size,
     this.colour = Palette.textDim,
     this.labelColour = Palette.tech,
     this.align = CrossAxisAlignment.start,
     this.note,
+    this.icon,
     this.trailing,
     this.above,
     this.below,
@@ -35,6 +38,11 @@ class Stat extends StatelessWidget {
   final String? value;
   final Widget? child;
 
+  /// How big the figure is set. Defaults to the house size; a readout that
+  /// has to share a crowded screen may ask for less without every other
+  /// readout in the game shrinking with it.
+  final double? size;
+
   final Color colour;
 
   /// The heading's own colour. Tech green is the house voice; a readout that
@@ -45,6 +53,12 @@ class Stat extends StatelessWidget {
 
   /// A quiet second line under the figure.
   final String? note;
+
+  /// A glyph before the heading, in the heading's own colour. For a readout
+  /// the player meets in several places at once -- depth in the mine and on
+  /// the shell, say -- so the same idea keeps the same face wherever it turns
+  /// up.
+  final String? icon;
 
   /// A second fact riding beside the heading. For what belongs to the readout
   /// itself rather than to its figure -- the odds of a loot lane, say, which
@@ -74,6 +88,19 @@ class Stat extends StatelessWidget {
         shadows: shadows,
       ),
     );
+    if (icon == null && trailing == null) return text;
+
+    final head = icon == null
+        ? text
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GameIcon(icon!, size: 11, colour: labelColour),
+              const SizedBox(width: 5),
+              Flexible(child: text),
+            ],
+          );
+
     if (trailing case final trailing?) {
       // Expanded, not Flexible: a loose slot hands its slack back to the row
       // and the trailing fact ends up glued to the label instead of standing
@@ -88,13 +115,13 @@ class Stat extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.baseline,
         textBaseline: TextBaseline.alphabetic,
         children: [
-          Flexible(child: text),
+          Flexible(child: head),
           const SizedBox(width: 6),
           trailing,
         ],
       );
     }
-    return text;
+    return head;
   }
 
   @override
@@ -110,7 +137,7 @@ class Stat extends StatelessWidget {
             Text(
               value!,
               style: AppText.display(
-                valueSize,
+                size ?? valueSize,
                 weight: FontWeight.w700,
                 color: colour,
                 shadows: shadows,

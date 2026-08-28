@@ -6,6 +6,7 @@ import 'package:stratum_core/stratum_core.dart';
 import '../game.dart';
 import 'console_menu.dart';
 import 'drill_screen.dart';
+import 'game_icons.dart';
 import 'home_screen.dart';
 import 'navigation.dart';
 import 'notices.dart';
@@ -786,10 +787,10 @@ class _SectionTab extends StatelessWidget {
                 color: lit ? Palette.amber : const Color(0x00000000),
               ),
             ),
-            child: Icon(
+            child: GameIcon(
               section.icon,
               size: 21,
-              color: lit ? Palette.gold : Palette.textFaint,
+              colour: lit ? Palette.gold : Palette.textFaint,
             ),
           ),
         ),
@@ -912,7 +913,7 @@ class _ScreenChip extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(screen.icon, size: 16, color: colour),
+              GameIcon(screen.icon, size: 16, colour: colour),
               const SizedBox(height: 2),
               Text(
                 screen.label,
@@ -944,7 +945,7 @@ class _Placeholder extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(screen.icon, size: 26, color: Palette.textFaint),
+          GameIcon(screen.icon, size: 30),
           const SizedBox(height: 10),
           Text(screen.label.toUpperCase(), style: AppText.eyebrow()),
           const SizedBox(height: 6),

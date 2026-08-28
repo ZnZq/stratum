@@ -11,6 +11,7 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../../game.dart';
+import '../game_icons.dart';
 import '../stat.dart';
 import '../tokens.dart';
 import 'metrics.dart';
@@ -103,6 +104,7 @@ class EnergyPlate extends StatelessWidget {
         children: [
           Stat(
             label: 'енергія',
+            icon: Ic.energy,
             align: CrossAxisAlignment.end,
             shadows: true,
             // Two styles in one figure, so the gauge passes a child rather

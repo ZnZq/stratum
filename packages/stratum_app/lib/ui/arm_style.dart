@@ -73,6 +73,16 @@ List<ArmBuff> buffsOf(ArmPart part, int generation) => [
     if (buff.fromGeneration <= generation) buff,
 ];
 
+/// The buffs a generation opens, and nothing carried over from before it.
+List<ArmBuff> buffsOpenedBy(ArmPart part, int generation) => [
+  for (final buff in armBuffs[part]!)
+    if (buff.fromGeneration == generation) buff,
+];
+
+/// How a generation is written wherever one is named.
+String markName(int generation) =>
+    const ['Mk I', 'Mk II', 'Mk III', 'Mk IV', 'Mk V'][generation];
+
 String _bitPower(PrototypeSimulation sim) {
   final gained = PrototypeSimulation.basePowerPerLevel * sim.bitLevel.value;
   return '+${BigDouble.fromNum(gained)}';

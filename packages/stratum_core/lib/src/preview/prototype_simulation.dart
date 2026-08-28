@@ -229,6 +229,24 @@ class PrototypeSimulation {
   final Signal<int> driveLevel = Signal(0, name: 'drive level');
   final Signal<int> supplyLevel = Signal(0, name: 'supply level');
 
+  /// The generation each part is BUILT to, 0 (Mk I) through 4 (Mk V).
+  ///
+  /// Deliberately its own number rather than something read off the level: a
+  /// part does not grow into the next mark by being levelled, it is rebuilt
+  /// into it, and until the player does that the next mark's buffs are not
+  /// running and the level cannot pass this mark's ceiling.
+  final Signal<int> bitMark = Signal(0, name: 'bit mark');
+  final Signal<int> driveMark = Signal(0, name: 'drive mark');
+  final Signal<int> supplyMark = Signal(0, name: 'supply mark');
+
+  /// The highest mark each part has EVER been built to, which is a different
+  /// thing from where it stands: a restart takes the hardware back, and what
+  /// the player learned about it while owning it does not go with it. The
+  /// part sheet reads these, so a mark once built stays readable forever.
+  final Signal<int> bitPeak = Signal(0, name: 'bit peak');
+  final Signal<int> drivePeak = Signal(0, name: 'drive peak');
+  final Signal<int> supplyPeak = Signal(0, name: 'supply peak');
+
   /// Tree levels. Purchasing is not wired up yet; they exist so the formulas
   /// read the way the prototype's do.
   final Signal<int> powerLevel = Signal(0, name: 'power level');
@@ -679,19 +697,58 @@ class PrototypeSimulation {
     ArmPart.supply => supplyLevel,
   };
 
-  bool atMaxLevel(ArmPart part) => levelOf(part).value >= maxPartLevel;
+  Signal<int> markOf(ArmPart part) => switch (part) {
+    ArmPart.bit => bitMark,
+    ArmPart.drive => driveMark,
+    ArmPart.supply => supplyMark,
+  };
+
+  Signal<int> peakOf(ArmPart part) => switch (part) {
+    ArmPart.bit => bitPeak,
+    ArmPart.drive => drivePeak,
+    ArmPart.supply => supplyPeak,
+  };
+
+  /// The best mark of [part] the player has ever built, from 0 (Mk I).
+  int knownGeneration(ArmPart part) => peakOf(part).value;
+
+  static const int lastMark = maxPartLevel ~/ levelsPerGeneration - 1;
+
+  /// As far as [part] can be levelled before it has to be rebuilt.
+  int ceilingOf(ArmPart part) => (markOf(part).value + 1) * levelsPerGeneration;
+
+  bool atMarkCeiling(ArmPart part) => levelOf(part).value >= ceilingOf(part);
+
+  /// A part at its ceiling with a mark left to build is ready to evolve.
+  bool canEvolve(ArmPart part) =>
+      atMarkCeiling(part) && markOf(part).value < lastMark;
+
+  /// Rebuilds [part] into its next mark. Returns the mark it now carries, or
+  /// null when it was not ready -- the caller has nothing to celebrate then.
+  int? evolve(ArmPart part) => batch(() {
+    if (!canEvolve(part)) return null;
+    final mark = markOf(part);
+    mark.value = mark.value + 1;
+    final peak = peakOf(part);
+    if (mark.value > peak.value) peak.value = mark.value;
+    return mark.value;
+  });
+
+  bool atMaxLevel(ArmPart part) =>
+      levelOf(part).value >= maxPartLevel && markOf(part).value >= lastMark;
 
   BigDouble upgradeCost(ArmPart part) => costOf(part, levelOf(part).value);
 
   bool canUpgrade(ArmPart part) =>
-      !atMaxLevel(part) && stock.has(ResourceId.regolith, upgradeCost(part));
+      !atMarkCeiling(part) && stock.has(ResourceId.regolith, upgradeCost(part));
 
   /// Buys [levels] of [part], stopping at the cap or at what the store can
   /// pay for -- whichever comes first. Returns how many actually landed.
   int upgrade(ArmPart part, {int levels = 1}) => batch(() {
     final signal = levelOf(part);
+    final ceiling = ceilingOf(part);
     var bought = 0;
-    while (bought < levels && signal.value < maxPartLevel) {
+    while (bought < levels && signal.value < ceiling) {
       final price = costOf(part, signal.value);
       if (!stock.spend(ResourceId.regolith, price)) break;
       signal.value = signal.value + 1;
@@ -704,8 +761,9 @@ class PrototypeSimulation {
   int affordableLevels(ArmPart part) {
     var purse = stock.amount(ResourceId.regolith);
     var level = levelOf(part).value;
+    final ceiling = ceilingOf(part);
     var count = 0;
-    while (level < maxPartLevel && count < maxPartLevel) {
+    while (level < ceiling && count < maxPartLevel) {
       final price = costOf(part, level);
       if (!purse.gteWithTolerance(price)) break;
       purse -= price;
@@ -1029,6 +1087,12 @@ class PrototypeSimulation {
       'bit': bitLevel.value,
       'drive': driveLevel.value,
       'supply': supplyLevel.value,
+      'bitMark': bitMark.value,
+      'driveMark': driveMark.value,
+      'supplyMark': supplyMark.value,
+      'bitPeak': bitPeak.value,
+      'drivePeak': drivePeak.value,
+      'supplyPeak': supplyPeak.value,
     },
     'tree': {
       'power': powerLevel.value,
@@ -1074,10 +1138,31 @@ class PrototypeSimulation {
       bitLevel.value = _readInt(arm['bit'], 0).clamp(0, maxPartLevel);
       driveLevel.value = _readInt(arm['drive'], 0).clamp(0, maxPartLevel);
       supplyLevel.value = _readInt(arm['supply'], 0).clamp(0, maxPartLevel);
+      // A save from before the marks were kept knows only where the parts
+      // stand, and standing at a level is proof enough of having been built
+      // that far -- demoting a returning player would be the worse lie.
+      for (final part in ArmPart.values) {
+        final level = levelOf(part).value;
+        final built = generationOf(level);
+        final mark = _readInt(
+          arm['${part.name}Mark'],
+          built,
+        ).clamp(0, lastMark);
+        markOf(part).value = mark > built ? mark : built;
+        final seen = _readInt(
+          arm['${part.name}Peak'],
+          markOf(part).value,
+        ).clamp(0, lastMark);
+        peakOf(part).value = seen > markOf(part).value
+            ? seen
+            : markOf(part).value;
+      }
     } else {
-      bitLevel.value = 0;
-      driveLevel.value = 0;
-      supplyLevel.value = 0;
+      for (final part in ArmPart.values) {
+        levelOf(part).value = 0;
+        markOf(part).value = 0;
+        peakOf(part).value = 0;
+      }
     }
     energy.value = _readInt(json['energy'], energyCap).clamp(0, energyCap);
 

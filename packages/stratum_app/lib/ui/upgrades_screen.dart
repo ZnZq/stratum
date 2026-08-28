@@ -396,12 +396,16 @@ class PressButton extends StatefulWidget {
     required this.onTap,
     required this.background,
     required this.child,
+    this.padding = const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
     super.key,
   });
 
   final VoidCallback? onTap;
   final Color background;
   final Widget child;
+
+  /// Room around the label. Tight rows pass their own.
+  final EdgeInsets padding;
 
   @override
   State<PressButton> createState() => _PressButtonState();
@@ -427,7 +431,7 @@ class _PressButtonState extends State<PressButton> {
         scale: _down ? 0.96 : 1,
         duration: const Duration(milliseconds: 90),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+          padding: widget.padding,
           decoration: BoxDecoration(
             color: widget.background,
             borderRadius: BorderRadius.circular(10),

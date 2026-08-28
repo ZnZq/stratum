@@ -1,8 +1,7 @@
-import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
-import 'tabler_icons.dart';
+import 'game_icons.dart';
 
 /// The four things the player can be doing.
 ///
@@ -10,15 +9,17 @@ import 'tabler_icons.dart';
 /// phone-width bar can hold, and grouping them means a new screen joins a
 /// section instead of shrinking every tab.
 enum NavSection {
-  extraction('Видобуток', Ti.pick),
-  production('Виробництво', Ti.factory),
-  research('Дослідження', Ti.telescope),
-  console('Консоль', Ti.terminal2);
+  extraction('Видобуток', Ic.extraction),
+  production('Виробництво', Ic.production),
+  research('Дослідження', Ic.research),
+  console('Консоль', Ic.console);
 
   const NavSection(this.label, this.icon);
 
   final String label;
-  final IconData icon;
+
+  /// The game's own glyph, not a font codepoint: an asset the nav tints.
+  final String icon;
 
   /// The console opens as a panel of cards rather than a strip of chips: its
   /// entries are places you go, do one thing and come back from, not places
@@ -38,47 +39,42 @@ enum NavSection {
 /// bar shows, and a screen cannot end up in two places or in none.
 enum GameScreen {
   /// The mine itself: dig by hand, watch the rigs work.
-  drill(NavSection.extraction, 'Шахта', Ti.arrowBarDown),
+  drill(NavSection.extraction, 'Шахта', Ic.mine),
 
   /// The arm itself and the three parts of it that upgrade: bit, drive,
   /// supply.
-  strikes(NavSection.extraction, 'Маніпулятор', Ti.handClick),
+  strikes(NavSection.extraction, 'Маніпулятор', Ic.arm),
 
   /// Every drill the player owns, and where they are upgraded.
-  upgrades(NavSection.extraction, 'Бури', Ti.adjustments),
-  planets(NavSection.extraction, 'Планети', Ti.planet),
+  upgrades(NavSection.extraction, 'Бури', Ic.drills),
+  planets(NavSection.extraction, 'Планети', Ic.planets),
 
-  craft(NavSection.production, 'Крафт', Ti.tools),
-  building(NavSection.production, 'Будівництво', Ti.crane),
-  lab(NavSection.production, 'Лабораторія', Ti.microscope),
+  craft(NavSection.production, 'Крафт', Ic.craft),
+  building(NavSection.production, 'Будівництво', Ic.building),
+  lab(NavSection.production, 'Лабораторія', Ic.lab),
 
-  tree(NavSection.research, 'Дерево', Ti.binaryTree),
-  avatar(NavSection.research, 'Аватар', Ti.userHexagon),
-  samples(NavSection.research, 'Зразки', Ti.flask2),
+  tree(NavSection.research, 'Дерево', Ic.tree),
+  avatar(NavSection.research, 'Аватар', Ic.avatar),
+  samples(NavSection.research, 'Зразки', Ic.samples),
 
   settings(
     NavSection.console,
     'Налаштування',
-    Ti.settings2,
+    Ic.settings,
     note: 'звук, мова, інтерфейс',
   ),
-  daily(NavSection.console, 'Щоденні', Ti.gift, note: 'нагорода за вхід'),
+  daily(NavSection.console, 'Щоденні', Ic.daily, note: 'нагорода за вхід'),
   achievements(
     NavSection.console,
     'Досягнення',
-    Ti.trophy,
+    Ic.achievements,
     note: 'віхи прогресу',
   ),
-  stats(
-    NavSection.console,
-    'Статистика',
-    Ti.chartLine,
-    note: 'числа за весь час',
-  ),
+  stats(NavSection.console, 'Статистика', Ic.stats, note: 'числа за весь час'),
   account(
     NavSection.console,
     'Акаунт',
-    Ti.userCircle,
+    Ic.account,
     note: 'профіль і синхронізація',
   ),
 
@@ -87,7 +83,7 @@ enum GameScreen {
   saves(
     NavSection.console,
     'Збереження',
-    Ti.deviceFloppy,
+    Ic.saves,
     note: 'слоти й автозбереження',
   );
 
@@ -95,7 +91,7 @@ enum GameScreen {
 
   final NavSection section;
   final String label;
-  final IconData icon;
+  final String icon;
 
   /// One line on what the screen is for. Only the console shows it, because
   /// only the console gives its entries room to be read.
@@ -113,7 +109,9 @@ enum GameScreen {
 /// else.
 bool screenNeedsAttention(GameScreen screen, Game game) => switch (screen) {
   GameScreen.upgrades => game.sim.canBuyDrill || game.sim.canBuyPowerUpgrade,
-  GameScreen.strikes => ArmPart.values.any(game.sim.canUpgrade),
+  GameScreen.strikes => ArmPart.values.any(
+    (part) => game.sim.canUpgrade(part) || game.sim.canEvolve(part),
+  ),
   _ => false,
 };
 

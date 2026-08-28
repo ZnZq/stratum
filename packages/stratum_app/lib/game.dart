@@ -856,6 +856,16 @@ class Game extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Rebuilds a part into its next mark. Returns the mark it now carries, so
+  /// the caller can show what just happened; null when it was not ready.
+  int? evolveArm(ArmPart part) {
+    final mark = sim.evolve(part);
+    if (mark == null) return null;
+    _syncEnergyLoop();
+    notifyListeners();
+    return mark;
+  }
+
   @override
   void dispose() {
     _disposed = true;

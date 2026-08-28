@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../game.dart';
+import 'game_icons.dart';
 import 'stat.dart';
 import 'tokens.dart';
 
@@ -56,6 +57,7 @@ class HomeScreen extends StatelessWidget {
                 child: _HomeCard(
                   child: Stat(
                     label: 'цикл',
+                    icon: Ic.collapse,
                     value: '${sim.cycleNumber}',
                     colour: Palette.steel,
                     note: 'очок колапсу: ${sim.collapses.value}',
@@ -69,6 +71,7 @@ class HomeScreen extends StatelessWidget {
                   // must not rename what the player just looked at.
                   child: Stat(
                     label: 'глибина',
+                    icon: Ic.depth,
                     value: '${sim.layer.value} м',
                     colour: Palette.steel,
                     note: 'симуляція ${sim.simulationNumber}',
@@ -81,6 +84,7 @@ class HomeScreen extends StatelessWidget {
           _HomeCard(
             child: Stat(
               label: 'сирі дані',
+              icon: Ic.rawData,
               note: 'за цикл: ${sim.cycleData.value}',
               // The headline of this screen, so it keeps a size of its own
               // rather than the house figure size.
@@ -99,6 +103,7 @@ class HomeScreen extends StatelessWidget {
           _HomeCard(
             child: Stat(
               label: 'перезапуск',
+              icon: Ic.dataWallet,
               labelColour: Palette.gold,
               trailing: const _Soon(),
               value: '+${sim.bankableData.value}',
@@ -110,6 +115,7 @@ class HomeScreen extends StatelessWidget {
           _HomeCard(
             child: Stat(
               label: 'колапс',
+              icon: Ic.collapse,
               labelColour: Palette.quantonium,
               trailing: const _Soon(),
               value:

@@ -158,28 +158,30 @@ class TickEngine {
   }
 
   void _startTimer() {
-    // A rate change leaves part of the interval already served, and a plain
-    // periodic timer would fire a whole interval after it -- the bar would sit
-    // full and wait. So the first fire is short by whatever was carried over,
-    // and only then does the loop settle into its period.
-    final remaining = timeToNextTick;
-    if (remaining >= scheduler.rate.interval) {
-      _timer = Timer.periodic(scheduler.rate.interval, (_) => syncNow());
-      return;
+    // Every fire aims at the time actually left in the interval, and the next
+    // one is armed only after it lands.
+    //
+    // A Timer.periodic cannot do this: it keeps a fixed phase, so any sync
+    // that happens BETWEEN fires -- a pause, a rate change, a stop at a cap --
+    // banks a remainder the periodic then paces right past, delivering exactly
+    // one interval per fire forever. The accumulator freezes at that
+    // remainder, and anything reading `progress` shows a bar stuck near full
+    // that never sweeps. Re-aiming each time works the remainder off on the
+    // very next fire instead.
+    void arm() {
+      late final Timer shot;
+      shot = Timer(timeToNextTick, () {
+        // The sync can retime or stop the engine from inside: a handler that
+        // hits a cap stops the loop, and the rate setter re-arms it. After
+        // that the timer belongs to someone else -- arming another here
+        // regardless would leave a phantom loop with no handle to cancel it.
+        syncNow();
+        if (identical(_timer, shot)) arm();
+      });
+      _timer = shot;
     }
-    late final Timer oneShot;
-    oneShot = Timer(remaining, () {
-      // The sync can retime or stop the engine from inside: a callback that
-      // ends forcing changes the rate, and the rate setter re-arms the timer.
-      // After that, _timer belongs to someone else -- chaining the periodic
-      // here regardless would leave it running with no handle to cancel it,
-      // a phantom loop that keeps mining through pauses and stops.
-      syncNow();
-      if (identical(_timer, oneShot)) {
-        _timer = Timer.periodic(scheduler.rate.interval, (_) => syncNow());
-      }
-    });
-    _timer = oneShot;
+
+    arm();
   }
 
   void _stopTimer() {

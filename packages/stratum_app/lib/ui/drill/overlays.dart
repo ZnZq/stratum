@@ -8,6 +8,7 @@ import 'package:stratum_core/stratum_core.dart';
 
 import '../../game.dart';
 import '../floating_number.dart';
+import '../game_icons.dart';
 import '../stat.dart';
 import '../tokens.dart';
 
@@ -25,6 +26,7 @@ class DepthReadout extends StatelessWidget {
     // the screen -- but it wears the same heading as every other readout.
     return Stat(
       label: 'глибина',
+      icon: Ic.depth,
       shadows: true,
       child: Row(
         mainAxisSize: MainAxisSize.min,
