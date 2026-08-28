@@ -3,6 +3,8 @@ import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
 import '../save_store.dart';
+import 'game_icons.dart';
+import 'game_modal.dart';
 import 'resource_style.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
@@ -68,116 +70,50 @@ class _SaveMenuState extends State<SaveMenu> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onClose,
-            child: const ColoredBox(color: Color(0xB3070A10)),
-          ),
-        ),
-        Positioned(
-          top: AppMetrics.resourceBar - 8,
-          left: 10,
-          right: 10,
-          bottom: AppMetrics.navTotal + 10,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Palette.bar,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0x407FD9C4)),
-              boxShadow: const [
-                BoxShadow(color: Color(0x99000000), blurRadius: 26),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _Header(onClose: widget.onClose),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(14, 4, 14, 16),
-                    children: [
-                      for (final slot in SaveSlot.values)
-                        _SlotCard(
-                          slot: slot,
-                          summary: _summaryOf(slot),
-                          loading: _slots == null,
-                          expanded: _expanded == slot,
-                          armed: _armed.contains(slot),
-                          onToggle: () => setState(
-                            () => _expanded = _expanded == slot ? null : slot,
-                          ),
-                          onArm: () => setState(() {
-                            if (!_armed.remove(slot)) _armed.add(slot);
-                          }),
-                          onSave: () => _run(
-                            slot,
-                            'записано в «${slot.label}»',
-                            () => widget.game.saveTo(slot),
-                          ),
-                          onLoad: () => _run(
-                            slot,
-                            'завантажено «${slot.label}»',
-                            () => widget.game.loadFrom(slot),
-                          ),
-                          onDelete: slot == SaveSlot.auto
-                              ? null
-                              : () => _run(
-                                  slot,
-                                  '«${slot.label}» стерто',
-                                  () => widget.game.deleteSlot(slot),
-                                ),
-                        ),
-                    ],
-                  ),
-                ),
-                _Footer(
-                  said: _said,
-                  failed: _failed,
-                  fault: widget.game.storageFault,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Header extends StatelessWidget {
-  const _Header({required this.onClose});
-
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 14, 10, 8),
-      child: Row(
+    return GameModal(
+      icon: Ic.saves,
+      title: 'ЗБЕРЕЖЕННЯ',
+      anchor: ModalAnchor.stretch,
+      contentPadding: EdgeInsets.zero,
+      onClose: widget.onClose,
+      footer: _Footer(
+        said: _said,
+        failed: _failed,
+        fault: widget.game.storageFault,
+      ),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 4, 14, 16),
         children: [
-          const Icon(Ti.deviceFloppy, size: 17, color: Palette.tech),
-          const SizedBox(width: 8),
-          Text(
-            'ЗБЕРЕЖЕННЯ',
-            style: AppText.body(
-              12,
-              weight: FontWeight.w800,
-              color: Palette.text,
-              letterSpacing: 2.4,
+          for (final slot in SaveSlot.values)
+            _SlotCard(
+              slot: slot,
+              summary: _summaryOf(slot),
+              loading: _slots == null,
+              expanded: _expanded == slot,
+              armed: _armed.contains(slot),
+              onToggle: () =>
+                  setState(() => _expanded = _expanded == slot ? null : slot),
+              onArm: () => setState(() {
+                if (!_armed.remove(slot)) _armed.add(slot);
+              }),
+              onSave: () => _run(
+                slot,
+                'записано в «${slot.label}»',
+                () => widget.game.saveTo(slot),
+              ),
+              onLoad: () => _run(
+                slot,
+                'завантажено «${slot.label}»',
+                () => widget.game.loadFrom(slot),
+              ),
+              onDelete: slot == SaveSlot.auto
+                  ? null
+                  : () => _run(
+                      slot,
+                      '«${slot.label}» стерто',
+                      () => widget.game.deleteSlot(slot),
+                    ),
             ),
-          ),
-          const Spacer(),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onClose,
-            child: const Padding(
-              padding: EdgeInsets.all(6),
-              child: Icon(Ti.close, size: 16, color: Palette.textMuted),
-            ),
-          ),
         ],
       ),
     );

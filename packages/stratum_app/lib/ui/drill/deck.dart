@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../../game.dart';
-import '../resource_style.dart';
+import '../resource_plate.dart';
 import '../stat.dart';
 import '../tokens.dart';
 
@@ -144,12 +144,12 @@ class DeckState extends State<Deck> {
 /// Collapsed, the deck keeps only what the player watches while drilling --
 /// hardness, power, cycles left -- and hands the rest of the screen back to
 /// the rock.
-/// What a strike can bring up: a grid of plates, three to a row.
+/// What a strike can bring up: a grid of plates, two to a row.
 ///
-/// Regolith is the guaranteed haul, so its plate spans the full row and
-/// quotes the band a blow can land in; everything under it is chance, name on
-/// the left, odds on the right. Ores still locked by depth stay listed and
-/// dimmed -- the grid doubles as the map of what going deeper opens.
+/// Regolith is the guaranteed haul and quotes the band a blow can land in;
+/// everything under it is chance, name on the left, odds beside it. Ores
+/// still locked by depth stay listed and dimmed -- the grid doubles as the
+/// map of what going deeper opens.
 class LootTable extends StatelessWidget {
   const LootTable({required this.sim, super.key});
 
@@ -185,134 +185,49 @@ class LootTable extends StatelessWidget {
               children: [
                 // The certain lane and the rarest one head the grid
                 // together: the two ends of the table, side by side.
-                LootCard(
+                ResourcePlate(
                   id: ResourceId.regolith,
                   amount: '${sim.strikeRegolithMin} – ${sim.strikeRegolithMax}',
                   width: half,
+                  shadows: true,
                 ),
-                LootCard(
+                ResourcePlate(
                   id: ResourceId.quantonium,
-                  chance:
+                  aside:
                       '${(PrototypeSimulation.strikeQuantoniumChance * 100).toStringAsFixed(0)}%',
                   amount: '${PrototypeSimulation.quantoniumDropAt(layer)}',
                   width: half,
+                  shadows: true,
                 ),
                 for (final row in PrototypeSimulation.oreTable)
                   if (layer >= row.unlockAt)
-                    LootCard(
+                    ResourcePlate(
                       id: row.id,
-                      chance: '${(row.chance * 100).round()}%',
+                      aside: '${(row.chance * 100).round()}%',
                       amount: '${PrototypeSimulation.oreDropAt(layer)}',
                       width: half,
+                      shadows: true,
                     )
                   else
-                    LootCard(
+                    ResourcePlate(
                       id: row.id,
                       amount: 'з ${row.unlockAt} м',
                       width: half,
-                      locked: true,
+                      dim: true,
+                      shadows: true,
                     ),
-                LootCard(
+                ResourcePlate(
                   id: ResourceId.crystals,
-                  chance: '${(sim.crystalChance * 100).round()}%',
+                  aside: '${(sim.crystalChance * 100).round()}%',
                   amount: '${PrototypeSimulation.crystalDropAt(layer)}',
                   width: half,
+                  shadows: true,
                 ),
               ],
             );
           },
         ),
       ],
-    );
-  }
-}
-
-/// One lane of the loot table, as a readout like any other.
-///
-/// The odds ride INSIDE the framed cell rather than beside the name: the
-/// three facts a lane has -- what it is, how often it pays, how much -- then
-/// read left to right as one line, and the card stands two rows tall instead
-/// of three, which is what pays for the wider two-column grid.
-class LootCard extends StatelessWidget {
-  const LootCard({
-    required this.id,
-    required this.amount,
-    required this.width,
-    this.chance,
-    this.locked = false,
-    super.key,
-  });
-
-  final ResourceId id;
-
-  /// The odds, or null for a guaranteed drop: certainty needs no label.
-  final String? chance;
-
-  final String amount;
-  final double width;
-  final bool locked;
-
-  /// What the icon is drawn at, and the height it is allowed to claim.
-  static const double _iconSize = 23;
-  static const double _iconSlot = 18;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = resourceStyles[id]!;
-    return SizedBox(
-      width: width,
-      child: Opacity(
-        opacity: locked ? 0.45 : 1,
-        child: Stat(
-          label: style.label,
-          labelColour: style.colour,
-          shadows: true,
-          trailing: chance == null
-              ? null
-              : Text(
-                  chance!,
-                  style: AppText.display(
-                    8.5,
-                    weight: FontWeight.w600,
-                    color: Palette.textFaint,
-                    shadows: true,
-                  ),
-                ),
-          child: Padding(
-            padding: const EdgeInsets.only(right: 2, top: 1),
-            child: Row(
-              children: [
-                // Drawn larger than the room it claims. The row's height is
-                // set by the icon box -- the figure beside it is shorter --
-                // so growing the icon honestly would push every card in the
-                // grid taller. Bleeding a couple of pixels past the slot buys
-                // the bigger silhouette for nothing.
-                SizedBox(
-                  width: _iconSize,
-                  height: _iconSlot,
-                  child: OverflowBox(
-                    maxHeight: _iconSize,
-                    child: ResourceIcon(id, size: _iconSize),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    amount,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppText.display(
-                      11,
-                      weight: FontWeight.w700,
-                      color: locked ? Palette.textFaint : Palette.textDim,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

@@ -1149,10 +1149,14 @@ class PrototypeSimulation {
           built,
         ).clamp(0, lastMark);
         markOf(part).value = mark > built ? mark : built;
-        final seen = _readInt(
-          arm['${part.name}Peak'],
-          markOf(part).value,
-        ).clamp(0, lastMark);
+        // A peak above the last mark cannot be a mark: it is a level,
+        // written by a build that kept peaks in levels. Convert rather than
+        // clamp -- clamping turned every such save into "Mk V already seen".
+        final stored = _readInt(arm['${part.name}Peak'], markOf(part).value);
+        final seen = (stored > lastMark ? generationOf(stored) : stored).clamp(
+          0,
+          lastMark,
+        );
         peakOf(part).value = seen > markOf(part).value
             ? seen
             : markOf(part).value;

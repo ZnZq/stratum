@@ -76,16 +76,44 @@ class _StrikesScreenState extends State<StrikesScreen> {
   }
 
   Widget _body(Game game) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ArmDiagram(game: game),
-          const SizedBox(height: 10),
-          _BlowSummary(game: game),
-          const SizedBox(height: 10),
-          Row(
+    // One surface, not a tray of boxes. The band runs edge to edge at the
+    // top, the panel below fades in over its foot, and from there down the
+    // only thing dividing anything is a hairline.
+    return Stack(
+      children: [
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: ArmDiagram(game: game, height: _band),
+        ),
+        Positioned.fill(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(height: _band - _dissolve),
+              const _Dissolve(height: _dissolve),
+              Expanded(child: _panel(game)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Everything under the rock: what a blow is worth, and the three parts.
+  Widget _panel(Game game) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: _BlowSummary(game: game),
+        ),
+        const SizedBox(height: 11),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
             children: [
               Text(
                 'ПРОКАЧКА РУКИ',
@@ -103,32 +131,64 @@ class _StrikesScreenState extends State<StrikesScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          // All three parts belong on one screen: they are a choice between
-          // each other, and a choice you have to scroll to see is not one.
-          // They split the room that is left in equal parts and keep the
-          // panel's full width -- what gives when the room is tight is the
-          // buff list inside each card, not the card.
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final part in ArmPart.values) ...[
-                  Expanded(
-                    child: PartCard(
-                      game: game,
-                      part: part,
-                      batch: _batch,
-                      onRead: () => setState(() => _reading = part),
-                      onEvolve: () => _evolve(part),
-                    ),
+        ),
+        const SizedBox(height: 8),
+        const _Rule(),
+        // All three parts belong on one screen: they are a choice between
+        // each other, and a choice you have to scroll to see is not one.
+        // They split the room that is left in equal parts; what gives when
+        // the room is tight is the buff list inside a part, not the part.
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final part in ArmPart.values) ...[
+                Expanded(
+                  child: PartCard(
+                    game: game,
+                    part: part,
+                    batch: _batch,
+                    onRead: () => setState(() => _reading = part),
+                    onEvolve: () => _evolve(part),
                   ),
-                  if (part != ArmPart.values.last) const SizedBox(height: 6),
-                ],
+                ),
+                if (part != ArmPart.values.last) const _Rule(),
               ],
-            ),
+            ],
           ),
-        ],
+        ),
+      ],
+    );
+  }
+}
+
+/// How tall the arm's band stands, and how much of its foot the panel
+/// dissolves. The rock has to be thick enough here for the dissolve to have
+/// something to eat: a hairline of stone under a gradient reads as a seam,
+/// which is the one thing this layout is for.
+const double _band = 104;
+const double _dissolve = 24;
+
+/// The join. Transparent at the top so the rock shows through it, the
+/// screen's own colour by the bottom, and no line anywhere.
+class _Dissolve extends StatelessWidget {
+  const _Dissolve({required this.height});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      child: const DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0x001D2734), Color(0xE01D2734), Color(0xFF1D2734)],
+            stops: [0, 0.62, 1],
+          ),
+        ),
       ),
     );
   }
@@ -258,13 +318,8 @@ class PartCard extends StatelessWidget {
     final style = armPartStyles[part]!;
     final steps = batch == 0 ? sim.affordableLevels(part) : batch;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
-      decoration: BoxDecoration(
-        color: Palette.well,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Palette.lineBar),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 9, 14, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -332,9 +387,7 @@ class PartCard extends StatelessWidget {
             _EvolveButton(onTap: onEvolve)
           else
             _MarkProgress(part: part, sim: sim, mark: mark, level: level),
-          const SizedBox(height: 6),
-          const _Rule(),
-          const SizedBox(height: 5),
+          const SizedBox(height: 7),
           // The one thing allowed to shrink. The card keeps its width and its
           // share of the height; when a mark opens more buffs than there is
           // room for, the TYPE gives -- not the layout. A FittedBox would
@@ -512,12 +565,13 @@ class _MarkProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final floor = mark * PrototypeSimulation.levelsPerGeneration;
-    final walked = (level - floor) / PrototypeSimulation.levelsPerGeneration;
-    final ceiling = sim.ceilingOf(part);
-    // The reading rides INSIDE the bar. It stood beside it as "63 до Mk III",
-    // which spent a column of the card on a sentence about what the bar was
-    // already showing.
+    const span = PrototypeSimulation.levelsPerGeneration;
+    final into = level - mark * span;
+    final walked = into / span;
+    // The reading rides INSIDE the bar, and it counts THIS mark's hundred
+    // rather than the running total: the bar measures the road to the next
+    // rebuild, so a bar at a third full has to read as a third, not as
+    // "137 / 200", which looks two thirds done.
     return ClipRRect(
       borderRadius: BorderRadius.circular(6),
       child: SizedBox(
@@ -539,7 +593,7 @@ class _MarkProgress extends StatelessWidget {
             ),
             Center(
               child: Text(
-                '$level / $ceiling',
+                '$into / $span',
                 // Lit and shadowed: the ground under it is dark on one side
                 // of the fill and bright on the other.
                 style: AppText.display(

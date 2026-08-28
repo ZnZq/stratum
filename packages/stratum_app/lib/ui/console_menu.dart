@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import 'navigation.dart';
 import 'game_icons.dart';
-import 'tabler_icons.dart';
+import 'game_modal.dart';
 import 'tokens.dart';
 
 /// The console: everything around the game rather than in it.
@@ -32,118 +32,54 @@ class ConsoleMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onClose,
-            child: const ColoredBox(color: Color(0x99070A10)),
-          ),
-        ),
-        Positioned(
-          left: 10,
-          right: 10,
-          bottom: AppMetrics.navTotal + 8,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Palette.bar,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0x407FD9C4)),
-              boxShadow: const [
-                BoxShadow(color: Color(0x99000000), blurRadius: 26),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 13, 10, 4),
-                  child: Row(
-                    children: [
-                      const GameIcon(
-                        Ic.console,
-                        size: 16,
-                        colour: Palette.tech,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'КОНСОЛЬ',
-                        style: AppText.body(
-                          11.5,
-                          weight: FontWeight.w800,
-                          color: Palette.text,
-                          letterSpacing: 2.4,
-                        ),
-                      ),
-                      const Spacer(),
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: onClose,
-                        child: const Padding(
-                          padding: EdgeInsets.all(6),
-                          child: Icon(
-                            Ti.close,
-                            size: 15,
-                            color: Palette.textMuted,
-                          ),
-                        ),
-                      ),
-                    ],
+    return GameModal(
+      icon: Ic.console,
+      title: 'КОНСОЛЬ',
+      anchor: ModalAnchor.bottom,
+      onClose: onClose,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Two columns, measured rather than assumed: the shell scales the
+          // whole design, so a hard-coded card width would only be right at
+          // one window size.
+          const gap = 8.0;
+          final card = (constraints.maxWidth - gap) / 2;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (final screen in NavSection.console.screens)
+                SizedBox(
+                  width: card,
+                  child: _Card(
+                    icon: screen.icon,
+                    label: screen.label,
+                    note: screen.note,
+                    onTap: () => onPick(screen),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(11, 4, 11, 13),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      // Two columns, measured rather than assumed: the shell
-                      // scales the whole design, so a hard-coded card width
-                      // would only be right at one window size.
-                      const gap = 8.0;
-                      final card = (constraints.maxWidth - gap) / 2;
-                      return Wrap(
-                        spacing: gap,
-                        runSpacing: gap,
-                        children: [
-                          for (final screen in NavSection.console.screens)
-                            SizedBox(
-                              width: card,
-                              child: _Card(
-                                icon: screen.icon,
-                                label: screen.label,
-                                note: screen.note,
-                                onTap: () => onPick(screen),
-                              ),
-                            ),
-                          SizedBox(
-                            width: card,
-                            child: _Card(
-                              icon: Ic.pause,
-                              label: 'Пауза',
-                              note: 'усе завмирає до повернення',
-                              onTap: onPause,
-                            ),
-                          ),
-                          SizedBox(
-                            width: card,
-                            child: _Card(
-                              icon: Ic.background,
-                              label: 'Фоновий режим',
-                              note: 'гра працює, рендер вимкнено',
-                              onTap: onBackground,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
+              SizedBox(
+                width: card,
+                child: _Card(
+                  icon: Ic.pause,
+                  label: 'Пауза',
+                  note: 'усе завмирає до повернення',
+                  onTap: onPause,
                 ),
-              ],
-            ),
-          ),
-        ),
-      ],
+              ),
+              SizedBox(
+                width: card,
+                child: _Card(
+                  icon: Ic.background,
+                  label: 'Фоновий режим',
+                  note: 'гра працює, рендер вимкнено',
+                  onTap: onBackground,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

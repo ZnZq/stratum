@@ -22,11 +22,18 @@ import 'tokens.dart';
 /// It runs a loop of its own -- one stroke, then a rest -- because a still
 /// diagram of a hammering arm reads as a picture of a broken one.
 class ArmDiagram extends StatefulWidget {
-  const ArmDiagram({required this.game, super.key});
+  const ArmDiagram({required this.game, this.height = 104, super.key});
 
   final Game game;
 
-  static const double height = 86;
+  /// The band the arm is drawn on. It runs the full width of the screen,
+  /// so the rock below the bit is the screen's own ground rather than the
+  /// floor of a box sitting on it.
+  final double height;
+
+  /// The height the ARM ITSELF is authored at. The band may be taller; the
+  /// face simply runs on down to meet it.
+  static const double designHeight = 86;
 
   @override
   State<ArmDiagram> createState() => _ArmDiagramState();
@@ -122,15 +129,12 @@ class _ArmDiagramState extends State<ArmDiagram>
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        height: ArmDiagram.height,
-        decoration: BoxDecoration(
-          color: Palette.shell,
-          border: Border.all(color: Palette.lineBar),
-          borderRadius: BorderRadius.circular(12),
-        ),
+    // No frame. The band is the top of the screen the way the borehole is
+    // the whole of the mine: the panel below fades in over its foot, so the
+    // two meet in a dissolve instead of on a border.
+    return ClipRect(
+      child: SizedBox(
+        height: widget.height,
         // The void above the rock is the borehole, so it gets the borehole's
         // own drifting field rather than a flat fill -- the same backdrop the
         // mine stands on, on its own ticker behind the arm.
@@ -145,6 +149,12 @@ class _ArmDiagramState extends State<ArmDiagram>
                   flutes: _flutes,
                   heat: _heat,
                   layer: widget.game.sim.layer.value,
+                  // The arm on screen IS the arm being bought. Every mark
+                  // shows up as metal on the piece it belongs to, so the
+                  // player watches the machine grow rather than a counter.
+                  bitMark: widget.game.sim.bitMark.value,
+                  driveMark: widget.game.sim.driveMark.value,
+                  supplyMark: widget.game.sim.supplyMark.value,
                 ),
               ),
             ),
@@ -161,6 +171,9 @@ class _ArmPainter extends CustomPainter {
     required this.flutes,
     required this.heat,
     required this.layer,
+    required this.bitMark,
+    required this.driveMark,
+    required this.supplyMark,
   }) : _bit = BitPainter(flutes: flutes, bite: heat),
        _shank = PipePainter(flutes: flutes),
        _stones = StonePainter(layer: layer, thick: false),
@@ -177,6 +190,11 @@ class _ArmPainter extends CustomPainter {
   /// The metre the player is standing on, so the face here is the face there.
   final int layer;
 
+  /// The generation each piece is built to, 0 (Mk I) through 4 (Mk V).
+  final int bitMark;
+  final int driveMark;
+  final int supplyMark;
+
   final BitPainter _bit;
   final PipePainter _shank;
   final StonePainter _stones;
@@ -184,7 +202,7 @@ class _ArmPainter extends CustomPainter {
 
   /// The drawing is authored at this width and scaled to whatever it gets.
   static const double _designWidth = 384;
-  static const double _designHeight = ArmDiagram.height;
+  static const double _designHeight = ArmDiagram.designHeight;
   static const double _faceTop = 74;
 
   /// The wrist at rest, and how far down the head hangs from it.
@@ -203,11 +221,15 @@ class _ArmPainter extends CustomPainter {
     // lands at the top, where the borehole backdrop already is.
     final scale = size.width / _designWidth;
     canvas.clipRect(Offset.zero & size);
-    canvas.translate(0, size.height - _designHeight * scale);
     canvas.scale(scale);
+    // Anchored to the TOP now, with the rock running on to whatever bottom
+    // it is given. Bottom-anchoring was right while the band was a box of
+    // exactly the authored height; a band that can be taller than the arm
+    // would push the arm down and leave the borehole a sliver.
+    final bottom = math.max(size.height / scale, _designHeight);
 
     final now = beat.value;
-    _paintFace(canvas);
+    _paintFace(canvas, bottom);
     _paintArm(canvas, now);
     _paintCallouts(canvas, now);
 
@@ -216,14 +238,14 @@ class _ArmPainter extends CustomPainter {
 
   /// The face is the mine's own layer: the stratum's gradient, then the
   /// texture and the ore [StonePainter] salts it with.
-  void _paintFace(Canvas canvas) {
-    // Run the face a little past the bottom of the design box: a fraction of
-    // a pixel of rounding must never read as a gap under the rock.
-    const band = Rect.fromLTWH(
+  void _paintFace(Canvas canvas, double bottom) {
+    // Run the face a little past the bottom of the band: a fraction of a
+    // pixel of rounding must never read as a gap under the rock.
+    final band = Rect.fromLTWH(
       0,
       _faceTop,
       _designWidth,
-      _designHeight - _faceTop + 6,
+      bottom - _faceTop + 6,
     );
     canvas.drawRect(
       band,
@@ -282,6 +304,17 @@ class _ArmPainter extends CustomPainter {
         Paint()..color = Palette.edge,
       );
     }
+    // The pack's cells, one more with every mark it is rebuilt to.
+    final cells = supplyMark + 2;
+    for (var i = 0; i < cells; i++) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(351, 11 + shoulder + i * 4.2, 9, 2.6),
+          const Radius.circular(1.3),
+        ),
+        Paint()..color = Palette.gold.withValues(alpha: 0.85),
+      );
+    }
     canvas.drawPath(
       Path()
         ..moveTo(338, 18 + shoulder)
@@ -310,7 +343,7 @@ class _ArmPainter extends CustomPainter {
       rodTo,
       Paint()
         ..color = Palette.lineBar
-        ..strokeWidth = 9
+        ..strokeWidth = 9 + driveMark * 0.9
         ..strokeCap = StrokeCap.round,
     );
     canvas.drawLine(
@@ -318,9 +351,25 @@ class _ArmPainter extends CustomPainter {
       Offset.lerp(rodFrom, rodTo, 0.5)!,
       Paint()
         ..color = const Color(0xFF8794A6)
-        ..strokeWidth = 6
+        ..strokeWidth = 6 + driveMark * 0.7
         ..strokeCap = StrokeCap.round,
     );
+    // Ribs across the actuator: what a rebuilt drive puts on the outside.
+    final along = rodTo - rodFrom;
+    final across =
+        Offset(-along.dy, along.dx) / along.distance * (4.5 + driveMark * 0.5);
+    final ribs = driveMark + 2;
+    for (var i = 1; i <= ribs; i++) {
+      final at = Offset.lerp(rodFrom, rodTo, i / (ribs + 1))!;
+      canvas.drawLine(
+        at - across,
+        at + across,
+        Paint()
+          ..color = Palette.edge
+          ..strokeWidth = 1.5
+          ..strokeCap = StrokeCap.round,
+      );
+    }
 
     _joint(canvas, wrist, 10);
 
@@ -331,8 +380,28 @@ class _ArmPainter extends CustomPainter {
     _shank.paint(canvas, const Size(pipeWidth, _shankLength));
     canvas.restore();
 
+    // A collar per mark, stacked up the shank.
+    for (var i = 0; i < bitMark; i++) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            wrist.dx - pipeWidth / 2 - 1.6,
+            wrist.dy + 5.2 + i * 2.4,
+            pipeWidth + 3.2,
+            1.7,
+          ),
+          const Radius.circular(0.8),
+        ),
+        Paint()..color = Palette.gold.withValues(alpha: 0.85),
+      );
+    }
+
+    // Scaled about the TIP, not the shoulder: a bigger head has to keep
+    // meeting the rock on the same line, or the sparks drift off the face.
     canvas.save();
-    canvas.translate(wrist.dx - bitWidth / 2, wrist.dy + 4 + _shankLength);
+    canvas.translate(wrist.dx, wrist.dy + 4 + _shankLength + bitHeight);
+    canvas.scale(1 + bitMark * 0.05);
+    canvas.translate(-bitWidth / 2, -bitHeight);
     _bit.paint(canvas, const Size(bitWidth, bitHeight));
     canvas.restore();
   }
@@ -423,5 +492,9 @@ class _ArmPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_ArmPainter oldDelegate) => oldDelegate.layer != layer;
+  bool shouldRepaint(_ArmPainter oldDelegate) =>
+      oldDelegate.layer != layer ||
+      oldDelegate.bitMark != bitMark ||
+      oldDelegate.driveMark != driveMark ||
+      oldDelegate.supplyMark != supplyMark;
 }

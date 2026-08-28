@@ -12,7 +12,7 @@ import 'tokens.dart';
 /// up the house style instead of inventing a third dialect of it.
 class Stat extends StatelessWidget {
   const Stat({
-    required this.label,
+    this.label,
     this.value,
     this.child,
     this.size,
@@ -24,14 +24,18 @@ class Stat extends StatelessWidget {
     this.trailing,
     this.above,
     this.below,
+    this.rule = false,
     this.shadows = false,
     super.key,
   }) : assert(
-         value != null || child != null,
-         'a readout needs a figure to show',
+         value != null || child != null || label != null,
+         'a readout needs a figure to show, or a name to be a heading',
        );
 
-  final String label;
+  /// The name over the figure. Absent on a bare reading -- a warehouse row
+  /// whose name is already spelled out beside it -- and, with no figure, the
+  /// whole widget: a section heading is a Stat that has nothing to report.
+  final String? label;
 
   /// The figure itself. Pass [child] instead when it needs more than one
   /// style -- a gauge reading "700 / 700", or a number that animates.
@@ -69,13 +73,20 @@ class Stat extends StatelessWidget {
   final Widget? above;
   final Widget? below;
 
+  /// A hairline running from the heading out to the far edge. For a heading
+  /// that opens a SECTION rather than names a figure: the rule is what makes
+  /// it read as a divider instead of as a stray word.
+  final bool rule;
+
   /// Lifts the text off a busy background. The readouts standing over the
   /// strata need it; the ones on a panel do not.
   final bool shadows;
 
   static const double valueSize = 14;
 
-  Widget _heading() {
+  Widget? _heading() {
+    final label = this.label;
+    if (label == null) return null;
     final text = Text(
       label.toUpperCase(),
       maxLines: 1,
@@ -88,7 +99,7 @@ class Stat extends StatelessWidget {
         shadows: shadows,
       ),
     );
-    if (icon == null && trailing == null) return text;
+    if (icon == null && trailing == null && !rule) return text;
 
     final head = icon == null
         ? text
@@ -100,6 +111,31 @@ class Stat extends StatelessWidget {
               Flexible(child: text),
             ],
           );
+
+    if (rule) {
+      // Centred, not baseline-aligned: the line is the heading's underscore
+      // continued sideways, and it has no baseline of its own to sit on.
+      return Row(
+        children: [
+          // NOT Flexible: a loose child and the Expanded rule would split the
+          // free width between them, and the line would stop halfway to the
+          // edge -- further short the longer the heading. A section name is
+          // short by construction, so it takes its own width.
+          head,
+          if (trailing case final trailing?) ...[
+            const SizedBox(width: 6),
+            trailing,
+          ],
+          const SizedBox(width: 8),
+          Expanded(
+            child: SizedBox(
+              height: 1,
+              child: ColoredBox(color: labelColour.withValues(alpha: 0.15)),
+            ),
+          ),
+        ],
+      );
+    }
 
     if (trailing case final trailing?) {
       // Expanded, not Flexible: a loose slot hands its slack back to the row
@@ -126,23 +162,27 @@ class Stat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final heading = _heading();
+    final figure =
+        child ??
+        (value == null
+            ? null
+            : Text(
+                value!,
+                style: AppText.display(
+                  size ?? valueSize,
+                  weight: FontWeight.w700,
+                  color: colour,
+                  shadows: shadows,
+                ),
+              ));
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: align,
       children: [
         if (above case final above?) ...[above, const SizedBox(height: 3)],
-        _heading(),
-        const SizedBox(height: 1),
-        child ??
-            Text(
-              value!,
-              style: AppText.display(
-                size ?? valueSize,
-                weight: FontWeight.w700,
-                color: colour,
-                shadows: shadows,
-              ),
-            ),
+        if (heading != null) ...[heading, const SizedBox(height: 1)],
+        ?figure,
         if (note case final note?)
           Text(note, style: AppText.display(9.5, color: Palette.textFaint)),
         if (below case final below?) ...[const SizedBox(height: 2), below],

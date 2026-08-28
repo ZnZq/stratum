@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
+import 'game_modal.dart';
 import 'resource_style.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
@@ -32,76 +33,49 @@ class OfflineWindow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onClose,
-      child: ColoredBox(
-        color: const Color(0xB3070A10),
-        child: Center(
-          child: Container(
-            width: 270,
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
-            decoration: BoxDecoration(
-              color: Palette.bar,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0x407FD9C4)),
-              boxShadow: const [
-                BoxShadow(color: Color(0x99000000), blurRadius: 26),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Icon(Ti.moon, size: 22, color: Palette.tech),
-                const SizedBox(height: 10),
-                Text(
-                  'ОФЛАЙН ДОХІД',
-                  textAlign: TextAlign.center,
-                  style: AppText.body(
-                    12,
-                    weight: FontWeight.w800,
-                    color: Palette.text,
-                    letterSpacing: 2.6,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'вас не було ${_span(away)} · ${gain.cycles} циклів на '
-                  '${(gain.efficiency * 100).round()}% темпу',
-                  textAlign: TextAlign.center,
-                  style: AppText.body(9.5, color: Palette.textMuted),
-                ),
-                const SizedBox(height: 14),
-                for (final entry in gain.gained.entries)
-                  _GainRow(id: entry.key, value: entry.value),
-                const SizedBox(height: 14),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onClose,
-                  child: Container(
-                    height: 34,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Palette.goldWell,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Palette.amber),
-                    ),
-                    child: Text(
-                      'ЗАБРАТИ',
-                      style: AppText.body(
-                        11,
-                        weight: FontWeight.w800,
-                        color: Palette.gold,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+    return GameModal(
+      leading: const Icon(Ti.moon, size: 16, color: Palette.tech),
+      title: 'ОФЛАЙН ДОХІД',
+      inset: 46,
+      onClose: onClose,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(3, 0, 3, 8),
+            child: Text(
+              'вас не було ${_span(away)} · ${gain.cycles} циклів на '
+              '${(gain.efficiency * 100).round()}% темпу',
+              style: AppText.body(9.5, color: Palette.textMuted),
             ),
           ),
-        ),
+          for (final entry in gain.gained.entries)
+            _GainRow(id: entry.key, value: entry.value),
+          const SizedBox(height: 12),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onClose,
+            child: Container(
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Palette.goldWell,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Palette.amber),
+              ),
+              child: Text(
+                'ЗАБРАТИ',
+                style: AppText.body(
+                  11,
+                  weight: FontWeight.w800,
+                  color: Palette.gold,
+                  letterSpacing: 2,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

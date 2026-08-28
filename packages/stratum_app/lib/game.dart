@@ -124,8 +124,34 @@ class Game extends ChangeNotifier {
   /// A gap in the chain is an error rather than a silent skip -- see
   /// [SaveCodec].
   static final SaveCodec codec = SaveCodec(
-    currentVersion: 6,
+    currentVersion: 7,
     migrations: [
+      // v6 -> v7: the peak each part has been BUILT to is a mark, 0..4. Every
+      // peak ever written to disk was a LEVEL -- and the build that started
+      // reading them as marks clamped, so a peak of 137 landed as 4 and every
+      // generation read as already known. There is no way back to the real
+      // figure, so it is rebuilt from what the run can prove: the mark the
+      // part stands at, or the mark its level has walked into.
+      SaveMigration(
+        fromVersion: 6,
+        apply: (sections) {
+          final run = sections['run'];
+          if (run is! Map) return sections;
+          final arm = run['arm'];
+          if (arm is! Map) return sections;
+          final out = Map<String, Object?>.from(arm);
+          int read(Object? value) => value is num ? value.toInt() : 0;
+          for (final part in const ['bit', 'drive', 'supply']) {
+            final walked = PrototypeSimulation.generationOf(read(out[part]));
+            final built = read(out['${part}Mark']);
+            out['${part}Peak'] = walked > built ? walked : built;
+          }
+          return {
+            ...sections,
+            'run': {...Map<String, Object?>.from(run), 'arm': out},
+          };
+        },
+      ),
       // v5 -> v6: the manual lane became the manipulator arm. Its three
       // levers were strike power, energy cap and energy regen; they are now
       // three PARTS, and cap and regen merged into one. Strike power carries

@@ -4,6 +4,8 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import 'arm_style.dart';
+import 'game_icons.dart';
+import 'game_modal.dart';
 import 'part_glyph.dart';
 import 'tokens.dart';
 
@@ -55,103 +57,72 @@ class _EvolveOverlayState extends State<EvolveOverlay>
     final style = armPartStyles[widget.part]!;
     final gained = buffsOpenedBy(widget.part, widget.to);
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
+    return GameModal(
+      icon: Ic.arm,
+      title: 'ЕВОЛЮЦІЯ',
+      accent: Palette.gold,
+      inset: 24,
+      onClose: widget.onClose,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: _Rebuild(
+              play: _play,
+              part: widget.part,
+              from: widget.from,
+              to: widget.to,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            style.label.toUpperCase(),
+            textAlign: TextAlign.center,
+            style: AppText.body(
+              10,
+              weight: FontWeight.w700,
+              color: Palette.textDim,
+              letterSpacing: 1.6,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            '${markName(widget.from)} → ${markName(widget.to)}',
+            textAlign: TextAlign.center,
+            style: AppText.display(
+              18,
+              weight: FontWeight.w700,
+              color: Palette.gold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _Gained(play: _play, gained: gained),
+          const SizedBox(height: 12),
+          GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: widget.onClose,
-            child: const ColoredBox(color: Color(0xCC070A10)),
-          ),
-        ),
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Container(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: Palette.bar,
-                borderRadius: BorderRadius.circular(18),
+                color: Palette.goldWell,
+                borderRadius: BorderRadius.circular(11),
                 border: Border.all(color: Palette.amber),
-                boxShadow: const [
-                  BoxShadow(color: Color(0x99000000), blurRadius: 28),
-                ],
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'ЕВОЛЮЦІЯ',
-                    textAlign: TextAlign.center,
-                    style: AppText.body(
-                      9,
-                      weight: FontWeight.w700,
-                      color: Palette.tech,
-                      letterSpacing: 2.4,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Center(
-                    child: _Rebuild(
-                      play: _play,
-                      part: widget.part,
-                      from: widget.from,
-                      to: widget.to,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    style.label.toUpperCase(),
-                    textAlign: TextAlign.center,
-                    style: AppText.body(
-                      10,
-                      weight: FontWeight.w700,
-                      color: Palette.textDim,
-                      letterSpacing: 1.6,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '${markName(widget.from)} → ${markName(widget.to)}',
-                    textAlign: TextAlign.center,
-                    style: AppText.display(
-                      18,
-                      weight: FontWeight.w700,
-                      color: Palette.gold,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _Gained(play: _play, gained: gained),
-                  const SizedBox(height: 14),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: widget.onClose,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Palette.goldWell,
-                        borderRadius: BorderRadius.circular(11),
-                        border: Border.all(color: Palette.amber),
-                      ),
-                      child: Text(
-                        'ДАЛІ',
-                        style: AppText.body(
-                          12,
-                          weight: FontWeight.w700,
-                          color: Palette.gold,
-                          letterSpacing: 1.8,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              child: Text(
+                'ДАЛІ',
+                style: AppText.body(
+                  12,
+                  weight: FontWeight.w700,
+                  color: Palette.gold,
+                  letterSpacing: 1.8,
+                ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -3,7 +3,8 @@ import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
 import 'arm_style.dart';
-import 'stat.dart';
+import 'game_modal.dart';
+import 'part_glyph.dart';
 import 'tokens.dart';
 
 /// One part of the arm, generation by generation.
@@ -12,10 +13,10 @@ import 'tokens.dart';
 /// "what does the next Mk get me?" -- and to answer it only as far as the
 /// player has earned the right to know.
 ///
-/// A generation the part has NEVER been taken to keeps its buffs hidden: the
-/// reward for evolving is finding out. What the player has once run, though,
-/// stays readable forever, even after a restart takes the levels back -- the
-/// hardware resets, what was learned about it does not.
+/// A generation the part has NEVER been built to keeps its buffs hidden and
+/// its piece a silhouette: the reward for evolving is finding out. What the
+/// player has once run stays readable forever, even after a restart takes the
+/// levels back -- the hardware resets, what was learned about it does not.
 class PartSheet extends StatelessWidget {
   const PartSheet({
     required this.game,
@@ -33,81 +34,82 @@ class PartSheet extends StatelessWidget {
     final sim = game.sim;
     final style = armPartStyles[part]!;
     final level = sim.levelOf(part).value;
-    final now = PrototypeSimulation.generationOf(level);
+    // The mark the part is BUILT to, not the one its level has walked into:
+    // a part sitting at its ceiling has not reached the next mark until the
+    // player rebuilds it, and the ladder must not say otherwise.
+    final now = sim.markOf(part).value;
     final known = sim.knownGeneration(part);
     const count =
         PrototypeSimulation.maxPartLevel ~/
         PrototypeSimulation.levelsPerGeneration;
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onClose,
-            child: const ColoredBox(color: Color(0xB3070A10)),
-          ),
+    return GameModal(
+      title: style.label.toUpperCase(),
+      // The piece itself rather than a symbol standing in for it, at the mark
+      // it is built to -- the same drawing the ladder below repeats five
+      // times.
+      leading: MarkGlyph(part: part, mark: now, size: 26),
+      accent: Palette.gold,
+      inset: 18,
+      // Set at the title's own size. Larger, it read as the main thing and
+      // the name looked like it was floating above it -- the two share a
+      // baseline either way, but the eye judges a line by its cap heights.
+      trailing: Text(
+        '$level / ${PrototypeSimulation.maxPartLevel}',
+        style: AppText.display(
+          11.5,
+          weight: FontWeight.w700,
+          color: Palette.gold,
         ),
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-              decoration: BoxDecoration(
-                color: Palette.bar,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Palette.line),
-                boxShadow: const [
-                  BoxShadow(color: Color(0x8C000000), blurRadius: 24),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Stat(
-                    label: style.label,
-                    value: '$level / ${PrototypeSimulation.maxPartLevel}',
-                    note: style.note,
-                    trailing: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onClose,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 8, bottom: 2),
-                        child: Text(
-                          '✕',
-                          style: AppText.display(
-                            12,
-                            weight: FontWeight.w700,
-                            color: Palette.textMuted,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  for (var mk = 0; mk < count; mk++) ...[
-                    _Generation(
-                      part: part,
-                      generation: mk,
-                      state: switch (mk) {
-                        _ when mk < now => _MarkState.passed,
-                        _ when mk == now => _MarkState.current,
-                        _ when mk <= known => _MarkState.known,
-                        _ => _MarkState.unknown,
-                      },
-                      sim: sim,
-                    ),
-                    if (mk < count - 1) const SizedBox(height: 7),
-                  ],
-                ],
-              ),
+      ),
+      // The ladder keeps its own sides, so the rules between marks reach the
+      // panel's edges the way they do between the parts on the screen behind.
+      // Only 5 at the foot: the last mark row already carries 9 of its own,
+      // and the two stacked read as the panel forgetting to end.
+      contentPadding: const EdgeInsets.fromLTRB(0, 4, 0, 5),
+      onClose: onClose,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+            child: Text(
+              style.note,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.body(9.5, color: Palette.textFaint),
             ),
           ),
-        ),
-      ],
+          // A list, not a tray of cards. Which mark the part stands at is
+          // told by its lit piece and its gold type; a frame around it would
+          // be one more island inside an island.
+          for (var mk = 0; mk < count; mk++) ...[
+            const _Rule(),
+            _Generation(
+              part: part,
+              generation: mk,
+              state: switch (mk) {
+                _ when mk < now => _MarkState.passed,
+                _ when mk == now => _MarkState.current,
+                _ when mk <= known => _MarkState.known,
+                _ => _MarkState.unknown,
+              },
+              sim: sim,
+            ),
+          ],
+        ],
+      ),
     );
   }
+}
+
+class _Rule extends StatelessWidget {
+  const _Rule();
+
+  @override
+  Widget build(BuildContext context) =>
+      const SizedBox(height: 1, child: ColoredBox(color: Palette.lineBar));
 }
 
 /// Where the player stands relative to one generation.
@@ -115,13 +117,13 @@ enum _MarkState {
   /// Run through and left behind.
   passed,
 
-  /// The part is here now.
+  /// The part is built to this mark now.
   current,
 
-  /// Reached in some earlier run, so its contents are remembered.
+  /// Built in some earlier run, so its contents are remembered.
   known,
 
-  /// Never reached: its contents are the reward for getting there.
+  /// Never built: its contents are the reward for getting there.
   unknown,
 }
 
@@ -143,97 +145,110 @@ class _Generation extends StatelessWidget {
     final opened = buffsOpenedBy(part, generation);
     final lit = state == _MarkState.current;
     final read = state != _MarkState.unknown;
-    final from = generation * PrototypeSimulation.levelsPerGeneration + 1;
+    // The floor, not the first level bought on it: a mark is reached AT the
+    // hundred that closes the one before it, so Mk II starts at 100.
+    final from = generation * PrototypeSimulation.levelsPerGeneration;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
-      decoration: BoxDecoration(
-        color: lit ? Palette.goldWell : Palette.well,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: lit ? Palette.amber : Palette.lineBar),
-      ),
-      child: Column(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 9),
+      // The piece leads the row. Every mark builds a different one, so the
+      // ladder can be read down the left edge without reading a word of it.
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                markName(generation),
-                style: AppText.display(
-                  11,
-                  weight: FontWeight.w700,
-                  color: switch (state) {
-                    _MarkState.current => Palette.gold,
-                    _MarkState.unknown => Palette.textFaint,
-                    _ => Palette.textDim,
-                  },
-                ),
-              ),
-              const SizedBox(width: 7),
-              Text(
-                'з $from рівня',
-                style: AppText.body(9, color: Palette.textFaint),
-              ),
-              const Spacer(),
-              if (state == _MarkState.current)
-                Text(
-                  'тут',
-                  style: AppText.body(
-                    9,
-                    weight: FontWeight.w700,
-                    color: Palette.gold,
-                  ),
-                )
-              else if (state == _MarkState.passed)
-                Text('пройдено', style: AppText.body(9, color: Palette.tech)),
-            ],
-          ),
-          const SizedBox(height: 5),
-          if (!read)
-            Text(
-              'дійди сюди, щоб дізнатись',
-              style: AppText.body(9.5, color: Palette.textFaint),
-            )
-          else if (opened.isEmpty)
-            Text(
-              generation == 0
-                  ? 'базові бафи деталі'
-                  : 'нових бафів це покоління не додає',
-              style: AppText.body(9.5, color: Palette.textFaint),
-            )
-          else
-            for (final buff in opened)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Row(
+          MarkGlyph(part: part, mark: generation, lit: lit, hidden: !read),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
                     Text(
-                      buff.label,
-                      style: AppText.body(10, color: Palette.textDim),
+                      markName(generation),
+                      style: AppText.display(
+                        11,
+                        weight: FontWeight.w700,
+                        color: switch (state) {
+                          _MarkState.current => Palette.gold,
+                          _MarkState.unknown => Palette.textFaint,
+                          _ => Palette.textDim,
+                        },
+                      ),
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 7),
                     Text(
-                      buff.step,
-                      style: AppText.display(9.5, color: Palette.textFaint),
+                      'з $from рівня',
+                      style: AppText.body(9, color: Palette.textFaint),
                     ),
                     const Spacer(),
-                    if (state != _MarkState.unknown)
+                    if (state == _MarkState.current)
                       Text(
-                        buff.total(sim),
-                        style: AppText.display(
-                          10.5,
+                        'тут',
+                        style: AppText.body(
+                          9,
                           weight: FontWeight.w700,
                           color: Palette.gold,
                         ),
+                      )
+                    else if (state == _MarkState.passed)
+                      Text(
+                        'пройдено',
+                        style: AppText.body(9, color: Palette.tech),
                       ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 4),
+                if (!read)
+                  Text(
+                    'дійди сюди, щоб дізнатись',
+                    style: AppText.body(9.5, color: Palette.textFaint),
+                  )
+                else if (opened.isEmpty)
+                  Text(
+                    generation == 0
+                        ? 'базові бафи деталі'
+                        : 'нових бафів це покоління не додає',
+                    style: AppText.body(9.5, color: Palette.textFaint),
+                  )
+                else
+                  for (final buff in opened)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            buff.label,
+                            style: AppText.body(10, color: Palette.textDim),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            buff.step,
+                            style: AppText.display(
+                              9.5,
+                              color: Palette.textFaint,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            buff.total(sim),
+                            style: AppText.display(
+                              10.5,
+                              weight: FontWeight.w700,
+                              color: Palette.gold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+              ],
+            ),
+          ),
         ],
       ),
     );
