@@ -68,8 +68,7 @@ class _DrillDetailState extends State<DrillDetail> {
           Positioned(
             left: 6,
             top: 6,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
+            child: HudTap(
               onTap: widget.onBack,
               child: Container(
                 padding: const EdgeInsets.fromLTRB(8, 6, 11, 6),
@@ -232,8 +231,7 @@ class _BatchPicker extends StatelessWidget {
             (10, '×10'),
             (0, 'макс'),
           ])
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
+            HudTap(
               onTap: () => onPick(value),
               child: Container(
                 padding: const EdgeInsets.fromLTRB(8, 3, 8, 4),

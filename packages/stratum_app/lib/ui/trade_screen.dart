@@ -307,9 +307,11 @@ class _Toggle extends StatelessWidget {
         ),
       ),
     );
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return HudTap(
       onTap: onTap,
+      // The film would flood the caption beside the track too; the cursor
+      // already answers hover, and the knob answers the tap.
+      wash: false,
       child: label == null
           ? track
           : Row(
@@ -482,9 +484,10 @@ class _GroupCard extends StatelessWidget {
               for (final row in PrototypeSimulation.priceTable) ...[
                 if (row.id != PrototypeSimulation.priceTable.first.id)
                   const SizedBox(width: 6),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
+                HudTap(
                   onTap: () => onPick(row.id),
+                  corners: HudCorners.centred,
+                  cut: 7,
                   // Chamfered, not rounded: the well sits on a HUD panel,
                   // and a rounded box was the app dialect leaking back in.
                   // Amber answers the EFFECTIVE question -- does this one

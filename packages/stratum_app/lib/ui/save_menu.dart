@@ -179,8 +179,7 @@ class _SlotCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
+          HudTap(
             onTap: held == null ? null : onToggle,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
@@ -459,8 +458,7 @@ class _Confirm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return HudTap(
       onTap: onTap,
       child: Row(
         children: [
@@ -511,8 +509,7 @@ class _Action extends StatelessWidget {
   Widget build(BuildContext context) {
     final live = onTap != null;
     return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: HudTap(
         onTap: onTap,
         child: Container(
           height: 30,

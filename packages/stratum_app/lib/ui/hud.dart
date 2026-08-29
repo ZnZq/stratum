@@ -5,6 +5,82 @@ import 'stat.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
 
+/// The house tap surface.
+///
+/// One widget owns what "pressable" means on a desktop: the click cursor,
+/// and a faint wash while the pointer rests on it. Every plain tap target
+/// goes through here so the mouse story cannot drift control by control;
+/// the stateful controls (buttons, mine face) speak the same language with
+/// their own hands.
+class HudTap extends StatefulWidget {
+  const HudTap({
+    required this.child,
+    required this.onTap,
+    this.wash = true,
+    this.corners,
+    this.cut = 8,
+    super.key,
+  });
+
+  final Widget child;
+
+  /// Null renders the child inert: default cursor, no wash, no hit target.
+  final VoidCallback? onTap;
+
+  /// The hover wash. Off for targets that carry their own hover story.
+  final bool wash;
+
+  /// The child's outline, when it has one. A wash is a rectangle by
+  /// default, and a rectangle over a chamfered slot paints the very corners
+  /// the outline cut away -- the wrapper cannot know the shape, so shaped
+  /// targets say theirs.
+  final HudCorners? corners;
+  final double cut;
+
+  @override
+  State<HudTap> createState() => _HudTapState();
+}
+
+class _HudTapState extends State<HudTap> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final live = widget.onTap != null;
+    Widget body = widget.child;
+    if (live && widget.wash && _hover) {
+      Widget film = const ColoredBox(color: Color(0x0DFFFFFF));
+      if (widget.corners case final corners?) {
+        film = ClipPath(
+          clipper: _CornerClipper(corners, widget.cut),
+          child: film,
+        );
+      }
+      body = Stack(
+        fit: StackFit.passthrough,
+        children: [
+          body,
+          Positioned.fill(child: IgnorePointer(child: film)),
+        ],
+      );
+    }
+    return MouseRegion(
+      cursor: live ? SystemMouseCursors.click : MouseCursor.defer,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      // The one raw GestureDetector this file is allowed: HudTap is where
+      // the pattern bottoms out, and the sweep that routes every plain tap
+      // through HudTap once rewrote this line into HudTap itself -- a
+      // widget building itself, and a stack overflow on the first frame.
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        child: body,
+      ),
+    );
+  }
+}
+
 /// Corner brackets instead of a frame.
 ///
 /// The game's rule is one surface, no boxes inside boxes -- but a console
@@ -86,6 +162,7 @@ class HudButton extends StatefulWidget {
 
 class _HudButtonState extends State<HudButton> {
   bool _down = false;
+  bool _hover = false;
 
   void _setDown(bool down) {
     if (widget.onTap == null || _down == down) return;
@@ -96,38 +173,48 @@ class _HudButtonState extends State<HudButton> {
   Widget build(BuildContext context) {
     final live = widget.onTap != null;
     final ink = live ? widget.accent : Palette.textFaint;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => _setDown(true),
-      onTapUp: (_) => _setDown(false),
-      onTapCancel: () => _setDown(false),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _down ? 0.96 : 1,
-        duration: const Duration(milliseconds: 90),
-        child: CustomPaint(
-          painter: _ChamferPainter(
-            fill: live
-                ? widget.accent.withValues(alpha: 0.12)
-                : const Color(0x00000000),
-            edge: live ? widget.accent.withValues(alpha: 0.7) : Palette.lineBar,
-          ),
-          child: SizedBox(
-            width: widget.width,
-            child: Padding(
-              padding: widget.padding,
-              child:
-                  widget.child ??
-                  Text(
-                    widget.label!,
-                    textAlign: TextAlign.center,
-                    style: AppText.body(
-                      10,
-                      weight: FontWeight.w800,
-                      color: ink,
-                      letterSpacing: 1.8,
+    final hot = live && _hover;
+    return MouseRegion(
+      cursor: live ? SystemMouseCursors.click : MouseCursor.defer,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _setDown(true),
+        onTapUp: (_) => _setDown(false),
+        onTapCancel: () => _setDown(false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _down ? 0.96 : 1,
+          duration: const Duration(milliseconds: 90),
+          child: CustomPaint(
+            painter: _ChamferPainter(
+              // Hover firms the same inks the button already wears -- the
+              // shape must not change, or rows of buttons would shimmer.
+              fill: live
+                  ? widget.accent.withValues(alpha: hot ? 0.2 : 0.12)
+                  : const Color(0x00000000),
+              edge: live
+                  ? widget.accent.withValues(alpha: hot ? 1.0 : 0.7)
+                  : Palette.lineBar,
+            ),
+            child: SizedBox(
+              width: widget.width,
+              child: Padding(
+                padding: widget.padding,
+                child:
+                    widget.child ??
+                    Text(
+                      widget.label!,
+                      textAlign: TextAlign.center,
+                      style: AppText.body(
+                        10,
+                        weight: FontWeight.w800,
+                        color: ink,
+                        letterSpacing: 1.8,
+                      ),
                     ),
-                  ),
+              ),
             ),
           ),
         ),
@@ -502,8 +589,7 @@ class HudChoice<T> extends StatelessWidget {
           color: active ? accent : Palette.textFaint,
         ),
       );
-      Widget cell = GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      Widget cell = HudTap(
         onTap: () => onPick(option),
         child: ColoredBox(
           color: active
@@ -511,23 +597,24 @@ class HudChoice<T> extends StatelessWidget {
               : const Color(0x00000000),
           child: Padding(
             padding: padding,
+            // The dot rides IN the row beside the label, never hung off
+            // its corner: a stretched cell's label spans the whole cell,
+            // and a dot positioned past its edge left the strip entirely
+            // and was eaten by the group's own clip.
             child: marked.contains(option)
-                ? Stack(
-                    clipBehavior: Clip.none,
-                    fit: StackFit.passthrough,
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      text,
-                      Positioned(
-                        top: -1,
-                        right: -6,
-                        child: Container(
-                          width: 7,
-                          height: 7,
-                          decoration: BoxDecoration(
-                            color: Palette.tech,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Palette.page, width: 1.5),
-                          ),
+                      Flexible(child: text),
+                      const SizedBox(width: 5),
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: Palette.tech,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Palette.page, width: 1.5),
                         ),
                       ),
                     ],
@@ -593,9 +680,10 @@ class HudMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return HudTap(
       onTap: onTap,
+      corners: HudCorners.centred,
+      cut: cut,
       child: HudBox(
         corners: HudCorners.centred,
         // Horizontals open: the run reads as one strip of a panel rather
@@ -706,8 +794,7 @@ class HudModal extends StatelessWidget {
                   trailing,
                   const SizedBox(width: 6),
                 ],
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
+                HudTap(
                   onTap: onClose,
                   child: const Padding(
                     padding: EdgeInsets.all(6),
@@ -741,8 +828,7 @@ class HudModal extends StatelessWidget {
     return Stack(
       children: [
         Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
+          child: HudTap(
             onTap: onClose,
             child: const ColoredBox(color: Color(0x99070A10)),
           ),

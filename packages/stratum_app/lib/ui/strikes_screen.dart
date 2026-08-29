@@ -303,8 +303,7 @@ class PartCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
+              HudTap(
                 onTap: onRead,
                 child: PartFace(part: part, mark: mark, lit: ready, size: 32),
               ),

@@ -375,8 +375,7 @@ class _ResourceBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sim = game.sim;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return HudTap(
       onTap: onTap,
       child: Container(
         height: AppMetrics.resourceBar,
@@ -512,8 +511,7 @@ class _BackgroundOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sim = game.sim;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return HudTap(
       onTap: onExit,
       child: ColoredBox(
         color: const Color(0xFF03050A),
@@ -622,8 +620,7 @@ class _PauseOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return HudTap(
       onTap: onResume,
       child: ColoredBox(
         color: const Color(0x8A0B1018),

@@ -656,12 +656,16 @@ class StrikeZoneState extends State<StrikeZone> {
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
-      child: Listener(
-        behavior: HitTestBehavior.opaque,
-        onPointerDown: (_) => _down(),
-        onPointerUp: (_) => _up(),
-        onPointerCancel: (_) => _up(),
-        child: const SizedBox.expand(),
+      // The rock is the game's biggest button, so the mouse says so.
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (_) => _down(),
+          onPointerUp: (_) => _up(),
+          onPointerCancel: (_) => _up(),
+          child: const SizedBox.expand(),
+        ),
       ),
     );
   }

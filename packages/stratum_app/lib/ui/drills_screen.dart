@@ -5,6 +5,7 @@ import '../game.dart';
 import 'drill_detail.dart';
 import 'resource_style.dart';
 import 'stat.dart';
+import 'hud.dart';
 import 'tokens.dart';
 
 /// Every drill the player owns, and the ladder of the ones still to come.
@@ -106,8 +107,7 @@ class _DrillRow extends StatelessWidget {
     final sim = game.sim;
     final style = resourceStyles[row.mines]!;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return HudTap(
       onTap: onOpen,
       child: Opacity(
         opacity: owned ? 1 : 0.45,

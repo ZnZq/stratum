@@ -7,6 +7,7 @@ import 'package:stratum_core/stratum_core.dart';
 import '../../game.dart';
 import '../resource_plate.dart';
 import '../stat.dart';
+import '../hud.dart';
 import '../tokens.dart';
 
 /// The rig's controls, laid on a deck that fades the rock out beneath them.
@@ -254,8 +255,7 @@ class DeckHandle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return HudTap(
       onTap: onTap,
       child: SizedBox(
         height: 24,
