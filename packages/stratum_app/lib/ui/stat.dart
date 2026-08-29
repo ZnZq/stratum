@@ -21,6 +21,8 @@ class Stat extends StatelessWidget {
     this.align = CrossAxisAlignment.start,
     this.note,
     this.icon,
+    this.leading,
+    this.unit,
     this.trailing,
     this.above,
     this.below,
@@ -64,6 +66,16 @@ class Stat extends StatelessWidget {
   /// up.
   final String? icon;
 
+  /// A face before the heading that draws itself. For a readout whose subject
+  /// is a specimen rather than a symbol -- it has colours of its own, so it
+  /// cannot go through [icon], which recolours what it is given.
+  final Widget? leading;
+
+  /// A face beside the FIGURE rather than the heading. An icon after a number
+  /// reads as its unit, which is what a resource's face actually is; up in the
+  /// heading it reads as decoration on the name.
+  final Widget? unit;
+
   /// A second fact riding beside the heading. For what belongs to the readout
   /// itself rather than to its figure -- the odds of a loot lane, say, which
   /// describe the lane and not the haul.
@@ -99,14 +111,19 @@ class Stat extends StatelessWidget {
         shadows: shadows,
       ),
     );
-    if (icon == null && trailing == null && !rule) return text;
+    if (icon == null && leading == null && trailing == null && !rule) {
+      return text;
+    }
 
-    final head = icon == null
+    final face =
+        leading ??
+        (icon == null ? null : GameIcon(icon!, size: 11, colour: labelColour));
+    final head = face == null
         ? text
         : Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              GameIcon(icon!, size: 11, colour: labelColour),
+              face,
               const SizedBox(width: 5),
               Flexible(child: text),
             ],
@@ -176,13 +193,20 @@ class Stat extends StatelessWidget {
                   shadows: shadows,
                 ),
               ));
+    final body = figure == null || unit == null
+        ? figure
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [figure, const SizedBox(width: 7), unit!],
+          );
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: align,
       children: [
         if (above case final above?) ...[above, const SizedBox(height: 3)],
         if (heading != null) ...[heading, const SizedBox(height: 1)],
-        ?figure,
+        ?body,
         if (note case final note?)
           Text(note, style: AppText.display(9.5, color: Palette.textFaint)),
         if (below case final below?) ...[const SizedBox(height: 2), below],

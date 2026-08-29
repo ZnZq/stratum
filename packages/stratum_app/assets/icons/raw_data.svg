@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <defs>
+    <linearGradient id="slab" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#C9FFF0"/>
+      <stop offset="0.5" stop-color="#6FE3C6"/>
+      <stop offset="1" stop-color="#31A98F"/>
+    </linearGradient>
+    <linearGradient id="slabDim" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#6FD8BE"/>
+      <stop offset="1" stop-color="#2A7E6D"/>
+    </linearGradient>
+  </defs>
+
+  <!-- A chunk of the simulation's own substrate: stacked slabs of terrain
+       that were never compiled, still carrying their wireframe, with a few
+       cells shaken loose from the edge. Not a disk, not a database -- rock
+       that turned out to be made of grid.
+
+       Lit well above the panel it sits on: at caption size a specimen has
+       only its silhouette, so the fills are bright and the keyline dark. The
+       first version was drawn in the tech green's own range and vanished
+       into the shell's field. -->
+
+  <!-- Drawn at 1.22 about the centre so this specimen carries the same
+       optical weight as the cube at the same nominal size. The mass used to
+       sit inside its box while the cube reached the edges, and no amount of
+       tuning the call sites could make two such drawings agree. -->
+  <g transform="translate(24,24) scale(1.22) translate(-24,-24)">
+
+  <!-- lower slab, offset back -->
+  <path d="M10 30 L24 23 L38 30 L24 37 Z" fill="url(#slabDim)"/>
+  <path d="M10 30 L24 23 L38 30 L24 37 Z" fill="none" stroke="#08221E" stroke-width="1.4"/>
+
+  <!-- the gap between the slabs: the seam that says it is a stack -->
+  <path d="M10 30 L10 26 L24 19 L38 26 L38 30 L24 37 Z" fill="none" stroke="#08221E" stroke-width="1.1" opacity="0.6"/>
+
+  <!-- upper slab -->
+  <path d="M10 22 L24 15 L38 22 L24 29 Z" fill="url(#slab)"/>
+  <path d="M10 22 L24 15 L38 22 L24 29 Z" fill="none" stroke="#08221E" stroke-width="1.4"/>
+
+  <!-- the wireframe the slab is actually made of -->
+  <g stroke="#0B3B33" stroke-width="0.9" opacity="0.7">
+    <path d="M17 18.5 L31 25.5"/>
+    <path d="M24 15 L24 29"/>
+    <path d="M31 18.5 L17 25.5"/>
+  </g>
+  <g stroke="#EDFFF9" stroke-width="0.8" opacity="0.65">
+    <path d="M13.5 23.7 L27.5 16.7"/>
+    <path d="M20.5 27.2 L34.5 20.2"/>
+  </g>
+
+  <!-- cells shaken loose: the data that has not settled back into the grid -->
+  <g stroke="#08221E" stroke-width="0.9">
+    <rect x="35.5" y="11.5" width="4.6" height="4.6" rx="0.9" fill="#C9FFF0" transform="rotate(18 37.8 13.8)"/>
+    <rect x="40" y="18.5" width="3.4" height="3.4" rx="0.7" fill="#6FE3C6" transform="rotate(-12 41.7 20.2)"/>
+    <rect x="6.4" y="15.2" width="3.8" height="3.8" rx="0.8" fill="#8FF0D8" transform="rotate(-24 8.3 17.1)"/>
+    <rect x="32.8" y="35.8" width="3" height="3" rx="0.6" fill="#6FE3C6" transform="rotate(28 34.3 37.3)"/>
+  </g>
+  </g>
+</svg>

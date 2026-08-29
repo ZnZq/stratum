@@ -43,8 +43,7 @@ abstract final class Ic {
 
   // Ideas the game keeps saying out loud.
   static const String depth = '${_at}sym_depth.svg';
-  static const String rawData = '${_at}sym_raw_data.svg';
-  static const String dataWallet = '${_at}sym_data_wallet.svg';
+
   static const String collapse = '${_at}sym_collapse.svg';
   static const String energy = '${_at}sym_energy.svg';
   static const String crit = '${_at}sym_crit.svg';

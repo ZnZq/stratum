@@ -13,6 +13,7 @@ import 'package:stratum_core/stratum_core.dart';
 import '../../game.dart';
 import '../game_icons.dart';
 import '../stat.dart';
+import '../gauge.dart';
 import '../tokens.dart';
 import 'metrics.dart';
 import 'overlays.dart';
@@ -251,60 +252,22 @@ class EnergyMeterState extends State<EnergyMeter>
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: SizedBox(
+      child: Gauge.live(
+        value: _progress,
         height: 2,
-        child: CustomPaint(
-          painter: EnergyMeterPainter(_progress, full: widget.full),
+        track: const Color(0x66000000),
+        // Gold once the gauge is full: the sweep has nowhere to land, so the
+        // bar stands still and says "at the cap" instead.
+        gradient: LinearGradient(
+          colors: widget.full
+              ? const [Palette.gold, Palette.gold]
+              : const [Palette.tech, Palette.compute],
         ),
       ),
     );
   }
 }
 
-class EnergyMeterPainter extends CustomPainter {
-  EnergyMeterPainter(this.progress, {required this.full})
-    : super(repaint: progress);
-
-  /// How far the current interval has been served, in `[0, 1]`.
-  ///
-  /// The bar sweeps toward the NEXT point and snaps back as it lands: it is
-  /// the metronome of the gauge, not its level. The level is the number on
-  /// the plate; drawing it twice told the player nothing new.
-  final ValueListenable<double> progress;
-  final bool full;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final radius = Radius.circular(size.height);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Offset.zero & size, radius),
-      Paint()..color = const Color(0x66000000),
-    );
-    final swept = size.width * progress.value.clamp(0.0, 1.0);
-    if (swept <= 0) return;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, swept, size.height), radius),
-      Paint()
-        ..shader = LinearGradient(
-          // Gold once the gauge is full: the sweep has nowhere to land, so
-          // the bar stands still and says "at the cap" instead.
-          colors: full
-              ? const [Palette.gold, Palette.gold]
-              : const [Palette.tech, Palette.compute],
-        ).createShader(Offset.zero & size),
-    );
-  }
-
-  @override
-  bool shouldRepaint(EnergyMeterPainter oldDelegate) =>
-      oldDelegate.full != full;
-}
-
-/// The pipe the bit hangs on.
-///
-/// Plain steel. It used to carry the forcing charge as a lit core running
-/// down its bore; forcing is gone, and a glowing pipe wired to energy instead
-/// only said a second time what the gauge above already says.
 class DrillPipe extends StatefulWidget {
   const DrillPipe({this.phase = 0, super.key});
 

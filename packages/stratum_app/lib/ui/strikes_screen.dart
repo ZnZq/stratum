@@ -5,6 +5,7 @@ import '../game.dart';
 import 'arm_diagram.dart';
 import 'arm_style.dart';
 import 'evolve_overlay.dart';
+import 'gauge.dart';
 import 'part_glyph.dart';
 import 'part_sheet.dart';
 import 'stat.dart';
@@ -572,39 +573,20 @@ class _MarkProgress extends StatelessWidget {
     // rather than the running total: the bar measures the road to the next
     // rebuild, so a bar at a third full has to read as a third, not as
     // "137 / 200", which looks two thirds done.
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: SizedBox(
-        height: 13,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            const ColoredBox(color: Palette.shell),
-            FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: walked.clamp(0.0, 1.0),
-              child: const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Palette.amber, Palette.gold],
-                  ),
-                ),
-              ),
-            ),
-            Center(
-              child: Text(
-                '$into / $span',
-                // Lit and shadowed: the ground under it is dark on one side
-                // of the fill and bright on the other.
-                style: AppText.display(
-                  8.5,
-                  weight: FontWeight.w700,
-                  color: Palette.text,
-                  shadows: true,
-                ),
-              ),
-            ),
-          ],
+    return Gauge(
+      fraction: walked,
+      height: 13,
+      radius: 6,
+      gradient: const LinearGradient(colors: [Palette.amber, Palette.gold]),
+      label: Text(
+        '$into / $span',
+        // Lit and shadowed: the ground under it is dark on one side of the
+        // fill and bright on the other.
+        style: AppText.display(
+          8.5,
+          weight: FontWeight.w700,
+          color: Palette.text,
+          shadows: true,
         ),
       ),
     );

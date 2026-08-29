@@ -31,6 +31,10 @@ enum ResourceId {
   /// No income yet -- selling is its own step.
   credits,
 
+  /// Fragments of the simulation's own substrate, dug out of the rock like
+  /// anything else. The restart currency before it is compiled.
+  rawData,
+
   /// One per first break of a thick layer within a simulation.
   samples,
 

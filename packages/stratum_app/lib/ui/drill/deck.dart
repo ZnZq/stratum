@@ -146,10 +146,11 @@ class DeckState extends State<Deck> {
 /// the rock.
 /// What a strike can bring up: a grid of plates, two to a row.
 ///
-/// Regolith is the guaranteed haul and quotes the band a blow can land in;
-/// everything under it is chance, name on the left, odds beside it. Ores
-/// still locked by depth stay listed and dimmed -- the grid doubles as the
-/// map of what going deeper opens.
+/// Regolith heads it on a row of its own -- the one certain lane, quoting a
+/// band rather than a figure. Under it the chances: the ore ladder, crystals,
+/// and the two exotic lanes paired at the foot. Ores still locked by depth
+/// stay listed and dimmed, so the grid doubles as the map of what going
+/// deeper opens.
 class LootTable extends StatelessWidget {
   const LootTable({required this.sim, super.key});
 
@@ -183,20 +184,13 @@ class LootTable extends StatelessWidget {
               spacing: _gap,
               runSpacing: _gap,
               children: [
-                // The certain lane and the rarest one head the grid
-                // together: the two ends of the table, side by side.
+                // Regolith takes the whole row: it is the one lane that is
+                // certain, and it quotes a band rather than a figure, which
+                // needs the width.
                 ResourcePlate(
                   id: ResourceId.regolith,
                   amount: '${sim.strikeRegolithMin} – ${sim.strikeRegolithMax}',
-                  width: half,
-                  shadows: true,
-                ),
-                ResourcePlate(
-                  id: ResourceId.quantonium,
-                  aside:
-                      '${(PrototypeSimulation.strikeQuantoniumChance * 100).toStringAsFixed(0)}%',
-                  amount: '${PrototypeSimulation.quantoniumDropAt(layer)}',
-                  width: half,
+                  width: constraints.maxWidth,
                   shadows: true,
                 ),
                 for (final row in PrototypeSimulation.oreTable)
@@ -220,6 +214,26 @@ class LootTable extends StatelessWidget {
                   id: ResourceId.crystals,
                   aside: '${(sim.crystalChance * 100).round()}%',
                   amount: '${PrototypeSimulation.crystalDropAt(layer)}',
+                  width: half,
+                  shadows: true,
+                ),
+                // The two exotic lanes close the table side by side: same
+                // odds, both outside the ore ladder, and both worth nothing
+                // to the rig -- one is the anti-brick drip, the other the
+                // simulation's own substrate.
+                ResourcePlate(
+                  id: ResourceId.quantonium,
+                  aside:
+                      '${(PrototypeSimulation.strikeQuantoniumChance * 100).toStringAsFixed(0)}%',
+                  amount: '${PrototypeSimulation.quantoniumDropAt(layer)}',
+                  width: half,
+                  shadows: true,
+                ),
+                ResourcePlate(
+                  id: ResourceId.rawData,
+                  aside:
+                      '${(PrototypeSimulation.rawDataChance * 100).toStringAsFixed(0)}%',
+                  amount: '${PrototypeSimulation.rawDataDropAt(layer)}',
                   width: half,
                   shadows: true,
                 ),

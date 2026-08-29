@@ -124,8 +124,23 @@ class Game extends ChangeNotifier {
   /// A gap in the chain is an error rather than a silent skip -- see
   /// [SaveCodec].
   static final SaveCodec codec = SaveCodec(
-    currentVersion: 7,
+    currentVersion: 8,
     migrations: [
+      // v7 -> v8: raw data stopped being a computed measurement and became a
+      // resource dug out of the rock. The old accumulators are denominated in
+      // normalised sightings -- billions of them -- and carrying either one
+      // across would trip the collapse gate on the first frame and hand out a
+      // wallet nobody earned. Both start over; nothing had been spent from
+      // them yet.
+      SaveMigration(
+        fromVersion: 7,
+        apply: (sections) {
+          final run = sections['run'];
+          if (run is! Map) return sections;
+          final out = Map<String, Object?>.from(run)..remove('data');
+          return {...sections, 'run': out};
+        },
+      ),
       // v6 -> v7: the peak each part has been BUILT to is a mark, 0..4. Every
       // peak ever written to disk was a LEVEL -- and the build that started
       // reading them as marks clamped, so a peak of 137 landed as 4 and every
@@ -668,23 +683,33 @@ class Game extends ChangeNotifier {
   /// scene where it visibly happens, and on any other screen the cards were
   /// noise laid over unrelated reading. Saves and errors are not gated --
   /// those matter wherever the player is.
-  bool _gainsVisible = true;
+  /// Whether the mine itself is on screen.
+  ///
+  /// Everything the mine says -- its gain cards, its floating numbers -- is
+  /// furniture of that screen, and the simulation behind it keeps running on
+  /// every other one. Without this flag the effects queue fills while nobody
+  /// is watching and pours out on the way back: a dozen crits landing in one
+  /// frame, which is what the window's own onHide/onShow pair already exists
+  /// to prevent. Same reasoning, one level up.
+  bool _watched = true;
 
-  void setGainsVisible(bool visible) {
-    if (_gainsVisible == visible) return;
-    _gainsVisible = visible;
-    if (!visible) {
+  void setWatched(bool watched) {
+    if (_watched == watched) return;
+    _watched = watched;
+    if (!watched) {
       // Leaving the mine sweeps its cards along: a stale streak hanging over
       // the next screen is exactly what this flag exists to prevent.
       for (final notice in List.of(notices)) {
         if (notice.kind == NoticeKind.gain) _drop(notice);
       }
+      // And its floats, which have no animation to retire them off-screen.
+      floats.clear();
       notifyListeners();
     }
   }
 
   void _announceGain(ResourceId id, BigDouble amount) {
-    if (!_gainsVisible) return;
+    if (!_watched) return;
     if (amount.isZero) return;
     final key = 'gain.${id.name}';
     final streak = (_gainStreak[key] ?? BigDouble.zero) + amount;
@@ -811,6 +836,9 @@ class Game extends ChangeNotifier {
     required double top,
     required double size,
   }) {
+    // Nobody to see it, and nothing to retire it: an unwatched float is a
+    // float that waits for the player to come back and then arrives late.
+    if (!_watched) return;
     if (floats.length >= _maxFloats) floats.removeAt(0);
     floats.add(
       FloatingNumber(

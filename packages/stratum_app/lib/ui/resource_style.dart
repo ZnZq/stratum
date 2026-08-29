@@ -97,6 +97,13 @@ const Map<ResourceId, ResourceStyle> resourceStyles = {
     colour: Palette.steel,
     shelf: ResourceShelf.currency,
   ),
+  ResourceId.rawData: (
+    label: 'Сирі дані',
+    note: 'уламки підкладки · рідкісно з удару',
+    icon: Ti.cpu,
+    colour: Palette.tech,
+    shelf: ResourceShelf.research,
+  ),
   ResourceId.samples: (
     label: 'Зразки',
     note: 'перший товстий шар у симуляції',
@@ -115,6 +122,13 @@ const Map<ResourceId, ResourceStyle> resourceStyles = {
 
 /// The bespoke faces. Resources missing here fall back to their Tabler
 /// glyph, so a new resource works before anyone has drawn it.
+/// The compiled currency's face.
+///
+/// Not in [resourceSvgs] because cubes are not a [ResourceId] -- they are
+/// banked outside the store -- but drawn from the same family and by the same
+/// rule: full colour, never tinted.
+const String cubesSvg = 'assets/icons/cubes.svg';
+
 const Map<ResourceId, String> resourceSvgs = {
   ResourceId.regolith: 'assets/icons/regolith.svg',
   ResourceId.cuprite: 'assets/icons/cuprite.svg',
@@ -123,6 +137,7 @@ const Map<ResourceId, String> resourceSvgs = {
   ResourceId.crystals: 'assets/icons/crystals.svg',
   ResourceId.quantonium: 'assets/icons/quantonium.svg',
   ResourceId.credits: 'assets/icons/credits.svg',
+  ResourceId.rawData: 'assets/icons/raw_data.svg',
   ResourceId.samples: 'assets/icons/samples.svg',
   ResourceId.capsules: 'assets/icons/capsules.svg',
   ResourceId.cores: 'assets/icons/cores.svg',
@@ -134,6 +149,18 @@ const Map<ResourceId, String> resourceSvgs = {
 /// One widget instead of `Icon(style.icon)` scattered around, so swapping a
 /// glyph for bespoke art -- or adding art for a new resource -- happens in
 /// [resourceSvgs] and nowhere else.
+/// The cubes' face, at the size asked for. A specimen like the resources,
+/// so it is drawn as it was painted -- no tint.
+class CubesIcon extends StatelessWidget {
+  const CubesIcon({required this.size, super.key});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) =>
+      SvgPicture.asset(cubesSvg, width: size, height: size);
+}
+
 class ResourceIcon extends StatelessWidget {
   const ResourceIcon(this.id, {required this.size, this.colour, super.key});
 

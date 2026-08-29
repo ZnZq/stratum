@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
+import '../preferences.dart';
 import 'console_menu.dart';
 import 'drills_screen.dart';
 import 'drill_screen.dart';
@@ -72,12 +73,13 @@ class _GameShellState extends State<GameShell> {
       }
       _screen = _lastIn[section] ?? section.landing;
     });
-    _syncGainAudience();
+    _syncAudience();
+    _rememberScreen();
   }
 
-  /// Income cards belong to the mine; any other screen mutes them.
-  void _syncGainAudience() {
-    _game.setGainsVisible(_screen == GameScreen.drill);
+  /// Everything the mine says belongs to the mine; any other screen mutes it.
+  void _syncAudience() {
+    _game.setWatched(_screen == GameScreen.drill);
   }
 
   void _pickScreen(GameScreen screen) {
@@ -90,7 +92,8 @@ class _GameShellState extends State<GameShell> {
       _screen = screen;
       _lastIn[screen.section] = screen;
     });
-    _syncGainAudience();
+    _syncAudience();
+    _rememberScreen();
   }
 
   void _openOverlay(GameScreen screen) {
@@ -102,12 +105,50 @@ class _GameShellState extends State<GameShell> {
     });
   }
 
+  /// Where the player was looking, kept beside the saves rather than in
+  /// one: a save is the run, and loading an old slot must not move the
+  /// camera.
+  final Preferences _prefs = Preferences();
+
+  static const String _screenKey = 'screen';
+
+  /// Standing on the shell is a PLACE, not the absence of one. Writing null
+  /// for it made the note indistinguishable from "nothing saved yet", so a
+  /// player who quit from the Data Centre came back to the mine.
+  static const String _shellValue = 'shell';
+
+  void _rememberScreen() =>
+      unawaited(_prefs.set(_screenKey, _screen?.name ?? _shellValue));
+
   @override
   void initState() {
     super.initState();
     // Reads the autosave and only then starts the loops, so the first cycle
     // never runs against a default state that is about to be replaced.
     _game.start();
+    unawaited(_restoreScreen());
+  }
+
+  Future<void> _restoreScreen() async {
+    await _prefs.load();
+    if (!mounted) return;
+    final saved = _prefs[_screenKey];
+    if (saved is! String) return;
+    if (saved == _shellValue) {
+      setState(() => _screen = null);
+      _syncAudience();
+      return;
+    }
+    // A screen this build no longer has is not an error -- the note may be
+    // older than the navigation. Landing on the shell is the right fallback.
+    final found = GameScreen.values
+        .where((screen) => screen.name == saved && !screen.isOverlay)
+        .firstOrNull;
+    setState(() {
+      _screen = found;
+      if (found case final screen?) _lastIn[screen.section] = screen;
+    });
+    _syncAudience();
   }
 
   @override

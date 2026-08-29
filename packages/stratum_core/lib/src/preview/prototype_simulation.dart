@@ -234,10 +234,10 @@ class PrototypeSimulation {
           .ceilToDouble();
       return estimate < 1 ? 1 : estimate.toInt();
     }, name: 'hits to break');
-    bankableData = Computed(() {
-      final due = walletEarned - dataBanked.value;
-      return due > BigDouble.zero ? due : BigDouble.zero;
-    }, name: 'bankable data');
+    // What a Restart pays: this simulation's own haul, compiled. No
+    // subtraction against what past restarts banked -- the run is the unit,
+    // so each one is paid in full for what it dug.
+    bankableData = Computed(() => walletEarned, name: 'bankable data');
 
     _resetLayer();
   }
@@ -308,7 +308,13 @@ class PrototypeSimulation {
 
   /// Raw data of the current simulation. Feeds the collapse gate; a restart
   /// resets it.
-  final Signal<BigDouble> rawData = Signal(BigDouble.zero, name: 'raw data');
+  /// What this simulation has dug up and not yet compiled.
+  ///
+  /// A view on the registry rather than a field of its own: it is a mined
+  /// resource like the ores, so the warehouse, the strip, the loot table and
+  /// the offline window all carry it without being told about it, and a
+  /// Restart wipes it with everything else mined.
+  Signal<BigDouble> get rawData => stock.signal(ResourceId.rawData);
 
   /// Raw data of the whole cycle, across restarts. Feeds the wallet
   /// function; only a collapse resets it.
@@ -331,7 +337,10 @@ class PrototypeSimulation {
   );
 
   /// Purchased levels of the wallet exponent. Buying is not wired up yet.
-  final Signal<int> dataExponentLevel = Signal(0, name: 'data exponent level');
+  /// How well the centre compiles. Each level lifts the rate; the JSON key
+  /// is still 'exponent' from when compilation was a power, and renaming it
+  /// would cost a migration for a number nobody has spent yet.
+  final Signal<int> compilerLevel = Signal(0, name: 'compiler level');
 
   /// Collapses performed, ever.
   final Signal<int> collapses = Signal(0, name: 'collapses');
@@ -518,14 +527,49 @@ class PrototypeSimulation {
   /// exponent can be this gentle and still keep the wallet in readable
   /// numbers. Each purchased step multiplies a cycle's whole earnings by
   /// gross^step, so it stays capped. PROVISIONAL.
-  static const double dataExponentBase = 0.25;
-  static const double dataExponentStep = 0.01;
-  static const double dataExponentMax = 0.35;
+  /// How much substrate one cube is compiled from.
+  ///
+  /// A plain divisor, not a power. A sublinear curve made splitting a haul
+  /// across many short runs pay more than one long one -- n runs of x/n came
+  /// to n^0.75 times a single run of x -- so the optimum was to restart as
+  /// often as the gate allowed. Dividing is neutral: the same substrate
+  /// compiles to the same cubes however many restarts it took, and WHEN to
+  /// restart goes back to being a question about when you want to spend.
+  static const double rawPerCube = 1000;
+
+  /// What one compiler level adds to the rate.
+  static const double compilerStep = 0.05;
 
   /// The oversaturation gate: one run's raw data reaching this allows a
   /// collapse. Sized against the accrual below so a first collapse is days
   /// of play, not minutes. PROVISIONAL.
-  static final BigDouble collapseThresholdBase = BigDouble.fromNum(3e8);
+  // Recalibrated when data stopped being a computed measurement and became
+  // a dug resource: the old 3e8 was denominated in normalised sightings,
+  // which no longer exist. PROVISIONAL -- tune against tool/data_pace.
+  /// What ONE collapse costs, in cubes.
+  ///
+  /// Cubes rather than the raw substrate behind them, so the collapse gauge
+  /// and the restart preview read the same figure. Consequence to keep in
+  /// view: the compiler upgrade lifts cubes, so it brings the collapse nearer
+  /// as well as paying more -- one lever, two effects.
+  static final BigDouble collapseThresholdBase = BigDouble.fromNum(1.5e5);
+
+  /// How many collapses the centre can hold at once -- one per rack.
+  ///
+  /// The wall is the decision: one full rack already lets the player collapse,
+  /// and every rack they wait for is another collapse point banked in the
+  /// same act. Past the fifth there is nowhere to put the cubes, so leaving
+  /// it full is a real loss rather than a safe idle.
+  static const int maxPendingCollapses = 5;
+
+  /// What each rack costs over the one before it.
+  ///
+  /// The costs are CUMULATIVE totals, not prices paid one after another: the
+  /// first rack is full at the base, the second at base x2.6, the third at
+  /// base x2.6^2. So a run worth twice the base fills the first rack and
+  /// makes a start on the second, and one worth five times fills two.
+  /// PROVISIONAL.
+  static const double collapseRackGrowth = 2.6;
 
   /// What the gate is multiplied by per collapse already performed. Later
   /// cycles reach far deeper far sooner, and data accrues with depth, so a
@@ -538,18 +582,51 @@ class PrototypeSimulation {
 
   int get simulationNumber => restarts.value + 1;
 
-  int get cycleNumber => collapses.value + 1;
+  /// Cycles CLOSED, not the ordinal of the one being played. A fresh save
+  /// has none: the first cycle exists once the first rack fills and the
+  /// player collapses it.
+  int get cycleNumber => collapses.value;
 
-  double get dataExponent {
-    final exponent =
-        dataExponentBase + dataExponentStep * dataExponentLevel.value;
-    return exponent > dataExponentMax ? dataExponentMax : exponent;
+  /// How many collapses are ready to be taken right now, 0 to
+  /// [maxPendingCollapses]. Each is worth a collapse point and closes a
+  /// cycle, so taking three at once is three of both.
+  int pendingCollapses(int nowMs) {
+    var full = 0;
+    for (var rack = 0; rack < maxPendingCollapses; rack++) {
+      if (!walletEarned.gteWithTolerance(collapseCost(rack, nowMs))) break;
+      full++;
+    }
+    return full;
   }
 
-  /// Everything the wallet function has earned over the cycle so far.
-  BigDouble get walletEarned => cycleData.value.isZero
-      ? BigDouble.zero
-      : cycleData.value.pow(dataExponent);
+  /// The cubes at which [rack] (0-based) is full -- a running total, so rack 2
+  /// being full means rack 0 and rack 1 are too.
+  BigDouble collapseCost(int rack, int nowMs) =>
+      collapseThreshold(nowMs) *
+      BigDouble.fromNum(math.pow(collapseRackGrowth, rack).toDouble());
+
+  /// How full one rack is, 0 to 1. A rack fills from where the one before it
+  /// finished, so the wall reads left to right without gaps.
+  double rackFill(int rack, int nowMs) {
+    final to = collapseCost(rack, nowMs);
+    final from = rack == 0 ? BigDouble.zero : collapseCost(rack - 1, nowMs);
+    final span = to - from;
+    if (span <= BigDouble.zero) return 0;
+    return ((walletEarned - from) / span).toDouble().clamp(0.0, 1.0);
+  }
+
+  /// Cubes per unit of substrate, before the divisor.
+  double get compileRate => 1 + compilerStep * compilerLevel.value;
+
+  /// What the current simulation would compile into.
+  ///
+  /// This run's substrate divided by [rawPerCube], not raised to a power.
+  /// A sublinear curve would pay more for splitting one haul across many
+  /// short runs than for one long one, and per-run banking would turn
+  /// into restart-spam; a division is neutral, so the same substrate is
+  /// worth the same cubes however many restarts it took to dig.
+  BigDouble get walletEarned =>
+      rawData.value * BigDouble.fromNum(compileRate / rawPerCube);
 
   /// The collapse threshold at [nowMs], melted by drift since the cycle
   /// began. A zero start means the app has not stamped the cycle yet, and a
@@ -567,32 +644,19 @@ class PrototypeSimulation {
   }
 
   /// Whether one run's raw data has oversaturated the simulation.
-  bool collapseReady(int nowMs) =>
-      rawData.value.gteWithTolerance(collapseThreshold(nowMs));
+  bool collapseReady(int nowMs) => pendingCollapses(nowMs) >= 1;
 
   /// One haul as MEASUREMENTS rather than as tonnes: how many typical drops
   /// of its kind this is, over how often a drop of that kind is seen.
   ///
-  /// Normalising against the depth's own drop is what keeps the data honest.
-  /// Amounts inflate exponentially with depth -- regolith alone is 1.03^m --
-  /// so counting them raw made a strike at 400 m worth tens of thousands of
-  /// strikes at the surface, and any fixed collapse gate fell in minutes.
-  /// A sighting is a sighting; what makes a deep one worth more is the depth
-  /// factor in [_recordData], not the tonnage. Dividing by the chance keeps
-  /// the rarer lane worth more per sighting, so every lane's expected
-  /// contribution per strike comes out at exactly one.
-  BigDouble _information(BigDouble amount, BigDouble typical, double chance) {
-    if (typical.isZero) return BigDouble.zero;
-    return amount / typical / BigDouble.fromNum(chance);
-  }
-
-  /// Books measurements as data at the depth they were taken.
+  /// Books a haul of substrate: into the store like any resource, and into
+  /// the cycle's running total, which is what the wallet is compressed from.
   ///
-  /// The depth factor is floored at one metre so the surface still counts.
-  void _recordData(BigDouble weighted) {
-    if (weighted.isZero) return;
-    final gained = weighted * BigDouble.fromNum(layer.value + 1);
-    rawData.value = rawData.value + gained;
+  /// The cycle total is kept apart because it must survive a Restart: the
+  /// store is wiped, the record of what this CYCLE has produced is not.
+  void _recordData(BigDouble gained) {
+    if (gained.isZero) return;
+    stock.add(ResourceId.rawData, gained);
     cycleData.value = cycleData.value + gained;
   }
 
@@ -634,21 +698,17 @@ class PrototypeSimulation {
     }
     if (gained.isEmpty) return OfflineGain.none;
 
-    // Every lane that pays expects one sighting per strike, so the data an
-    // absence books is the strikes it stands for times the lanes open.
-    final strikesPerSecond =
-        energyPerSecond / strikeCost +
-        (cycleSeconds > 0 ? 1 / cycleSeconds : 0);
-
     batch(() {
       for (final entry in gained.entries) {
+        // Substrate is a lane like any other now, so an absence earns it by
+        // the same expectation -- and the cycle's running total has to hear
+        // about it, which plain stocking would not do.
+        if (entry.key == ResourceId.rawData) {
+          _recordData(entry.value);
+          continue;
+        }
         stock.add(entry.key, entry.value);
       }
-      _recordData(
-        BigDouble.fromNum(
-          gained.length * strikesPerSecond * seconds * efficiency,
-        ),
-      );
     });
     return OfflineGain(
       seconds: seconds,
@@ -685,6 +745,24 @@ class PrototypeSimulation {
 
   /// A strike's own crit: one roll that multiplies the whole blow -- the
   /// damage dealt and the haul taken alike.
+  /// How often a strike turns up a fragment of the substrate.
+  ///
+  /// Small but not microscopic. The collapse gate is the one wall in the
+  /// game, so it must not wobble: at these odds a session throws thousands
+  /// of strikes and the law of large numbers flattens the variance to a few
+  /// percent. At a tenth of this it would be a lottery.
+  static const double rawDataChance = 0.02;
+
+  /// How much one fragment is worth.
+  ///
+  /// DELIBERATELY not the ore curve. Drop volumes inflate exponentially with
+  /// depth (regolith alone is 1.03^m), and a data lane that inherited that
+  /// would make one strike at 400 m worth thousands at the surface -- which
+  /// is exactly how the fixed collapse gate once fell in minutes. Deeper rock
+  /// holds denser substrate, but linearly.
+  static BigDouble rawDataDropAt(int layer) =>
+      BigDouble.fromNum(1 + layer / 25);
+
   static const double strikeCritChance = 0.05;
   static const double strikeCritPower = 1.20;
 
@@ -996,6 +1074,8 @@ class PrototypeSimulation {
       case ResourceId.quantonium:
         return quantoniumDropAt(layer.value).big *
             BigDouble.fromNum(strikeQuantoniumChance);
+      case ResourceId.rawData:
+        return rawDataDropAt(layer.value) * BigDouble.fromNum(rawDataChance);
       default:
         for (final row in oreTable) {
           if (row.id != id) continue;
@@ -1077,9 +1157,6 @@ class PrototypeSimulation {
   }) {
     final loot = <ResourceId, BigDouble>{};
 
-    // Measurements, not tonnage -- see [_information].
-    var weighted = BigDouble.zero;
-
     // The one crit in the game. Rolled here so the loot scales in place; the
     // caller reads the flag to scale the blow itself the same way.
     final critical = random
@@ -1098,7 +1175,6 @@ class PrototypeSimulation {
     final regolith = (low + span * BigDouble.fromNum(spread)) * multiplier;
     stock.add(ResourceId.regolith, regolith);
     loot[ResourceId.regolith] = regolith;
-    weighted += _information(regolith, _strikeRegolithMean, 1);
 
     for (final row in oreTable) {
       if (layer.value < row.unlockAt) continue;
@@ -1106,7 +1182,6 @@ class PrototypeSimulation {
         final drop = oreDropAt(layer.value) * multiplier;
         stock.add(row.id, drop);
         loot[row.id] = drop;
-        weighted += _information(drop, oreDropAt(layer.value), row.chance);
       }
     }
 
@@ -1114,7 +1189,6 @@ class PrototypeSimulation {
       final drop = crystalDropAt(layer.value) * multiplier;
       stock.add(ResourceId.crystals, drop);
       loot[ResourceId.crystals] = drop;
-      weighted += _information(drop, crystalDropAt(layer.value), crystalChance);
     }
 
     // Named apart from the cycle's own anti-brick stream: the loot glint and
@@ -1125,14 +1199,16 @@ class PrototypeSimulation {
       final drop = quantoniumDropAt(layer.value).big * multiplier;
       stock.add(ResourceId.quantonium, drop);
       loot[ResourceId.quantonium] = drop;
-      weighted += _information(
-        drop,
-        quantoniumDropAt(layer.value).big,
-        strikeQuantoniumChance,
-      );
     }
 
-    _recordData(weighted);
+    // The substrate lane. Its own stream, named apart from everything else,
+    // so adding it shifted no roll that came before it.
+    if (random.stream('${prefix}rawdata').chance(rawDataChance)) {
+      final drop = rawDataDropAt(layer.value) * multiplier;
+      _recordData(drop);
+      loot[ResourceId.rawData] = drop;
+    }
+
     return (critical: critical, loot: loot);
   }
 
@@ -1216,28 +1292,26 @@ class PrototypeSimulation {
     // weight one -- and before the depth moves off the layer they came from.
     var payout = BigDouble.zero;
     if (thick) {
+      // A thick break opens three metres of face at once, so the substrate
+      // it exposes is certain rather than rolled.
+      payout = rawDataDropAt(layer.value) * BigDouble.fromNum(thickSpan);
       final bonus = BigDouble.fromNum(thickSpan);
       final regolith = regolithPerCycle.value * bonus;
       final crystals = crystalDropAt(layer.value) * bonus;
       final quantonium = (quantoniumDropAt(layer.value) * thickSpan).big;
       stock.add(ResourceId.regolith, regolith);
       stock.add(ResourceId.crystals, crystals);
-      payout +=
-          _information(regolith, _strikeRegolithMean, 1) +
-          _information(crystals, crystalDropAt(layer.value), 1) +
-          _information(quantonium, quantoniumDropAt(layer.value).big, 1);
       for (final row in oreTable) {
         if (layer.value < row.unlockAt) continue;
-        final drop = oreDropAt(layer.value) * bonus;
-        stock.add(row.id, drop);
-        payout += _information(drop, oreDropAt(layer.value), 1);
+        stock.add(row.id, oreDropAt(layer.value) * bonus);
       }
       stock.add(ResourceId.quantonium, quantonium);
       stock.add(ResourceId.samples, BigDouble.one);
     } else {
-      final regolith = regolithPerCycle.value * BigDouble.fromNum(1.5);
-      stock.add(ResourceId.regolith, regolith);
-      payout = _information(regolith, _strikeRegolithMean, 1);
+      stock.add(
+        ResourceId.regolith,
+        regolithPerCycle.value * BigDouble.fromNum(1.5),
+      );
     }
     _recordData(payout);
 
@@ -1299,7 +1373,7 @@ class PrototypeSimulation {
       'gross': cycleData.value.toJson(),
       'banked': dataBanked.value.toJson(),
       'wallet': dataWallet.value.toJson(),
-      'exponent': dataExponentLevel.value,
+      'exponent': compilerLevel.value,
       'cycleStartMs': cycleStartMs.value,
     },
     'energy': energy.value,
@@ -1351,14 +1425,14 @@ class PrototypeSimulation {
       cycleData.value = _readBig(data['gross']);
       dataBanked.value = _readBig(data['banked']);
       dataWallet.value = _readBig(data['wallet']);
-      dataExponentLevel.value = _readInt(data['exponent'], 0);
+      compilerLevel.value = _readInt(data['exponent'], 0);
       cycleStartMs.value = _readInt(data['cycleStartMs'], 0);
     } else {
       rawData.value = BigDouble.zero;
       cycleData.value = BigDouble.zero;
       dataBanked.value = BigDouble.zero;
       dataWallet.value = BigDouble.zero;
-      dataExponentLevel.value = 0;
+      compilerLevel.value = 0;
       cycleStartMs.value = 0;
     }
     final bores = json['bores'];

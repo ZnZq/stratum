@@ -11,14 +11,22 @@ void main() {
     sim.layerHp.value = BigDouble.fromNum(1e300);
     sim.layerHpMax.value = BigDouble.fromNum(1e300);
 
-    const cycles = 20000;
-    for (var i = 0; i < cycles; i++) {
-      sim.tick();
-    }
-    final perCycle = sim.rawData.value.toDouble() / cycles;
-    // The heartbeat is four seconds, so a day of pure idling is this many.
-    const cyclesPerDay = 86400 / 4;
-    final perDay = perCycle * cyclesPerDay;
+    // BOTH lanes, at the cadences the app actually drives them at. Measuring
+    // the drill alone under-reported by more than three times, because the
+    // hand throws far more strikes per second than the rig does.
+    const energyPerSecond = 0.58;
+    const cycleSeconds = 4.0;
+    final perSecond = sim
+        .yieldPerSecond(
+          ResourceId.rawData,
+          energyPerSecond: energyPerSecond,
+          cycleSeconds: cycleSeconds,
+        )
+        .toDouble();
+    final perCycle = perSecond * cycleSeconds;
+    // The gate is denominated in cubes, so the pace has to be too.
+    final perDay =
+        perSecond * 86400 / PrototypeSimulation.rawPerCube * sim.compileRate;
     final days = PrototypeSimulation.collapseThresholdBase.toDouble() / perDay;
     print(
       '${depth.toString().padLeft(5)} m  '

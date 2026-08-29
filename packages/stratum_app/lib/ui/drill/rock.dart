@@ -9,6 +9,7 @@ import 'package:stratum_core/stratum_core.dart';
 
 import '../../game.dart';
 import '../resource_style.dart';
+import '../gauge.dart';
 import '../tokens.dart';
 import 'metrics.dart';
 
@@ -253,15 +254,15 @@ class LayerTile extends StatelessWidget {
                 right: 0,
                 bottom: 0,
                 height: 3,
-                child: FractionallySizedBox(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: hpFraction,
-                  child: const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Palette.amber, Palette.gold],
-                      ),
-                    ),
+                child: Gauge(
+                  fraction: hpFraction,
+                  height: 3,
+                  radius: 0,
+                  // No track: the rock behind it is already dark enough to
+                  // read the fill against.
+                  track: const Color(0x00000000),
+                  gradient: const LinearGradient(
+                    colors: [Palette.amber, Palette.gold],
                   ),
                 ),
               ),

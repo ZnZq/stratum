@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <defs>
+    <linearGradient id="cubeTop" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#FFF0C8"/>
+      <stop offset="1" stop-color="#FFD782"/>
+    </linearGradient>
+    <linearGradient id="cubeLeft" x1="0" y1="0" x2="0.2" y2="1">
+      <stop offset="0" stop-color="#EFA83A"/>
+      <stop offset="1" stop-color="#C67F1E"/>
+    </linearGradient>
+    <linearGradient id="cubeRight" x1="1" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#B87A22"/>
+      <stop offset="1" stop-color="#7E4F13"/>
+    </linearGradient>
+  </defs>
+
+  <!-- A solid OLAP cube, lit from the upper left: three faces, three tones,
+       so the form reads at ten pixels where an outline would collapse. The
+       cell divisions are kept faint on purpose -- at caption size they are
+       texture, and only at warehouse size do they resolve into a grid. -->
+
+  <path d="M24 6 L42 16 L24 26 L6 16 Z" fill="url(#cubeTop)"/>
+  <path d="M6 16 L24 26 L24 44 L6 34 Z" fill="url(#cubeLeft)"/>
+  <path d="M24 26 L42 16 L42 34 L24 44 Z" fill="url(#cubeRight)"/>
+
+  <g stroke="#2B1A02" stroke-width="0.9" stroke-opacity="0.32" fill="none">
+    <path d="M33 11 L15 21"/>
+    <path d="M15 11 L33 21"/>
+    <path d="M15 21 L15 39"/>
+    <path d="M6 25 L24 35"/>
+    <path d="M33 21 L33 39"/>
+    <path d="M42 25 L24 35"/>
+  </g>
+
+  <!-- The near corner and the outline: a dark keyline keeps the cube off the
+       panel it sits on, which the fills alone cannot do on a dark screen. -->
+  <path d="M24 6 L42 16 L42 34 L24 44 L6 34 L6 16 Z"
+        fill="none" stroke="#2B1A02" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M24 26 L42 16 M24 26 L6 16 M24 26 L24 44"
+        fill="none" stroke="#2B1A02" stroke-width="1.3" stroke-opacity="0.75"
+        stroke-linecap="round"/>
+
+  <!-- One specular edge along the lit corner. -->
+  <path d="M24 7.6 L39.6 16.3" fill="none" stroke="#FFF8E2"
+        stroke-width="1.1" stroke-opacity="0.7" stroke-linecap="round"/>
+</svg>

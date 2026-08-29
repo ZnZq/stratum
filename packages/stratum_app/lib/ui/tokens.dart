@@ -45,6 +45,10 @@ abstract final class Palette {
   static const Color steel = Color(0xFF85B7EB);
   static const Color boostWell = Color(0xFF1B4036);
 
+  /// Capacity that is gone. The only red in the game, kept at the palette's
+  /// own lightness so it warns without shouting over a dark panel.
+  static const Color alarm = Color(0xFFE8706B);
+
   /// Stratum fills, one pair per stratum, top colour then bottom.
   ///
   /// These are only the ground tone: the grain, clasts and bedding planes are
