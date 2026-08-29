@@ -3,6 +3,7 @@ import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
 import 'resource_style.dart';
+import 'hud.dart';
 import 'server_rack.dart';
 import 'stat.dart';
 import 'tokens.dart';
@@ -154,40 +155,54 @@ class HomeScreen extends StatelessWidget {
 
           const Spacer(),
 
-          // The two acts, in the order they are reached: banking is always
-          // available, oversaturation is the wall.
-          _Act(
-            label: 'перезапуск',
-            colour: Palette.gold,
-            headline: '+${sim.bankableData.value}',
-            note: 'з цієї симуляції · в olap-куби',
-          ),
-          const SizedBox(height: 9),
-          const _Rule(),
-          const SizedBox(height: 9),
-          // The wall itself instead of a bar: five racks say how full each
-          // one is AND what each costs, which a single bar never could.
-          _Act(
-            label: 'колапс',
-            colour: ready > 0 ? Palette.alarm : Palette.quantonium,
-            headline: ready > 0
-                ? 'готово $ready з '
-                      '${PrototypeSimulation.maxPendingCollapses} · +$ready очко'
-                : 'дрейф −3%/добу',
-            note: ready >= PrototypeSimulation.maxPendingCollapses
-                ? 'стіна повна · далі складати нікуди'
-                : 'сервер = один колапс і один цикл',
-            // No height given: a rack knows how tall it has to be to still
-            // look like a rack, and says so.
-            below: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // The console: two acts, bracketed rather than boxed. They were two
+          // readouts with a rule between them and a "later" chip on each --
+          // which made the most important controls on the screen look like
+          // labels that happened to be disabled.
+          HudBrackets(
+            padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (var r = 0; r < fills.length; r++) ...[
-                  Expanded(
-                    child: ServerRack(fill: fills[r], cost: costs[r], phase: r),
+                _Act(
+                  lamp: Palette.gold,
+                  label: 'перезапуск',
+                  colour: Palette.gold,
+                  figure: '+${sim.bankableData.value}',
+                  unit: const _Unit(size: 22, child: CubesIcon(size: 22)),
+                  note: 'згортає симуляцію · глибина, ресурси і бури з нею',
+                  action: 'ЗГОРНУТИ',
+                  onAct: null,
+                ),
+                const SizedBox(height: 15),
+                _Act(
+                  lamp: ready > 0 ? Palette.alarm : Palette.tech,
+                  label: 'колапс',
+                  colour: ready > 0 ? Palette.alarm : Palette.quantonium,
+                  figure: '$ready / ${PrototypeSimulation.maxPendingCollapses}',
+                  note: ready >= PrototypeSimulation.maxPendingCollapses
+                      ? 'стіна повна · далі складати нікуди'
+                      : 'сервер = очко колапсу і цикл · поріг тане 3% за добу',
+                  action: ready > 0 ? 'ЗАБРАТИ $ready' : 'ЗАБРАТИ',
+                  onAct: null,
+                  // No height given: a rack knows how tall it has to be to
+                  // still look like a rack, and says so.
+                  body: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var r = 0; r < fills.length; r++) ...[
+                        Expanded(
+                          child: ServerRack(
+                            fill: fills[r],
+                            cost: costs[r],
+                            phase: r,
+                          ),
+                        ),
+                        if (r < fills.length - 1) const SizedBox(width: 10),
+                      ],
+                    ],
                   ),
-                  if (r < fills.length - 1) const SizedBox(width: 10),
-                ],
+                ),
               ],
             ),
           ),
@@ -226,70 +241,85 @@ class _Unit extends StatelessWidget {
   }
 }
 
-class _Rule extends StatelessWidget {
-  const _Rule();
-
-  @override
-  Widget build(BuildContext context) =>
-      const SizedBox(height: 1, child: ColoredBox(color: Palette.lineBar));
-}
-
-/// One of the two things this screen is for.
-///
-/// Carries its own preview rather than a button for now: the acts are not
-/// built, and a control that does nothing is worse than a number that is
-/// honest about waiting.
 class _Act extends StatelessWidget {
   const _Act({
+    required this.lamp,
     required this.label,
     required this.colour,
-    required this.headline,
+    required this.figure,
     required this.note,
-    this.below,
+    required this.action,
+    required this.onAct,
+    this.unit,
+    this.body,
   });
 
+  final Color lamp;
   final String label;
   final Color colour;
-  final String headline;
+  final String figure;
   final String note;
-  final Widget? below;
+  final String action;
+  final VoidCallback? onAct;
+  final Widget? unit;
+  final Widget? body;
 
   @override
   Widget build(BuildContext context) {
-    return Stat(
-      label: label,
-      labelColour: colour,
-      trailing: const _Soon(),
-      value: headline,
-      size: 15,
-      colour: colour,
-      below: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (below case final below?) ...[const SizedBox(height: 5), below],
-          const SizedBox(height: 4),
-          Text(note, style: AppText.display(9.5, color: Palette.textFaint)),
-        ],
-      ),
-    );
-  }
-}
-
-/// The tag on an act that reads out but does not act yet.
-class _Soon extends StatelessWidget {
-  const _Soon();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(7, 2, 7, 3),
-      decoration: BoxDecoration(
-        color: Palette.bar,
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: Palette.lineBar),
-      ),
-      child: Text('згодом', style: AppText.body(8.5, color: Palette.textFaint)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            HudLamp(colour: lamp),
+            const SizedBox(width: 8),
+            Text(
+              label.toUpperCase(),
+              style: AppText.body(
+                9,
+                weight: FontWeight.w800,
+                color: colour,
+                letterSpacing: 2.2,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: SizedBox(
+                height: 1,
+                child: ColoredBox(color: colour.withValues(alpha: 0.16)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              figure,
+              style: AppText.display(
+                18,
+                weight: FontWeight.w700,
+                color: colour,
+                height: 1,
+              ),
+            ),
+            if (unit case final unit?) ...[const SizedBox(width: 6), unit],
+          ],
+        ),
+        if (body case final body?) ...[const SizedBox(height: 11), body],
+        const SizedBox(height: 9),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Text(
+                note,
+                style: AppText.body(9, color: Palette.textFaint),
+              ),
+            ),
+            const SizedBox(width: 12),
+            HudButton(label: action, accent: colour, onTap: onAct),
+          ],
+        ),
+      ],
     );
   }
 }
