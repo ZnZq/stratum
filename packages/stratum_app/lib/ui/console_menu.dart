@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'navigation.dart';
 import 'game_icons.dart';
 import 'game_modal.dart';
+import 'hud.dart';
 import 'tokens.dart';
 
 /// The console: everything around the game rather than in it.
@@ -32,7 +33,7 @@ class ConsoleMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GameModal(
+    return HudModal(
       icon: Ic.console,
       title: 'КОНСОЛЬ',
       anchor: ModalAnchor.bottom,
@@ -99,57 +100,52 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return HudMenu(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(11, 10, 11, 11),
-        decoration: BoxDecoration(
-          color: Palette.well,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Palette.lineBar),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 26,
-                  height: 26,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: Palette.bar,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Palette.line),
-                  ),
-                  child: GameIcon(icon, size: 15, colour: Palette.tech),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppText.body(
-                      11.5,
-                      weight: FontWeight.w700,
-                      color: Palette.text,
-                    ),
+      accent: Palette.tech,
+      cut: 10,
+      padding: const EdgeInsets.fromLTRB(11, 10, 11, 11),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 26,
+                height: 26,
+                child: HudPlate(
+                  cut: 6,
+                  fill: Palette.bar,
+                  edge: Palette.line,
+                  child: Center(
+                    child: GameIcon(icon, size: 15, colour: Palette.tech),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 7),
-            Text(
-              note,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppText.body(9.5, color: Palette.textMuted),
-            ),
-          ],
-        ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.body(
+                    11.5,
+                    weight: FontWeight.w700,
+                    color: Palette.text,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            note,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.body(9.5, color: Palette.textMuted),
+          ),
+        ],
       ),
     );
   }

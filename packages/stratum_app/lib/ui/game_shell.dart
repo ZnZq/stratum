@@ -9,6 +9,7 @@ import 'console_menu.dart';
 import 'drills_screen.dart';
 import 'drill_screen.dart';
 import 'game_icons.dart';
+import 'hud.dart';
 import 'home_screen.dart';
 import 'navigation.dart';
 import 'notices.dart';
@@ -809,29 +810,36 @@ class _SectionTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lit = current || open;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
+    // The console does not take you anywhere: it lays a sheet over whatever
+    // you were looking at. So it lights in the sheet's own green rather than
+    // the gold that means "this is the screen you are on" -- the bar tells
+    // you which of its slots changes the view and which covers it.
+    final accent = section.opensAsPanel ? Palette.tech : Palette.gold;
+    // The section bar is icons only, so without a label it is unreadable to
+    // anything that cannot see -- a screen reader, or a test driver.
+    return Semantics(
+      label: section.label,
+      button: true,
+      selected: lit,
       child: Center(
         child: _Dotted(
           marked: marked && !current,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            curve: Curves.easeOutCubic,
+          child: SizedBox(
             width: 46,
             height: 32,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: lit ? Palette.goldWell : const Color(0x00000000),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: lit ? Palette.amber : const Color(0x00000000),
+            child: HudMenu(
+              onTap: onTap,
+              active: lit,
+              accent: accent,
+              cut: 7,
+              padding: EdgeInsets.zero,
+              child: Center(
+                child: GameIcon(
+                  section.icon,
+                  size: 21,
+                  colour: lit ? accent : Palette.textFaint,
+                ),
               ),
-            ),
-            child: GameIcon(
-              section.icon,
-              size: 21,
-              colour: lit ? Palette.gold : Palette.textFaint,
             ),
           ),
         ),
@@ -936,19 +944,13 @@ class _ScreenChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colour = active ? Palette.gold : Palette.textDim;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: _Dotted(
-        marked: marked && !active,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 3),
-          padding: const EdgeInsets.symmetric(vertical: 5),
-          decoration: BoxDecoration(
-            color: active ? Palette.goldWell : Palette.well,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: active ? Palette.amber : Palette.lineBar),
-          ),
+    return _Dotted(
+      marked: marked && !active,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        child: HudMenu(
+          onTap: onTap,
+          active: active,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,

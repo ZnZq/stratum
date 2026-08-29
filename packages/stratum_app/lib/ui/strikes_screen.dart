@@ -5,13 +5,12 @@ import '../game.dart';
 import 'arm_diagram.dart';
 import 'arm_style.dart';
 import 'evolve_overlay.dart';
-import 'gauge.dart';
+import 'hud.dart';
 import 'part_glyph.dart';
 import 'part_sheet.dart';
 import 'stat.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
-import 'upgrades_screen.dart';
 
 /// The manipulator arm: what a blow is worth, and the three parts that grow it.
 ///
@@ -502,22 +501,10 @@ class _FlatButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: Palette.shell,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Palette.lineBar),
-      ),
-      child: Text(
-        label,
-        style: AppText.body(
-          10.5,
-          weight: FontWeight.w700,
-          color: Palette.textFaint,
-        ),
-      ),
+    return HudButton(
+      onTap: null,
+      label: label,
+      padding: const EdgeInsets.symmetric(vertical: 8),
     );
   }
 }
@@ -531,21 +518,10 @@ class _EvolveButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PressButton(
+    return HudButton(
       onTap: onTap,
-      background: Palette.goldWell,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      child: Center(
-        child: Text(
-          'ЕВОЛЮЦІЯ',
-          style: AppText.body(
-            10,
-            weight: FontWeight.w700,
-            color: Palette.gold,
-            letterSpacing: 1.2,
-          ),
-        ),
-      ),
+      label: 'ЕВОЛЮЦІЯ',
+      padding: const EdgeInsets.symmetric(vertical: 6),
     );
   }
 }
@@ -573,23 +549,7 @@ class _MarkProgress extends StatelessWidget {
     // rather than the running total: the bar measures the road to the next
     // rebuild, so a bar at a third full has to read as a third, not as
     // "137 / 200", which looks two thirds done.
-    return Gauge(
-      fraction: walked,
-      height: 13,
-      radius: 6,
-      gradient: const LinearGradient(colors: [Palette.amber, Palette.gold]),
-      label: Text(
-        '$into / $span',
-        // Lit and shadowed: the ground under it is dark on one side of the
-        // fill and bright on the other.
-        style: AppText.display(
-          8.5,
-          weight: FontWeight.w700,
-          color: Palette.text,
-          shadows: true,
-        ),
-      ),
-    );
+    return HudProgress(fraction: walked, reading: '$into / $span');
   }
 }
 
@@ -608,10 +568,9 @@ class _BuyButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final sim = game.sim;
     final affordable = sim.canUpgrade(part) && steps > 0;
-    return PressButton(
+    return HudButton(
       onTap: affordable ? () => game.upgradeArm(part, levels: steps) : null,
-      background: affordable ? Palette.goldWell : Palette.card,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,

@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import 'game_modal.dart';
+import 'hud.dart';
 import 'resource_style.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
@@ -53,27 +54,10 @@ class OfflineWindow extends StatelessWidget {
           for (final entry in gain.gained.entries)
             _GainRow(id: entry.key, value: entry.value),
           const SizedBox(height: 12),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
+          HudButton(
             onTap: onClose,
-            child: Container(
-              height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Palette.goldWell,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Palette.amber),
-              ),
-              child: Text(
-                'ЗАБРАТИ',
-                style: AppText.body(
-                  11,
-                  weight: FontWeight.w800,
-                  color: Palette.gold,
-                  letterSpacing: 2,
-                ),
-              ),
-            ),
+            label: 'ЗАБРАТИ',
+            padding: const EdgeInsets.symmetric(vertical: 10),
           ),
         ],
       ),

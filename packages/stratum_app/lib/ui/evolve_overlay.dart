@@ -6,6 +6,7 @@ import 'package:stratum_core/stratum_core.dart';
 import 'arm_style.dart';
 import 'game_icons.dart';
 import 'game_modal.dart';
+import 'hud.dart';
 import 'part_glyph.dart';
 import 'tokens.dart';
 
@@ -99,27 +100,10 @@ class _EvolveOverlayState extends State<EvolveOverlay>
           const SizedBox(height: 12),
           _Gained(play: _play, gained: gained),
           const SizedBox(height: 12),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
+          HudButton(
             onTap: widget.onClose,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Palette.goldWell,
-                borderRadius: BorderRadius.circular(11),
-                border: Border.all(color: Palette.amber),
-              ),
-              child: Text(
-                'ДАЛІ',
-                style: AppText.body(
-                  12,
-                  weight: FontWeight.w700,
-                  color: Palette.gold,
-                  letterSpacing: 1.8,
-                ),
-              ),
-            ),
+            label: 'ДАЛІ',
+            padding: const EdgeInsets.symmetric(vertical: 10),
           ),
         ],
       ),

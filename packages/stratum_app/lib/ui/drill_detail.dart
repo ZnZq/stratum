@@ -3,11 +3,11 @@ import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
 import 'drill_diagram.dart';
+import 'hud.dart';
 import 'resource_style.dart';
 import 'stat.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
-import 'upgrades_screen.dart';
 
 /// One drill: the machine at work, what it is worth, and its three tracks.
 ///
@@ -415,22 +415,10 @@ class _Flat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: Palette.shell,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Palette.lineBar),
-      ),
-      child: Text(
-        label,
-        style: AppText.body(
-          10.5,
-          weight: FontWeight.w700,
-          color: Palette.textFaint,
-        ),
-      ),
+    return HudButton(
+      onTap: null,
+      label: label,
+      padding: const EdgeInsets.symmetric(vertical: 8),
     );
   }
 }
@@ -452,12 +440,11 @@ class _Buy extends StatelessWidget {
   Widget build(BuildContext context) {
     final sim = game.sim;
     final affordable = sim.canUpgradeDrill(id, part) && steps > 0;
-    return PressButton(
+    return HudButton(
       onTap: affordable
           ? () => game.upgradeDrill(id, part, levels: steps)
           : null,
-      background: affordable ? Palette.goldWell : Palette.card,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,

@@ -5,7 +5,6 @@ import '../game.dart';
 import 'resource_style.dart';
 import 'hud.dart';
 import 'server_rack.dart';
-import 'stat.dart';
 import 'tokens.dart';
 
 /// The Data Centre: the machine the digging is FOR.
@@ -73,84 +72,81 @@ class HomeScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Two columns, not two rows: where the simulation stands on the
-          // left, what it has produced on the right. The headline figures
-          // then sit together instead of being split by a rule.
+          // Five plates cut as ONE panel: only the block's outer corners
+          // are struck, and every seam between plates stays square. Each
+          // plate cut to its own reading looked like five separate cards
+          // stacked, which is the opposite of what the group is.
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Two counts on one line, because they are the same kind
-                    // of fact: what this save has CLOSED. Neither starts at
-                    // one -- a fresh save has finished nothing.
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Stat(
-                            label: 'циклів',
-                            value: '${sim.cycleNumber}',
-                            size: _figure,
-                            colour: Palette.steel,
-                          ),
-                        ),
-                        Expanded(
-                          child: Stat(
-                            // Plural in the label, ordinal in the figure:
-                            // this is the simulation you are IN, not a count
-                            // of the ones behind you.
-                            label: 'симуляцій',
-                            value: '${sim.simulationNumber}',
-                            size: _figure,
-                            colour: Palette.steel,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Stat(
-                      label: 'глибина',
-                      value: '${sim.layer.value} м',
-                      size: _figure,
-                      colour: Palette.steel,
-                    ),
-                  ],
+                child: HudStat(
+                  // A count, not an ordinal: a fresh save has closed none.
+                  label: 'циклів',
+                  corners: const HudCorners(topLeft: true),
+                  value: '${sim.cycleNumber}',
+                  size: _figure,
+                  accent: Palette.steel,
+                  colour: Palette.steel,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Stat(
-                      label: 'сирі дані',
-                      unit: const _Unit(
-                        size: 24,
-                        child: ResourceIcon(ResourceId.rawData, size: 24),
-                      ),
-                      align: CrossAxisAlignment.end,
-                      value: '${sim.rawData.value}',
-                      size: _figure,
-                      colour: Palette.tech,
-                    ),
-                    const SizedBox(height: 14),
-                    Stat(
-                      label: 'olap-куби',
-                      unit: const _Unit(size: 24, child: CubesIcon(size: 24)),
-                      labelColour: Palette.gold,
-                      align: CrossAxisAlignment.end,
-                      value: '${sim.dataWallet.value}',
-                      size: _figure,
-                      colour: Palette.gold,
-                    ),
-                  ],
+                child: HudStat(
+                  label: 'сирі дані',
+                  align: CrossAxisAlignment.end,
+                  corners: const HudCorners(topRight: true),
+                  value: '${sim.rawData.value}',
+                  size: _figure,
+                  accent: Palette.tech,
+                  colour: Palette.tech,
+                  unit: const _Unit(
+                    size: 24,
+                    child: ResourceIcon(ResourceId.rawData, size: 24),
+                  ),
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: HudStat(
+                  // Plural in the label, ordinal in the figure: this is the
+                  // simulation you are IN, not a count of the ones behind.
+                  label: 'симуляцій',
+                  corners: HudCorners.none,
+                  value: '${sim.simulationNumber}',
+                  size: _figure,
+                  accent: Palette.steel,
+                  colour: Palette.steel,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: HudStat(
+                  label: 'olap-куби',
+                  align: CrossAxisAlignment.end,
+                  corners: HudCorners.none,
+                  value: '${sim.dataWallet.value}',
+                  size: _figure,
+                  accent: Palette.gold,
+                  colour: Palette.gold,
+                  labelColour: Palette.gold,
+                  unit: const _Unit(size: 24, child: CubesIcon(size: 24)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          HudStat(
+            label: 'глибина',
+            align: CrossAxisAlignment.center,
+            corners: const HudCorners(bottomLeft: true, bottomRight: true),
+            value: '${sim.layer.value} м',
+            size: _figure,
+            accent: Palette.steel,
+            colour: Palette.steel,
           ),
 
           const Spacer(),
