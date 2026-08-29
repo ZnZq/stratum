@@ -405,74 +405,20 @@ class HudMenu extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: CustomPaint(
-        painter: _MenuPainter(active: active, accent: accent, cut: cut),
-        child: Padding(padding: padding, child: child),
+      child: HudBox(
+        corners: HudCorners.centred,
+        // Horizontals open: the run reads as one strip of a panel rather
+        // than a line of separate boxes.
+        sides: HudSides.upright,
+        cut: cut,
+        fill: active ? accent.withValues(alpha: 0.14) : null,
+        edge: active ? accent.withValues(alpha: 0.85) : Palette.lineBar,
+        edgeWidth: active ? 1.4 : 1,
+        padding: padding,
+        child: child,
       ),
     );
   }
-}
-
-class _MenuPainter extends CustomPainter {
-  const _MenuPainter({
-    required this.active,
-    required this.accent,
-    required this.cut,
-  });
-
-  final bool active;
-  final Color accent;
-  final double cut;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final cut = this.cut > h / 2 ? h / 2 : this.cut;
-
-    // All four corners taken off, not the button's two: a menu cell is a
-    // slot in a strip and reads as one when both ends are cut the same way,
-    // where the button's diagonal pair reads as a direction.
-    canvas.drawPath(
-      Path()
-        ..moveTo(cut, 0)
-        ..lineTo(w - cut, 0)
-        ..lineTo(w, cut)
-        ..lineTo(w, h - cut)
-        ..lineTo(w - cut, h)
-        ..lineTo(cut, h)
-        ..lineTo(0, h - cut)
-        ..lineTo(0, cut)
-        ..close(),
-      Paint()
-        ..color = active
-            ? accent.withValues(alpha: 0.14)
-            : const Color(0x00000000),
-    );
-
-    // Two symmetric brackets: the horizontals stay open, so the row reads
-    // as one strip rather than a line of boxes.
-    canvas.drawPath(
-      Path()
-        ..moveTo(cut, 0)
-        ..lineTo(0, cut)
-        ..lineTo(0, h - cut)
-        ..lineTo(cut, h)
-        ..moveTo(w - cut, 0)
-        ..lineTo(w, cut)
-        ..lineTo(w, h - cut)
-        ..lineTo(w - cut, h),
-      Paint()
-        ..color = active ? accent.withValues(alpha: 0.85) : Palette.lineBar
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = active ? 1.4 : 1
-        ..strokeCap = StrokeCap.square,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_MenuPainter old) =>
-      old.active != active || old.accent != accent || old.cut != cut;
 }
 
 /// A panel cut out of the console, rather than a card laid on top of it.
@@ -511,8 +457,13 @@ class HudModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final panel = CustomPaint(
-      painter: _PanelPainter(accent),
+    final panel = HudBox(
+      corners: HudCorners.centred,
+      cut: 15,
+      fill: Palette.bar,
+      edge: accent.withValues(alpha: 0.28),
+      bracket: accent.withValues(alpha: 0.85),
+      bracketArm: 7,
       child: Column(
         mainAxisSize: anchor == ModalAnchor.stretch
             ? MainAxisSize.max
@@ -618,85 +569,6 @@ class HudModal extends StatelessWidget {
   }
 }
 
-class _PanelPainter extends CustomPainter {
-  const _PanelPainter(this.accent);
-
-  final Color accent;
-
-  static const double _cut = 15;
-  static const double _bracket = 22;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final shape = Path()
-      ..moveTo(_cut, 0)
-      ..lineTo(w - _cut, 0)
-      ..lineTo(w, _cut)
-      ..lineTo(w, h - _cut)
-      ..lineTo(w - _cut, h)
-      ..lineTo(_cut, h)
-      ..lineTo(0, h - _cut)
-      ..lineTo(0, _cut)
-      ..close();
-
-    canvas.drawPath(
-      shape,
-      Paint()
-        ..color = Palette.bar
-        ..maskFilter = null,
-    );
-    canvas.drawPath(
-      shape,
-      Paint()
-        ..color = accent.withValues(alpha: 0.28)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
-
-    // The corners struck harder than the sides: the eye takes the shape from
-    // them, which is what lets the rest of the outline stay this quiet.
-    final ink = Paint()
-      ..color = accent.withValues(alpha: 0.85)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6
-      ..strokeCap = StrokeCap.square;
-    canvas.drawPath(
-      Path()
-        ..moveTo(_bracket, 0)
-        ..lineTo(_cut, 0)
-        ..lineTo(0, _cut)
-        ..lineTo(0, _bracket)
-        ..moveTo(w - _bracket, 0)
-        ..lineTo(w - _cut, 0)
-        ..lineTo(w, _cut)
-        ..lineTo(w, _bracket)
-        ..moveTo(w, h - _bracket)
-        ..lineTo(w, h - _cut)
-        ..lineTo(w - _cut, h)
-        ..lineTo(w - _bracket, h)
-        ..moveTo(_bracket, h)
-        ..lineTo(_cut, h)
-        ..lineTo(0, h - _cut)
-        ..lineTo(0, h - _bracket),
-      ink,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_PanelPainter old) => old.accent != accent;
-}
-
-/// Which corners a chamfer takes off.
-///
-/// A set rather than a preset, because a run of plates has to be able to read
-/// as ONE cut panel: the block's outer corners are struck and its inner ones
-/// are left square, which no per-plate rule can work out on its own.
-///
-/// The presets cover the common case -- the cut follows the reading, so a
-/// figure read from the left is struck where the eye enters and where it
-/// leaves, and one read from the right has that pair mirrored.
 class HudCorners {
   const HudCorners({
     this.topLeft = false,
@@ -774,6 +646,269 @@ class HudCorners {
   int get hashCode => Object.hash(topLeft, topRight, bottomRight, bottomLeft);
 }
 
+/// Which straight runs of the outline are drawn.
+///
+/// Separate from the corners because they are separate decisions: a menu cell
+/// is cut on all four and drawn on two, and a bracket frame is cut on none
+/// and drawn on none at all.
+class HudSides {
+  const HudSides({
+    this.top = true,
+    this.right = true,
+    this.bottom = true,
+    this.left = true,
+  });
+
+  final bool top;
+  final bool right;
+  final bool bottom;
+  final bool left;
+
+  static const HudSides all = HudSides();
+  static const HudSides none = HudSides(
+    top: false,
+    right: false,
+    bottom: false,
+    left: false,
+  );
+
+  /// Left and right only: the run reads as one strip rather than a line of
+  /// boxes, which is what a menu wants.
+  static const HudSides upright = HudSides(top: false, bottom: false);
+}
+
+/// The one surface every HUD part is cut from.
+///
+/// Corners, sides and corner strikes are three independent choices, and every
+/// panel in the game turns out to be a combination of them: a plate is all
+/// sides and no strikes, a menu cell is two sides, a bracket frame is no
+/// sides and long strikes, a sheet is every side with short ones. Holding
+/// them apart is what stopped this file from growing a painter per shape.
+class HudBox extends StatelessWidget {
+  const HudBox({
+    required this.child,
+    this.corners = HudCorners.centred,
+    this.sides = HudSides.all,
+    this.cut = 8,
+    this.fill,
+    this.edge,
+    this.edgeWidth = 1,
+    this.bracket,
+    this.bracketWidth = 1.6,
+    this.bracketArm = 0,
+    this.padding = EdgeInsets.zero,
+    super.key,
+  });
+
+  final Widget child;
+  final HudCorners corners;
+  final HudSides sides;
+  final double cut;
+
+  /// The body. Null leaves whatever is behind showing through.
+  final Color? fill;
+
+  /// The thin outline, drawn along the enabled [sides] and across every cut.
+  final Color? edge;
+  final double edgeWidth;
+
+  /// The heavy strike at each corner, drawn over the edge. The eye takes a
+  /// shape from its corners, which is what lets the rest of an outline stay
+  /// quiet -- or disappear entirely.
+  final Color? bracket;
+  final double bracketWidth;
+
+  /// How far a strike runs along each side it meets. Zero marks the cut
+  /// alone; a long arm makes the corner brackets of a frame.
+  final double bracketArm;
+
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _BoxPainter(
+        corners: corners,
+        sides: sides,
+        cut: cut,
+        fill: fill,
+        edge: edge,
+        edgeWidth: edgeWidth,
+        bracket: bracket,
+        bracketWidth: bracketWidth,
+        bracketArm: bracketArm,
+      ),
+      child: Padding(padding: padding, child: child),
+    );
+  }
+}
+
+class _BoxPainter extends CustomPainter {
+  const _BoxPainter({
+    required this.corners,
+    required this.sides,
+    required this.cut,
+    required this.fill,
+    required this.edge,
+    required this.edgeWidth,
+    required this.bracket,
+    required this.bracketWidth,
+    required this.bracketArm,
+  });
+
+  final HudCorners corners;
+  final HudSides sides;
+  final double cut;
+  final Color? fill;
+  final Color? edge;
+  final double edgeWidth;
+  final Color? bracket;
+  final double bracketWidth;
+  final double bracketArm;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final c = cut > h / 2 ? h / 2 : cut;
+
+    if (fill case final fill?) {
+      canvas.drawPath(corners.path(size, cut), Paint()..color = fill);
+    }
+
+    if (edge case final edge?) {
+      final ink = Paint()
+        ..color = edge
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = edgeWidth
+        ..strokeCap = StrokeCap.square;
+      final line = Path();
+      if (sides.top) {
+        line
+          ..moveTo(corners.topLeft ? c : 0, 0)
+          ..lineTo(corners.topRight ? w - c : w, 0);
+      }
+      if (sides.right) {
+        line
+          ..moveTo(w, corners.topRight ? c : 0)
+          ..lineTo(w, corners.bottomRight ? h - c : h);
+      }
+      if (sides.bottom) {
+        line
+          ..moveTo(corners.bottomRight ? w - c : w, h)
+          ..lineTo(corners.bottomLeft ? c : 0, h);
+      }
+      if (sides.left) {
+        line
+          ..moveTo(0, corners.bottomLeft ? h - c : h)
+          ..lineTo(0, corners.topLeft ? c : 0);
+      }
+      // A cut belongs to the outline whenever either side it joins is drawn:
+      // otherwise a menu cell would show two floating verticals.
+      if (corners.topLeft && (sides.top || sides.left)) {
+        line
+          ..moveTo(c, 0)
+          ..lineTo(0, c);
+      }
+      if (corners.topRight && (sides.top || sides.right)) {
+        line
+          ..moveTo(w - c, 0)
+          ..lineTo(w, c);
+      }
+      if (corners.bottomRight && (sides.bottom || sides.right)) {
+        line
+          ..moveTo(w, h - c)
+          ..lineTo(w - c, h);
+      }
+      if (corners.bottomLeft && (sides.bottom || sides.left)) {
+        line
+          ..moveTo(c, h)
+          ..lineTo(0, h - c);
+      }
+      canvas.drawPath(line, ink);
+    }
+
+    if (bracket case final bracket?) {
+      final arm = bracketArm;
+      final ink = Paint()
+        ..color = bracket
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = bracketWidth
+        ..strokeCap = StrokeCap.square;
+      final strike = Path();
+
+      void corner(
+        bool isCut,
+        Offset alongTop,
+        Offset cutStart,
+        Offset cutEnd,
+        Offset alongSide,
+        Offset square,
+      ) {
+        if (isCut) {
+          strike
+            ..moveTo(alongTop.dx, alongTop.dy)
+            ..lineTo(cutStart.dx, cutStart.dy)
+            ..lineTo(cutEnd.dx, cutEnd.dy)
+            ..lineTo(alongSide.dx, alongSide.dy);
+        } else {
+          strike
+            ..moveTo(alongTop.dx, alongTop.dy)
+            ..lineTo(square.dx, square.dy)
+            ..lineTo(alongSide.dx, alongSide.dy);
+        }
+      }
+
+      corner(
+        corners.topLeft,
+        Offset(c + arm, 0),
+        Offset(c, 0),
+        Offset(0, c),
+        Offset(0, c + arm),
+        Offset.zero,
+      );
+      corner(
+        corners.topRight,
+        Offset(w - c - arm, 0),
+        Offset(w - c, 0),
+        Offset(w, c),
+        Offset(w, c + arm),
+        Offset(w, 0),
+      );
+      corner(
+        corners.bottomRight,
+        Offset(w - c - arm, h),
+        Offset(w - c, h),
+        Offset(w, h - c),
+        Offset(w, h - c - arm),
+        Offset(w, h),
+      );
+      corner(
+        corners.bottomLeft,
+        Offset(c + arm, h),
+        Offset(c, h),
+        Offset(0, h - c),
+        Offset(0, h - c - arm),
+        Offset(0, h),
+      );
+      canvas.drawPath(strike, ink);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BoxPainter old) =>
+      old.corners != corners ||
+      old.sides.top != sides.top ||
+      old.sides.right != sides.right ||
+      old.sides.bottom != sides.bottom ||
+      old.sides.left != sides.left ||
+      old.cut != cut ||
+      old.fill != fill ||
+      old.edge != edge ||
+      old.bracket != bracket ||
+      old.bracketArm != bracketArm;
+}
+
 /// A chamfered surface with nothing to press.
 ///
 /// The panel equivalent of a rounded Container: a fill, an optional edge, and
@@ -798,52 +933,15 @@ class HudPlate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _PlatePainter(
-        corners: corners,
-        fill: fill,
-        edge: edge,
-        cut: cut,
-      ),
-      child: Padding(padding: padding, child: child),
+    return HudBox(
+      corners: corners,
+      cut: cut,
+      fill: fill,
+      edge: edge,
+      padding: padding,
+      child: child,
     );
   }
-}
-
-class _PlatePainter extends CustomPainter {
-  const _PlatePainter({
-    required this.corners,
-    required this.fill,
-    required this.edge,
-    required this.cut,
-  });
-
-  final HudCorners corners;
-  final Color? fill;
-  final Color? edge;
-  final double cut;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final shape = corners.path(size, cut);
-    if (fill case final fill?) canvas.drawPath(shape, Paint()..color = fill);
-    if (edge case final edge?) {
-      canvas.drawPath(
-        shape,
-        Paint()
-          ..color = edge
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_PlatePainter old) =>
-      old.corners != corners ||
-      old.fill != fill ||
-      old.edge != edge ||
-      old.cut != cut;
 }
 
 /// A readout on a plate of its own, cut to the way it is read.

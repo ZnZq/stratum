@@ -3,6 +3,7 @@ import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
 import 'game_modal.dart';
+import 'hud.dart';
 import 'resource_plate.dart';
 import 'resource_style.dart';
 import 'stat.dart';
@@ -22,7 +23,7 @@ class WarehouseSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GameModal(
+    return HudModal(
       leading: const Icon(Ti.buildingWarehouse, size: 16, color: Palette.tech),
       title: 'СКЛАД',
       anchor: ModalAnchor.stretch,
