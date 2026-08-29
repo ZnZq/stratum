@@ -136,7 +136,7 @@ bool screenNeedsAttention(GameScreen screen, Game game) => switch (screen) {
   GameScreen.trade => game.hasUnseenRequests,
   GameScreen.simulation =>
     game.sim.pendingCollapses(DateTime.now().millisecondsSinceEpoch) > 0,
-  GameScreen.upgrades => game.sim.canBuyDrill || game.sim.canBuyPowerUpgrade,
+  GameScreen.upgrades => game.hasNewDrillUpgrades,
   GameScreen.strikes => ArmPart.values.any(
     (part) => game.sim.canUpgrade(part) || game.sim.canEvolve(part),
   ),

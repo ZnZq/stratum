@@ -288,6 +288,73 @@ class Game extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ------------------------------------------------------- clock breach
+
+  /// How far back the wall clock may sit behind the save's last observed
+  /// moment before it counts as tampering. NTP nudges move a clock by
+  /// seconds; a player moves it by hours.
+  static const Duration clockRewindTolerance = Duration(minutes: 2);
+
+  /// When the simulation is whole again: the save's own last-observed
+  /// moment. Non-null while the breach overlay holds the game.
+  int? get breachUntilMs => _breachUntilMs;
+  int? _breachUntilMs;
+  Timer? _breachTimer;
+
+  /// True when the wall clock sits behind what the save has already lived.
+  /// The acknowledged clock never runs backwards, so the only way to get
+  /// here is winding the system clock forward, banking that time, and
+  /// winding it back.
+  bool _clockBreached() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return now + clockRewindTolerance.inMilliseconds < sim.lastWallMs;
+  }
+
+  /// Halts everything behind an unclosable overlay until the wall clock
+  /// catches up with the save. No absence is stamped and none will be
+  /// settled: time spent in the breach pays nothing.
+  void _enterBreach() {
+    if (_breachUntilMs != null) return;
+    _breachUntilMs = sim.lastWallMs;
+    drill.stop();
+    energyLoop.stop();
+    _breachTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!_clockBreached()) {
+        _exitBreach();
+      } else {
+        // The countdown on the overlay reads this notifier.
+        notifyListeners();
+      }
+    });
+    notifyListeners();
+  }
+
+  void _exitBreach() {
+    if (_breachUntilMs == null) return;
+    _breachTimer?.cancel();
+    _breachTimer = null;
+    _breachUntilMs = null;
+    // The clock has caught up to the exact moment the save had already
+    // lived, so the gap observed here is nil: the wait pays nothing.
+    sim.observeWall(DateTime.now().millisecondsSinceEpoch);
+    if (_ready && !_paused) {
+      drill.start();
+      _syncEnergyLoop();
+    }
+    notifyListeners();
+  }
+
+  /// Checks the clock and holds the game if it has been wound back.
+  /// Returns whether the game is (now) held.
+  bool _guardClock() {
+    if (_clockBreached()) {
+      _enterBreach();
+      return true;
+    }
+    if (_breachUntilMs != null) _exitBreach();
+    return false;
+  }
+
   /// Freezes the whole heartbeat: drilling and energy.
   ///
   /// Both engines stop through [TickEngine.stop], which banks the time already
@@ -347,8 +414,10 @@ class Game extends ChangeNotifier {
     _stampCycleStart();
     _ready = true;
     _played.start();
-    drill.start();
-    _syncEnergyLoop();
+    if (!_guardClock()) {
+      drill.start();
+      _syncEnergyLoop();
+    }
     _autosave = Timer.periodic(
       autosaveEvery,
       (_) => unawaited(saveTo(SaveSlot.auto)),
@@ -397,17 +466,23 @@ class Game extends ChangeNotifier {
     }
     _stampCycleStart();
     _muteGains = false;
-    _syncEnergyLoop();
+    // A clean slot lifts a standing breach; a tampered one raises it. The
+    // engines re-arm through the exit path, not here.
+    _guardClock();
+    if (_breachUntilMs == null) _syncEnergyLoop();
     notifyListeners();
     return true;
   }
 
-  /// The drift formula needs to know when the cycle began. A fresh game and
-  /// a save from before measurement data existed carry no stamp, so one is
-  /// taken here; the core stays free of DateTime.
+  /// The drift formula needs to know when the cycle began -- on the
+  /// acknowledged clock. A fresh game and a save from before the clock
+  /// existed carry no stamp, so one is taken here; the core stays free of
+  /// DateTime.
   void _stampCycleStart() {
-    if (sim.cycleStartMs.value != 0) return;
-    sim.cycleStartMs.value = DateTime.now().millisecondsSinceEpoch;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    sim.observeWall(now);
+    if (sim.cycleStartMs.value >= 0) return;
+    sim.cycleStartMs.value = sim.seenNow(now);
   }
 
   /// Returns whether the text was a save this build can read.
@@ -443,6 +518,12 @@ class Game extends ChangeNotifier {
   /// "saved" over a write that never happened is worse than one that says
   /// nothing, because the player stops looking for the problem.
   Future<bool> saveTo(SaveSlot slot) {
+    // NOTHING writes during a clock breach -- not the autosave timer, not
+    // the lifecycle hooks, not a manual slot save. The game is frozen, so
+    // there is no progress to lose; and a slot written now would carry the
+    // future-dated stamp into itself, spreading the breach to the one place
+    // the player can escape to.
+    if (_breachUntilMs != null) return Future.value(false);
     // Queued behind whatever is already writing rather than dropped: a manual
     // save the player asked for must not be swallowed because the autosave
     // happened to fire.
@@ -455,6 +536,11 @@ class Game extends ChangeNotifier {
 
   Future<bool> _writeTo(SaveSlot slot) async {
     final now = DateTime.now();
+    // The save's own write moment IS the last-activity stamp the breach
+    // detector trusts, so bank it right here: `clock.last` in the run and
+    // `meta.savedAt` leave this method telling the same story. observeWall
+    // is monotonic, so a rewound clock cannot lower the stamp on the way.
+    sim.observeWall(now.millisecondsSinceEpoch);
     final document = SaveDocument(
       version: codec.currentVersion,
       sections: {
@@ -465,7 +551,10 @@ class Game extends ChangeNotifier {
         // it is not about to start. Written from the same state in the same
         // call, so the two cannot drift apart.
         'meta': {
-          'savedAt': now.toIso8601String(),
+          // UTC on purpose: an ISO string in local time shifts with the
+          // machine's timezone, which is one more clock a player can turn.
+          // (clock.last needs no such care -- epoch ms has no timezone.)
+          'savedAt': now.toUtc().toIso8601String(),
           'depth': sim.layer.value + 1,
           'drills': sim.drills.value,
           'drillPower': sim.drillPowerLevel.value,
@@ -561,8 +650,15 @@ class Game extends ChangeNotifier {
   }
 
   /// Pays out an absence and decides whether it deserves a window.
+  ///
+  /// Clamped to the core's absence cap: a week away pays -- and shows --
+  /// two days. The acknowledged clock is banked here too, so drift credits
+  /// the same clamped span the payout does.
   void _settleAbsence(Duration away) {
     if (away <= Duration.zero) return;
+    sim.observeWall(DateTime.now().millisecondsSinceEpoch);
+    const cap = Duration(milliseconds: PrototypeSimulation.absenceCapMs);
+    if (away > cap) away = cap;
     _muteGains = true;
     final gain = sim.claimOffline(
       seconds: away.inMicroseconds / 1e6,
@@ -772,6 +868,35 @@ class Game extends ChangeNotifier {
   bool get hasUnseenRequests =>
       sim.requests.any((request) => !_seenRequests.contains(request));
 
+  /// Drill tracks that were affordable the last time the player LOOKED at
+  /// the drills screen. Same discipline as the request board: a dot that
+  /// answers "can you afford something" is always lit in an idle game and
+  /// means nothing -- news is a track that BECAME affordable since then.
+  final Set<String> _seenAffordableTracks = {};
+
+  Iterable<String> _affordableTracks() sync* {
+    for (final row in PrototypeSimulation.drillTable) {
+      for (final part in DrillPart.values) {
+        if (sim.canUpgradeDrill(row.id, part)) {
+          yield '${row.id.name}.${part.name}';
+        }
+      }
+    }
+  }
+
+  bool get hasNewDrillUpgrades => _affordableTracks().any(
+    (track) => !_seenAffordableTracks.contains(track),
+  );
+
+  /// The drills screen is open: snapshot what is affordable. A track that
+  /// later dips below affordable and climbs back IS news again, which is
+  /// why this replaces the set rather than adding to it.
+  void markDrillUpgradesSeen() {
+    _seenAffordableTracks
+      ..clear()
+      ..addAll(_affordableTracks());
+  }
+
   /// The board is on screen: everything on it stops being news.
   void markRequestsSeen() {
     if (!hasUnseenRequests) return;
@@ -780,7 +905,10 @@ class Game extends ChangeNotifier {
   }
 
   void _onDrillBatch(TickBatch batch) {
-    sim.syncRequests(DateTime.now().millisecondsSinceEpoch);
+    if (_guardClock()) return;
+    final wallNow = DateTime.now().millisecondsSinceEpoch;
+    sim.observeWall(wallNow);
+    sim.syncRequests(wallNow);
     _seenRequests.retainAll(sim.requests);
     for (var i = 0; i < batch.ticks; i++) {
       final outcome = sim.tick();

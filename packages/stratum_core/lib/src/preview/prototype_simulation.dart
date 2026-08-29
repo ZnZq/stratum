@@ -407,7 +407,46 @@ class PrototypeSimulation {
 
   /// Wall-clock epoch ms the cycle began, for the drift formula. Zero means
   /// not stamped yet: the app stamps it, keeping DateTime out of the core.
-  final Signal<int> cycleStartMs = Signal(0, name: 'cycle start');
+  /// When this cycle began, on the ACKNOWLEDGED clock ([seenNow] units,
+  /// not epoch ms). -1 until the app stamps it.
+  final Signal<int> cycleStartMs = Signal(-1, name: 'cycle start');
+
+  /// The longest absence the game acknowledges in one gap: away for a week,
+  /// paid and drifted as if away for two days. One constant for EVERY
+  /// wall-clock mechanic, so none of them can quietly disagree.
+  static const int absenceCapMs = 48 * 60 * 60 * 1000;
+
+  /// Wall time the game has acknowledged, in ms. Advances by real gaps,
+  /// each clamped to [absenceCapMs].
+  int wallSeenMs = 0;
+
+  /// The raw wall stamp of the last [observeWall]. Zero = never observed;
+  /// the first observation banks nothing, so the epoch offset never leaks
+  /// into the acknowledged total.
+  int lastWallMs = 0;
+
+  /// What the acknowledged clock reads at [nowMs], WITHOUT banking it.
+  /// Continuous between observations; a gap longer than the cap contributes
+  /// exactly the cap, and a clock wound backwards contributes nothing.
+  int seenNow(int nowMs) {
+    if (lastWallMs == 0) return wallSeenMs;
+    final gap = nowMs - lastWallMs;
+    if (gap <= 0) return wallSeenMs;
+    return wallSeenMs + (gap > absenceCapMs ? absenceCapMs : gap);
+  }
+
+  /// Banks the clock up to [nowMs]. The app calls this every batch and on
+  /// every return from absence; between calls [seenNow] extrapolates.
+  ///
+  /// MONOTONIC: a rewound wall clock banks nothing and, crucially, does not
+  /// move [lastWallMs] backwards -- that stamp is the breach detector's
+  /// evidence, and letting a rewound clock overwrite it would pardon the
+  /// very tampering it proves.
+  void observeWall(int nowMs) {
+    if (nowMs <= lastWallMs) return;
+    wallSeenMs = seenNow(nowMs);
+    lastWallMs = nowMs;
+  }
 
   /// Damage already taken by the current layer, kept between cycles.
   final Signal<BigDouble> layerHp = Signal(BigDouble.zero, name: 'layer hp');
@@ -698,8 +737,7 @@ class PrototypeSimulation {
       rawData.value * BigDouble.fromNum(compileRate / rawPerCube);
 
   /// The collapse threshold at [nowMs], melted by drift since the cycle
-  /// began. A zero start means the app has not stamped the cycle yet, and a
-  /// clock wound backwards counts as no time passed.
+  /// began -- on the acknowledged clock, see [driftDays].
   BigDouble collapseThreshold(int nowMs) {
     final base =
         collapseThresholdBase *
@@ -713,12 +751,15 @@ class PrototypeSimulation {
 
   /// Days of drift this cycle has banked, capped at [collapseDriftCapDays].
   ///
-  /// A zero start means the app has not stamped the cycle yet, and a clock
-  /// wound backwards counts as no time passed.
+  /// Measured on the ACKNOWLEDGED clock, so an absence past [absenceCapMs]
+  /// melts the gate by two days, not by however long the player was gone.
+  /// A negative start means the app has not stamped the cycle yet.
   double driftDays(int nowMs) {
     final start = cycleStartMs.value;
-    if (start <= 0 || nowMs <= start) return 0;
-    final days = (nowMs - start) / Duration.millisecondsPerDay;
+    if (start < 0) return 0;
+    final seen = seenNow(nowMs);
+    if (seen <= start) return 0;
+    final days = (seen - start) / Duration.millisecondsPerDay;
     return days > collapseDriftCapDays ? collapseDriftCapDays : days;
   }
 
@@ -1656,7 +1697,7 @@ class PrototypeSimulation {
       'banked': dataBanked.value.toJson(),
       'wallet': dataWallet.value.toJson(),
       'exponent': compilerLevel.value,
-      'cycleStartMs': cycleStartMs.value,
+      'cycleStartSeen': cycleStartMs.value,
     },
     'energy': energy.value,
     'bores': {
@@ -1685,6 +1726,7 @@ class PrototypeSimulation {
       'quantonium': quantoniumLevel.value,
     },
     'stock': stock.toJson(),
+    'clock': {'seen': wallSeenMs, 'last': lastWallMs},
     'trade': {
       // Only departures from the defaults are written: a fresh build reads
       // an old save and every position simply sells whole, switched on.
@@ -1725,14 +1767,17 @@ class PrototypeSimulation {
       dataBanked.value = _readBig(data['banked']);
       dataWallet.value = _readBig(data['wallet']);
       compilerLevel.value = _readInt(data['exponent'], 0);
-      cycleStartMs.value = _readInt(data['cycleStartMs'], 0);
+      // Older saves stamped the cycle in EPOCH ms under 'cycleStartMs'; the
+      // acknowledged clock cannot honour that unit, so their drift restarts
+      // once rather than being misread as decades of melt.
+      cycleStartMs.value = _readInt(data['cycleStartSeen'], -1);
     } else {
       rawData.value = BigDouble.zero;
       cycleData.value = BigDouble.zero;
       dataBanked.value = BigDouble.zero;
       dataWallet.value = BigDouble.zero;
       compilerLevel.value = 0;
-      cycleStartMs.value = 0;
+      cycleStartMs.value = -1;
     }
     final bores = json['bores'];
     for (final row in drillTable) {
@@ -1791,6 +1836,15 @@ class PrototypeSimulation {
     final held = json['stock'];
     if (held is Map) {
       stock.readJson(Map<String, Object?>.from(held));
+    }
+
+    final clock = json['clock'];
+    if (clock is Map) {
+      wallSeenMs = _readInt(clock['seen'], 0);
+      lastWallMs = _readInt(clock['last'], 0);
+    } else {
+      wallSeenMs = 0;
+      lastWallMs = 0;
     }
 
     final trade = json['trade'];

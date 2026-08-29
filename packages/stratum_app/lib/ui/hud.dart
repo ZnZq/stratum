@@ -452,6 +452,7 @@ class HudChoice<T> extends StatelessWidget {
     this.bottom = true,
     this.size = 9,
     this.padding = const EdgeInsets.fromLTRB(10, 5, 10, 6),
+    this.marked = const {},
     super.key,
   });
 
@@ -475,6 +476,11 @@ class HudChoice<T> extends StatelessWidget {
   final double size;
   final EdgeInsets padding;
 
+  /// Options wearing the attention dot -- the same mark the navigation puts
+  /// on a tab, so the player can follow it from the tab to the exact cell
+  /// it is talking about.
+  final Set<T> marked;
+
   @override
   Widget build(BuildContext context) {
     final corners = HudCorners(
@@ -486,6 +492,16 @@ class HudChoice<T> extends StatelessWidget {
     final cells = <Widget>[];
     for (final (option, label) in options) {
       final active = option == value;
+      final text = Text(
+        label,
+        textAlign: TextAlign.center,
+        style: AppText.body(
+          size,
+          weight: FontWeight.w700,
+          letterSpacing: 1.2,
+          color: active ? accent : Palette.textFaint,
+        ),
+      );
       Widget cell = GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => onPick(option),
@@ -495,16 +511,28 @@ class HudChoice<T> extends StatelessWidget {
               : const Color(0x00000000),
           child: Padding(
             padding: padding,
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: AppText.body(
-                size,
-                weight: FontWeight.w700,
-                letterSpacing: 1.2,
-                color: active ? accent : Palette.textFaint,
-              ),
-            ),
+            child: marked.contains(option)
+                ? Stack(
+                    clipBehavior: Clip.none,
+                    fit: StackFit.passthrough,
+                    children: [
+                      text,
+                      Positioned(
+                        top: -1,
+                        right: -6,
+                        child: Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: Palette.tech,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Palette.page, width: 1.5),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : text,
           ),
         ),
       );

@@ -80,6 +80,9 @@ class _TradeScreenState extends State<TradeScreen> {
               (TradeMode.requests, 'ЗАПИТИ'),
             ],
             value: _mode,
+            // The same dot the navigation wears, on the exact cell it means:
+            // the tab said "something in Торгівля", this says "in ЗАПИТИ".
+            marked: {if (widget.game.hasUnseenRequests) TradeMode.requests},
             onPick: (mode) => setState(() {
               _mode = mode;
               if (mode == TradeMode.requests) {
@@ -482,26 +485,22 @@ class _GroupCard extends StatelessWidget {
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => onPick(row.id),
-                  child: Container(
-                    width: 30,
-                    height: 30,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: row.id == picked
-                          ? Palette.goldWell
-                          : Palette.shell,
-                      borderRadius: BorderRadius.circular(8),
-                      // Amber answers the EFFECTIVE question -- does
-                      // this one actually go in the sweep: its own switch
-                      // and the shelf's together.
-                      border: Border.all(
-                        color: sim.sellsInSweep(row.id)
-                            ? Palette.amber
-                            : Palette.lineBar,
-                        width: row.id == picked ? 1.4 : 1,
-                      ),
+                  // Chamfered, not rounded: the well sits on a HUD panel,
+                  // and a rounded box was the app dialect leaking back in.
+                  // Amber answers the EFFECTIVE question -- does this one
+                  // actually go in the sweep: its own switch and the
+                  // shelf's together.
+                  child: HudPlate(
+                    cut: 7,
+                    fill: row.id == picked ? Palette.goldWell : Palette.shell,
+                    edge: sim.sellsInSweep(row.id)
+                        ? Palette.amber
+                        : Palette.lineBar,
+                    child: SizedBox(
+                      width: 30,
+                      height: 30,
+                      child: Center(child: ResourceIcon(row.id, size: 17)),
                     ),
-                    child: ResourceIcon(row.id, size: 17),
                   ),
                 ),
               ],
@@ -552,14 +551,11 @@ class _LockedGroup extends StatelessWidget {
             children: [
               for (var slot = 0; slot < 3; slot++) ...[
                 if (slot > 0) const SizedBox(width: 6),
-                Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: Palette.shell,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Palette.lineBar),
-                  ),
+                const HudPlate(
+                  cut: 7,
+                  fill: Palette.shell,
+                  edge: Palette.lineBar,
+                  child: SizedBox(width: 30, height: 30),
                 ),
               ],
             ],
