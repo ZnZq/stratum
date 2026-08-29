@@ -542,11 +542,18 @@ class _MarkProgress extends StatelessWidget {
     const span = PrototypeSimulation.levelsPerGeneration;
     final into = level - mark * span;
     final walked = into / span;
-    // The reading rides INSIDE the bar, and it counts THIS mark's hundred
-    // rather than the running total: the bar measures the road to the next
-    // rebuild, so a bar at a third full has to read as a third, not as
-    // "137 / 200", which looks two thirds done.
-    return HudProgress(fraction: walked, reading: '$into / $span');
+    // The reading counts THIS mark's hundred rather than the running
+    // total: the bar measures the road to the next rebuild, so a bar a third
+    // full has to read as a third, not as "137 / 200", which looks two
+    // thirds done.
+    // The figure rides ACROSS the cells here: the card is a stack of rows
+    // with no line to spare, and the mark this bar leads to is already named
+    // by the chip beside the part.
+    return HudProgress(
+      fraction: walked,
+      reading: '$into / $span',
+      place: HudReading.inside,
+    );
   }
 }
 

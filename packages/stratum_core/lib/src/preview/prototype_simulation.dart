@@ -588,8 +588,17 @@ class PrototypeSimulation {
   static const double collapseThresholdGrowth = 4;
 
   /// Drift: the collapse threshold melts by this factor per wall-clock day,
-  /// online and offline alike, with no floor.
+  /// online and offline alike.
   static const double collapseDriftPerDay = 0.97;
+
+  /// How many days of drift a cycle accrues before the melt stops.
+  ///
+  /// Capped rather than endless (decision 2026-08-29). At 30 days the wall
+  /// stands at 0.97^30 = 40% of base -- a relief of x2.5, which is still less
+  /// than the x4 a single collapse adds, so waiting can never outrun the
+  /// ladder. Uncapped it eventually could, and a player who leaves for a
+  /// season would come back to a gate that had melted to nothing.
+  static const double collapseDriftCapDays = 30;
 
   int get simulationNumber => restarts.value + 1;
 
@@ -647,12 +656,30 @@ class PrototypeSimulation {
         collapseThresholdBase *
         BigDouble.fromNum(collapseThresholdGrowth)
             .pow(collapses.value.toDouble());
-    final start = cycleStartMs.value;
-    if (start <= 0 || nowMs <= start) return base;
-    final days = (nowMs - start) / Duration.millisecondsPerDay;
+    final days = driftDays(nowMs);
+    if (days <= 0) return base;
     return base *
         BigDouble.fromNum(math.pow(collapseDriftPerDay, days).toDouble());
   }
+
+  /// Days of drift this cycle has banked, capped at [collapseDriftCapDays].
+  ///
+  /// A zero start means the app has not stamped the cycle yet, and a clock
+  /// wound backwards counts as no time passed.
+  double driftDays(int nowMs) {
+    final start = cycleStartMs.value;
+    if (start <= 0 || nowMs <= start) return 0;
+    final days = (nowMs - start) / Duration.millisecondsPerDay;
+    return days > collapseDriftCapDays ? collapseDriftCapDays : days;
+  }
+
+  /// How far through the drift window the cycle is, 0 to 1.
+  double driftProgress(int nowMs) => driftDays(nowMs) / collapseDriftCapDays;
+
+  /// How much of the gate the drift has already eaten, 0 to 1. What the wall
+  /// is worth now is (1 - this) of what it was worth on day zero.
+  double driftDiscount(int nowMs) =>
+      1 - math.pow(collapseDriftPerDay, driftDays(nowMs)).toDouble();
 
   /// Whether one run's raw data has oversaturated the simulation.
   bool collapseReady(int nowMs) => pendingCollapses(nowMs) >= 1;

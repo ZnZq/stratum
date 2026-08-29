@@ -16,7 +16,8 @@ import 'notices.dart';
 import 'offline_window.dart';
 import 'save_menu.dart';
 import 'strikes_screen.dart';
-import 'tree_sheet.dart';
+import 'simulation_screen.dart';
+import 'tree_screen.dart';
 import 'shell_backdrop.dart';
 import 'resource_style.dart';
 import 'tabler_icons.dart';
@@ -57,8 +58,6 @@ class _GameShellState extends State<GameShell> {
   bool _warehouse = false;
   bool _saves = false;
 
-  /// Which tree is open over the screen, if any.
-  TreeKind? _tree;
   bool _console = false;
 
   void _pickSection(NavSection section) {
@@ -67,7 +66,6 @@ class _GameShellState extends State<GameShell> {
         _console = !_console;
         _warehouse = false;
         _saves = false;
-        _tree = null;
       });
       return;
     }
@@ -86,6 +84,37 @@ class _GameShellState extends State<GameShell> {
   /// Everything the mine says belongs to the mine; any other screen mutes it.
   void _syncAudience() {
     _game.setWatched(_screen == GameScreen.drill);
+  }
+
+  /// A screen inside its frame.
+  ///
+  /// The frame wears the screen's own colour: a tree is read by what it
+  /// spends, so the border says which wallet is at stake before a single node
+  /// is drawn. Everything else keeps the house grey.
+  Widget _framed(GameScreen screen) {
+    final accent = switch (screen) {
+      GameScreen.tree => TreeKind.simulation.accent,
+      GameScreen.firmware => TreeKind.firmware.accent,
+      _ => Palette.tech,
+    };
+    return HudScreen(
+      accent: accent,
+      edge: accent == Palette.tech
+          ? Palette.line
+          : accent.withValues(alpha: 0.34),
+      child: switch (screen) {
+        GameScreen.drill => DrillScreen(game: _game),
+        GameScreen.upgrades => DrillsScreen(game: _game),
+        GameScreen.strikes => StrikesScreen(game: _game),
+        GameScreen.simulation => SimulationScreen(
+          game: _game,
+          onOpen: _pickScreen,
+        ),
+        GameScreen.tree => TreeScreen(kind: TreeKind.simulation, game: _game),
+        GameScreen.firmware => TreeScreen(kind: TreeKind.firmware, game: _game),
+        _ => _Placeholder(screen: screen),
+      },
+    );
   }
 
   void _pickScreen(GameScreen screen) {
@@ -201,17 +230,7 @@ class _GameShellState extends State<GameShell> {
                               // around their edges instead of being covered.
                               const Positioned.fill(child: ShellBackdrop()),
                               if (_screen == null)
-                                Positioned.fill(
-                                  child: HomeScreen(
-                                    game: _game,
-                                    onTree: (kind) => setState(() {
-                                      _tree = kind;
-                                      _saves = false;
-                                      _console = false;
-                                      _warehouse = false;
-                                    }),
-                                  ),
-                                ),
+                                Positioned.fill(child: HomeScreen()),
                               if (_screen case final screen?)
                                 Positioned.fill(
                                   child: Padding(
@@ -221,20 +240,7 @@ class _GameShellState extends State<GameShell> {
                                       8,
                                       AppMetrics.navTotal + 4,
                                     ),
-                                    child: HudScreen(
-                                      child: switch (screen) {
-                                        GameScreen.drill => DrillScreen(
-                                          game: _game,
-                                        ),
-                                        GameScreen.upgrades => DrillsScreen(
-                                          game: _game,
-                                        ),
-                                        GameScreen.strikes => StrikesScreen(
-                                          game: _game,
-                                        ),
-                                        _ => _Placeholder(screen: screen),
-                                      },
-                                    ),
+                                    child: _framed(screen),
                                   ),
                                 ),
                               // Positioned.fill, not a bare child: the sheet is a
@@ -248,25 +254,18 @@ class _GameShellState extends State<GameShell> {
                                     _warehouse,
                                     _saves,
                                     _console,
-                                    _tree,
                                   )) {
-                                    (true, _, _, _) => WarehouseSheet(
+                                    (true, _, _) => WarehouseSheet(
                                       game: _game,
                                       onClose: () =>
                                           setState(() => _warehouse = false),
                                     ),
-                                    (_, true, _, _) => SaveMenu(
+                                    (_, true, _) => SaveMenu(
                                       game: _game,
                                       onClose: () =>
                                           setState(() => _saves = false),
                                     ),
-                                    (_, _, _, final kind?) => TreeSheet(
-                                      kind: kind,
-                                      game: _game,
-                                      onClose: () =>
-                                          setState(() => _tree = null),
-                                    ),
-                                    (_, _, true, _) => ConsoleMenu(
+                                    (_, _, true) => ConsoleMenu(
                                       onPick: _pickScreen,
                                       onPause: () {
                                         setState(() => _console = false);
@@ -301,7 +300,6 @@ class _GameShellState extends State<GameShell> {
                                     _warehouse = !_warehouse;
                                     _saves = false;
                                     _console = false;
-                                    _tree = null;
                                   }),
                                 ),
                               ),

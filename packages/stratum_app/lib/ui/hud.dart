@@ -14,59 +14,34 @@ class HudBrackets extends StatelessWidget {
   const HudBrackets({
     required this.child,
     this.colour = Palette.tech,
+    this.struck = HudCorners.centred,
     this.padding = const EdgeInsets.fromLTRB(12, 12, 12, 12),
     super.key,
   });
 
   final Widget child;
   final Color colour;
+
+  /// Which corners are marked. Four is a console; the bottom pair alone is a
+  /// plinth the block is seated on, which is what a block INSIDE a framed
+  /// screen wants -- four would be a second frame around the first.
+  final HudCorners struck;
+
   final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _BracketPainter(colour),
-      child: Padding(padding: padding, child: child),
+    return HudBox(
+      corners: HudCorners.none,
+      sides: HudSides.none,
+      bracket: colour.withValues(alpha: 0.34),
+      brackets: struck,
+      bracketWidth: 1.2,
+      bracketArm: 13,
+      padding: padding,
+      child: child,
     );
   }
-}
-
-class _BracketPainter extends CustomPainter {
-  const _BracketPainter(this.colour);
-
-  final Color colour;
-
-  static const double _arm = 13;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final ink = Paint()
-      ..color = colour.withValues(alpha: 0.34)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..strokeCap = StrokeCap.square;
-    final w = size.width;
-    final h = size.height;
-    canvas.drawPath(
-      Path()
-        ..moveTo(0, _arm)
-        ..lineTo(0, 0)
-        ..lineTo(_arm, 0)
-        ..moveTo(w - _arm, 0)
-        ..lineTo(w, 0)
-        ..lineTo(w, _arm)
-        ..moveTo(w, h - _arm)
-        ..lineTo(w, h)
-        ..lineTo(w - _arm, h)
-        ..moveTo(_arm, h)
-        ..lineTo(0, h)
-        ..lineTo(0, h - _arm),
-      ink,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_BracketPainter old) => old.colour != colour;
 }
 
 /// A control with two corners cut away.
@@ -232,76 +207,161 @@ class HudLamp extends StatelessWidget {
 /// The cell being filled now is drawn faint rather than full, the same way a
 /// server rack marks the slot it is working on, so the frontier is visible
 /// without a second colour.
+/// Where a bar's figure is written.
+enum HudReading {
+  /// Over the track, beside the label. Costs a line and owes the fill
+  /// nothing, which is what a bar with room above it should take.
+  above,
+
+  /// Across the cells. For a bar packed into a card or a strip where there
+  /// is no line to spare -- it is lifted off the fill by a shadow rather
+  /// than by a plate, because a plate is a hole punched in the very cells
+  /// the bar is drawing.
+  inside,
+}
+
 class HudProgress extends StatelessWidget {
   const HudProgress({
     required this.fraction,
     this.height = 13,
     this.accent = Palette.gold,
+    this.from,
+    this.label,
     this.reading,
+    this.readingColour,
+    this.place = HudReading.above,
     super.key,
   });
 
   final double fraction;
   final double height;
+
+  /// The colour the fill runs TO, and the colour of the track's outline.
   final Color accent;
 
-  /// The figure written across the track.
-  ///
-  /// Styled here rather than by the caller, and set on a plate of its own: a
-  /// reading laid straight onto the cells has to be legible over amber on one
-  /// side and over the empty track on the other, and no single ink colour
-  /// does both. The plate settles it once for every bar.
+  /// The colour the fill runs FROM. Null keeps the house warm start, which is
+  /// what a track being walked wants; a cold bar passes its own so the run
+  /// does not begin in amber.
+  final Color? from;
+
+  /// What the bar measures, written at its head. Without it a bar is a
+  /// quantity with no noun: the player can see that something is 3% along and
+  /// not what. Always above the track, wherever the figure goes.
+  final String? label;
+
+  /// The figure. [place] decides whether it rides over the track or across
+  /// it.
   final String? reading;
+
+  /// The figure's ink. Null takes the accent above the track and the house
+  /// text colour inside it -- inside, the figure crosses both the fill and
+  /// the empty run, and only a near-white reads over both.
+  final Color? readingColour;
+
+  final HudReading place;
 
   @override
   Widget build(BuildContext context) {
-    final bar = CustomPaint(
-      painter: _CellPainter(fraction: fraction.clamp(0.0, 1.0), accent: accent),
-    );
-    if (reading == null) return SizedBox(height: height, child: bar);
-    return SizedBox(
+    final inside = place == HudReading.inside && reading != null;
+    Widget bar = SizedBox(
       height: height,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          bar,
-          Center(
-            child: Container(
-              // Horizontal room only: at 13 tall the track has about two
-              // pixels of outline top and bottom, and a plate with vertical
-              // padding covers exactly those.
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              color: const Color(0xD90E141C),
-              // Nudged down by the gap between the text BOX and the text INK.
-              // The reading is digits and a slash, none of which descend, so
-              // the font's descent sits empty at the bottom of the box and
-              // centring the box leaves the glyphs riding high. Line height
-              // is pinned to 1 first, so this is the whole remaining error.
+      child: CustomPaint(
+        painter: _CellPainter(
+          fraction: fraction.clamp(0.0, 1.0),
+          accent: accent,
+          from: from ?? Palette.amber,
+        ),
+      ),
+    );
+
+    if (inside) {
+      bar = SizedBox(
+        height: height,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            bar,
+            Align(
+              // At the tail of the track, not across its middle: the middle
+              // is where the frontier usually is, so a centred figure spent
+              // most of its life sitting on the one cell the eye is looking
+              // for.
+              alignment: Alignment.centerRight,
+              // Nudged down by the gap between the text BOX and the text INK:
+              // a figure of digits and a slash has nothing that descends, so
+              // the font's descent sits empty at the foot of the box and
+              // centring the box alone leaves the glyphs riding high. Line
+              // height is pinned to 1 first, so this is the whole remaining
+              // error.
               child: Transform.translate(
-                offset: const Offset(0, 0.8),
+                offset: const Offset(-7, 0.8),
                 child: Text(
                   reading!,
+                  // A halo, not the house lift: the lift falls 2 px down
+                  // and to nothing sideways, and that much weight under an
+                  // 8.5 px figure reads as the figure sitting high even when
+                  // the metrics put it dead centre.
                   style: AppText.display(
                     8.5,
                     weight: FontWeight.w700,
-                    color: Palette.text,
+                    color: readingColour ?? Palette.text,
                     height: 1,
-                  ),
+                  ).copyWith(shadows: AppText.halo),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
+      );
+    }
+
+    if (label == null && (reading == null || inside)) return bar;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            if (label case final label?)
+              Text(
+                label,
+                style: AppText.body(
+                  8,
+                  weight: FontWeight.w800,
+                  color: accent.withValues(alpha: 0.75),
+                  letterSpacing: 2,
+                ),
+              ),
+            const Spacer(),
+            if (reading case final reading? when !inside)
+              Text(
+                reading,
+                style: AppText.display(
+                  10.5,
+                  weight: FontWeight.w700,
+                  color: readingColour ?? accent,
+                  height: 1,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        bar,
+      ],
     );
   }
 }
 
 class _CellPainter extends CustomPainter {
-  const _CellPainter({required this.fraction, required this.accent});
+  const _CellPainter({
+    required this.fraction,
+    required this.accent,
+    required this.from,
+  });
 
   final double fraction;
   final Color accent;
+  final Color from;
 
   /// About how wide one cell wants to be. The count is derived from the room
   /// available rather than fixed, so the same bar reads the same whether it
@@ -351,7 +411,7 @@ class _CellPainter extends CustomPainter {
         Paint()
           ..shader = LinearGradient(
             colors: [
-              Palette.amber.withValues(alpha: alpha),
+              from.withValues(alpha: alpha),
               accent.withValues(alpha: alpha),
             ],
           ).createShader(Offset.zero & size),
@@ -370,7 +430,7 @@ class _CellPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CellPainter old) =>
-      old.fraction != fraction || old.accent != accent;
+      old.fraction != fraction || old.accent != accent || old.from != from;
 }
 
 /// A navigation cell: the button's chamfer with its top and bottom opened.
@@ -712,6 +772,7 @@ class HudBox extends StatelessWidget {
     this.bracket,
     this.bracketWidth = 1.6,
     this.bracketArm = 0,
+    this.brackets = HudCorners.centred,
     this.padding = EdgeInsets.zero,
     this.over = false,
     super.key,
@@ -739,6 +800,12 @@ class HudBox extends StatelessWidget {
   /// alone; a long arm makes the corner brackets of a frame.
   final double bracketArm;
 
+  /// WHICH corners are struck. A fourth axis, held apart from [corners] for
+  /// the same reason the first three are: which corners are cut and which are
+  /// hit are different questions, and a shape that can only answer them
+  /// together cannot be a plinth, a header rule or an open bracket.
+  final HudCorners brackets;
+
   final EdgeInsets padding;
 
   /// Draws the outline OVER the child instead of behind it. For a box whose
@@ -758,6 +825,7 @@ class HudBox extends StatelessWidget {
       bracket: bracket,
       bracketWidth: bracketWidth,
       bracketArm: bracketArm,
+      brackets: brackets,
     );
     return CustomPaint(
       painter: over ? null : painter,
@@ -778,6 +846,7 @@ class _BoxPainter extends CustomPainter {
     required this.bracket,
     required this.bracketWidth,
     required this.bracketArm,
+    required this.brackets,
   });
 
   final HudCorners corners;
@@ -789,6 +858,7 @@ class _BoxPainter extends CustomPainter {
   final Color? bracket;
   final double bracketWidth;
   final double bracketArm;
+  final HudCorners brackets;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -862,6 +932,7 @@ class _BoxPainter extends CustomPainter {
       final strike = Path();
 
       void corner(
+        bool struck,
         bool isCut,
         Offset alongTop,
         Offset cutStart,
@@ -869,6 +940,7 @@ class _BoxPainter extends CustomPainter {
         Offset alongSide,
         Offset square,
       ) {
+        if (!struck) return;
         if (isCut) {
           strike
             ..moveTo(alongTop.dx, alongTop.dy)
@@ -884,6 +956,7 @@ class _BoxPainter extends CustomPainter {
       }
 
       corner(
+        brackets.topLeft,
         corners.topLeft,
         Offset(c + arm, 0),
         Offset(c, 0),
@@ -892,6 +965,7 @@ class _BoxPainter extends CustomPainter {
         Offset.zero,
       );
       corner(
+        brackets.topRight,
         corners.topRight,
         Offset(w - c - arm, 0),
         Offset(w - c, 0),
@@ -900,6 +974,7 @@ class _BoxPainter extends CustomPainter {
         Offset(w, 0),
       );
       corner(
+        brackets.bottomRight,
         corners.bottomRight,
         Offset(w - c - arm, h),
         Offset(w - c, h),
@@ -908,6 +983,7 @@ class _BoxPainter extends CustomPainter {
         Offset(w, h),
       );
       corner(
+        brackets.bottomLeft,
         corners.bottomLeft,
         Offset(c + arm, h),
         Offset(c, h),
@@ -930,7 +1006,8 @@ class _BoxPainter extends CustomPainter {
       old.fill != fill ||
       old.edge != edge ||
       old.bracket != bracket ||
-      old.bracketArm != bracketArm;
+      old.bracketArm != bracketArm ||
+      old.brackets != brackets;
 }
 
 /// A chamfered surface with nothing to press.

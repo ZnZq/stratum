@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
-import 'resource_style.dart';
 import 'tokens.dart';
 
 /// One server rack, drawn wherever it is put.
@@ -20,7 +19,6 @@ import 'tokens.dart';
 class ServerRack extends StatefulWidget {
   const ServerRack({
     required this.fill,
-    this.cost,
     this.slots = 7,
     this.slotHeight = 11,
     this.phase = 0,
@@ -30,11 +28,6 @@ class ServerRack extends StatefulWidget {
 
   /// How full this rack is, 0 to 1. At 1 it IS a collapse, and says so.
   final double fill;
-
-  /// What it holds when full, already formatted. Written under the rack with
-  /// the cubes glyph, so the figure needs no unit spelled after it. Null
-  /// leaves the caption off.
-  final String? cost;
 
   final int slots;
 
@@ -87,73 +80,41 @@ class _ServerRackState extends State<ServerRack>
 
   @override
   Widget build(BuildContext context) {
-    final full = widget.fill >= 1 && !widget.locked;
-    final ink = full ? Palette.alarm : Palette.gold;
-
     final lock = widget.bodyHeight * 0.26;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          height: widget.bodyHeight,
-          child: RepaintBoundary(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                CustomPaint(
-                  painter: _RackPainter(
-                    clock: _clock,
-                    fill: widget.locked ? 0 : widget.fill.clamp(0.0, 1.0),
-                    slots: widget.slots,
-                    phase: widget.phase,
-                  ),
-                ),
-                // Locked capacity is drawn dark and padlocked rather than
-                // faded: a dim rack reads as one that is off, and this one is
-                // not off -- it is shut.
-                if (widget.locked)
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Palette.page.withValues(alpha: 0.72),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Center(
-                      child: CustomPaint(
-                        size: Size(lock * 0.78, lock),
-                        painter: const _LockGlyph(Palette.textFaint),
-                      ),
-                    ),
-                  ),
-              ],
+    return SizedBox(
+      height: widget.bodyHeight,
+      child: RepaintBoundary(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            CustomPaint(
+              painter: _RackPainter(
+                clock: _clock,
+                fill: widget.locked ? 0 : widget.fill.clamp(0.0, 1.0),
+                slots: widget.slots,
+                phase: widget.phase,
+              ),
             ),
-          ),
-        ),
-        if (widget.cost case final cost? when !widget.locked) ...[
-          const SizedBox(height: 5),
-          // Icon and figure share one colour: they are one statement, and a
-          // full rack turns both red at once.
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CubesIcon(size: 11),
-              const SizedBox(width: 3),
-              Flexible(
-                child: Text(
-                  cost,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppText.display(
-                    8.5,
-                    weight: FontWeight.w600,
-                    color: ink,
+            // Locked capacity is drawn dark and padlocked rather than faded:
+            // a dim rack reads as one that is off, and this one is not off --
+            // it is shut.
+            if (widget.locked)
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Palette.page.withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Center(
+                  child: CustomPaint(
+                    size: Size(lock * 0.78, lock),
+                    painter: const _LockGlyph(Palette.textFaint),
                   ),
                 ),
               ),
-            ],
-          ),
-        ],
-      ],
+          ],
+        ),
+      ),
     );
   }
 }

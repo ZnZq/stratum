@@ -146,6 +146,17 @@ abstract final class AppText {
     Shadow(color: Color(0xD9000000), blurRadius: 8, offset: Offset(0, 2)),
   ];
 
+  /// A halo for ink laid ON a lit surface -- a figure across a filled bar.
+  ///
+  /// No offset, unlike [_lift]: a shadow that falls to one side puts visual
+  /// weight there and the glyph reads as pushed the other way. At 8.5 px that
+  /// bias is the whole margin of error, and it is what makes a figure that is
+  /// centred by the numbers still look a pixel high.
+  static const List<Shadow> halo = [
+    Shadow(color: Color(0xE60B1018), blurRadius: 2),
+    Shadow(color: Color(0xB30B1018), blurRadius: 4),
+  ];
+
   static TextStyle body(
     double size, {
     FontWeight weight = FontWeight.w500,

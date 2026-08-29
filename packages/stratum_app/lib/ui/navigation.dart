@@ -12,6 +12,11 @@ enum NavSection {
   extraction('Видобуток', Ic.extraction),
   production('Виробництво', Ic.production),
   research('Дослідження', Ic.research),
+
+  /// The only room in the game that is not underground: what the digging is
+  /// FOR. Both prestige acts, the trees they pay for, and the numbers that
+  /// say when to press them.
+  datacentre('Датацентр', Ic.datacentre),
   console('Консоль', Ic.console);
 
   const NavSection(this.label, this.icon);
@@ -53,9 +58,24 @@ enum GameScreen {
   building(NavSection.production, 'Будівництво', Ic.building),
   lab(NavSection.production, 'Лабораторія', Ic.lab),
 
-  tree(NavSection.research, 'Дерево', Ic.tree),
   avatar(NavSection.research, 'Аватар', Ic.avatar),
   samples(NavSection.research, 'Зразки', Ic.samples),
+
+  /// Where a simulation is ended: both acts, and the wall of racks that says
+  /// how close the next collapse is.
+  simulation(NavSection.datacentre, 'Симуляція', Ic.datacentre),
+
+  /// Bought with OLAP cubes. Named for the section it sits in rather than
+  /// "дерево симуляції": the strip already says which datacentre this is.
+  tree(NavSection.datacentre, 'Дерево', Ic.tree),
+
+  /// Bought with collapse points. A level below the tree: it rewrites what
+  /// every future cycle runs ON.
+  firmware(NavSection.datacentre, 'Прошивка', Ic.collapse),
+
+  /// The run's live numbers -- rates, forecasts, drift. Not the console's
+  /// statistics, which are lifetime totals: this one is about now.
+  analytics(NavSection.datacentre, 'Аналітика', Ic.stats),
 
   settings(
     NavSection.console,
@@ -108,6 +128,8 @@ enum GameScreen {
 /// than being left out, so wiring one up later is a case here and nothing
 /// else.
 bool screenNeedsAttention(GameScreen screen, Game game) => switch (screen) {
+  GameScreen.simulation =>
+    game.sim.pendingCollapses(DateTime.now().millisecondsSinceEpoch) > 0,
   GameScreen.upgrades => game.sim.canBuyDrill || game.sim.canBuyPowerUpgrade,
   GameScreen.strikes => ArmPart.values.any(
     (part) => game.sim.canUpgrade(part) || game.sim.canEvolve(part),
