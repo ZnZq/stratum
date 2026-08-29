@@ -16,6 +16,7 @@ import 'notices.dart';
 import 'offline_window.dart';
 import 'save_menu.dart';
 import 'strikes_screen.dart';
+import 'tree_sheet.dart';
 import 'shell_backdrop.dart';
 import 'resource_style.dart';
 import 'tabler_icons.dart';
@@ -55,6 +56,9 @@ class _GameShellState extends State<GameShell> {
 
   bool _warehouse = false;
   bool _saves = false;
+
+  /// Which tree is open over the screen, if any.
+  TreeKind? _tree;
   bool _console = false;
 
   void _pickSection(NavSection section) {
@@ -63,6 +67,7 @@ class _GameShellState extends State<GameShell> {
         _console = !_console;
         _warehouse = false;
         _saves = false;
+        _tree = null;
       });
       return;
     }
@@ -196,22 +201,40 @@ class _GameShellState extends State<GameShell> {
                               // around their edges instead of being covered.
                               const Positioned.fill(child: ShellBackdrop()),
                               if (_screen == null)
-                                Positioned.fill(child: HomeScreen(game: _game)),
+                                Positioned.fill(
+                                  child: HomeScreen(
+                                    game: _game,
+                                    onTree: (kind) => setState(() {
+                                      _tree = kind;
+                                      _saves = false;
+                                      _console = false;
+                                      _warehouse = false;
+                                    }),
+                                  ),
+                                ),
                               if (_screen case final screen?)
                                 Positioned.fill(
-                                  child: _Island(
-                                    child: switch (screen) {
-                                      GameScreen.drill => DrillScreen(
-                                        game: _game,
-                                      ),
-                                      GameScreen.upgrades => DrillsScreen(
-                                        game: _game,
-                                      ),
-                                      GameScreen.strikes => StrikesScreen(
-                                        game: _game,
-                                      ),
-                                      _ => _Placeholder(screen: screen),
-                                    },
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      8,
+                                      AppMetrics.resourceBar,
+                                      8,
+                                      AppMetrics.navTotal + 4,
+                                    ),
+                                    child: HudScreen(
+                                      child: switch (screen) {
+                                        GameScreen.drill => DrillScreen(
+                                          game: _game,
+                                        ),
+                                        GameScreen.upgrades => DrillsScreen(
+                                          game: _game,
+                                        ),
+                                        GameScreen.strikes => StrikesScreen(
+                                          game: _game,
+                                        ),
+                                        _ => _Placeholder(screen: screen),
+                                      },
+                                    ),
                                   ),
                                 ),
                               // Positioned.fill, not a bare child: the sheet is a
@@ -225,18 +248,25 @@ class _GameShellState extends State<GameShell> {
                                     _warehouse,
                                     _saves,
                                     _console,
+                                    _tree,
                                   )) {
-                                    (true, _, _) => WarehouseSheet(
+                                    (true, _, _, _) => WarehouseSheet(
                                       game: _game,
                                       onClose: () =>
                                           setState(() => _warehouse = false),
                                     ),
-                                    (_, true, _) => SaveMenu(
+                                    (_, true, _, _) => SaveMenu(
                                       game: _game,
                                       onClose: () =>
                                           setState(() => _saves = false),
                                     ),
-                                    (_, _, true) => ConsoleMenu(
+                                    (_, _, _, final kind?) => TreeSheet(
+                                      kind: kind,
+                                      game: _game,
+                                      onClose: () =>
+                                          setState(() => _tree = null),
+                                    ),
+                                    (_, _, true, _) => ConsoleMenu(
                                       onPick: _pickScreen,
                                       onPause: () {
                                         setState(() => _console = false);
@@ -271,6 +301,7 @@ class _GameShellState extends State<GameShell> {
                                     _warehouse = !_warehouse;
                                     _saves = false;
                                     _console = false;
+                                    _tree = null;
                                   }),
                                 ),
                               ),
@@ -315,55 +346,6 @@ class _GameShellState extends State<GameShell> {
               ),
             );
           },
-        ),
-      ),
-    );
-  }
-}
-
-/// The short version of the warehouse, and the way into the long one.
-/// A screen, inset from the chrome and floating on the shell.
-///
-/// Screens used to run edge to edge and each one padded itself clear of the
-/// resource strip and the tabs. Doing it once here means a screen lays out
-/// against its own box and never has to know what is stacked over the app.
-class _Island extends StatelessWidget {
-  const _Island({required this.child});
-
-  final Widget child;
-
-  static const double _radius = 18;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        8,
-        AppMetrics.resourceBar,
-        8,
-        AppMetrics.navTotal + 4,
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(_radius),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x8C000000),
-              blurRadius: 20,
-              offset: Offset(0, 6),
-            ),
-          ],
-        ),
-        // The border rides in the foreground: an opaque screen fills the clip
-        // right to its edge, and a border painted underneath it -- as plain
-        // DecoratedBox does -- only ever showed on see-through placeholders.
-        foregroundDecoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(_radius),
-          border: Border.all(color: Palette.line),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(_radius - 1),
-          child: child,
         ),
       ),
     );

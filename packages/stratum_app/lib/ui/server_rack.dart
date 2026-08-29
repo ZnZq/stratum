@@ -24,6 +24,7 @@ class ServerRack extends StatefulWidget {
     this.slots = 7,
     this.slotHeight = 11,
     this.phase = 0,
+    this.locked = false,
     super.key,
   });
 
@@ -45,6 +46,11 @@ class ServerRack extends StatefulWidget {
 
   /// Desyncs the lamps from a neighbouring rack's.
   final int phase;
+
+  /// Capacity the player has not bought yet: drawn shut rather than hidden,
+  /// and without its cube figure -- a price under a padlock reads as a price
+  /// FOR the padlock, and unlocking a rack is not what cubes buy.
+  final bool locked;
 
   /// The room the body asks for, before the caption.
   double get bodyHeight => slots * slotHeight + _padding * 2;
@@ -81,8 +87,10 @@ class _ServerRackState extends State<ServerRack>
 
   @override
   Widget build(BuildContext context) {
-    final full = widget.fill >= 1;
+    final full = widget.fill >= 1 && !widget.locked;
     final ink = full ? Palette.alarm : Palette.gold;
+
+    final lock = widget.bodyHeight * 0.26;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -90,17 +98,38 @@ class _ServerRackState extends State<ServerRack>
         SizedBox(
           height: widget.bodyHeight,
           child: RepaintBoundary(
-            child: CustomPaint(
-              painter: _RackPainter(
-                clock: _clock,
-                fill: widget.fill.clamp(0.0, 1.0),
-                slots: widget.slots,
-                phase: widget.phase,
-              ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CustomPaint(
+                  painter: _RackPainter(
+                    clock: _clock,
+                    fill: widget.locked ? 0 : widget.fill.clamp(0.0, 1.0),
+                    slots: widget.slots,
+                    phase: widget.phase,
+                  ),
+                ),
+                // Locked capacity is drawn dark and padlocked rather than
+                // faded: a dim rack reads as one that is off, and this one is
+                // not off -- it is shut.
+                if (widget.locked)
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Palette.page.withValues(alpha: 0.72),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Center(
+                      child: CustomPaint(
+                        size: Size(lock * 0.78, lock),
+                        painter: const _LockGlyph(Palette.textFaint),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
-        if (widget.cost case final cost?) ...[
+        if (widget.cost case final cost? when !widget.locked) ...[
           const SizedBox(height: 5),
           // Icon and figure share one colour: they are one statement, and a
           // full rack turns both red at once.
@@ -127,6 +156,56 @@ class _ServerRackState extends State<ServerRack>
       ],
     );
   }
+}
+
+/// A padlock: shackle, body, keyhole.
+class _LockGlyph extends CustomPainter {
+  const _LockGlyph(this.colour);
+
+  final Color colour;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final shoulder = h * 0.44;
+    final ink = Paint()..color = colour;
+
+    // Shackle first: the body is drawn over where it enters, so the joint
+    // needs no mitre.
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(w / 2, shoulder), radius: w * 0.3),
+      math.pi,
+      math.pi,
+      false,
+      Paint()
+        ..color = colour
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = w * 0.14,
+    );
+
+    // The keyhole is cut out of the body, not laid on it.
+    final cut = Paint()..blendMode = BlendMode.clear;
+    final eye = Offset(w / 2, shoulder + (h - shoulder) * 0.42);
+    canvas
+      ..saveLayer(Offset.zero & size, Paint())
+      ..drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(0, shoulder, w, h - shoulder),
+          Radius.circular(w * 0.16),
+        ),
+        ink,
+      )
+      ..drawCircle(eye, w * 0.12, cut)
+      ..drawRect(
+        Rect.fromLTWH(eye.dx - w * 0.05, eye.dy, w * 0.1, h * 0.16),
+        cut,
+      )
+      ..restore();
+  }
+
+  @override
+  bool shouldRepaint(_LockGlyph old) => old.colour != colour;
 }
 
 class _RackPainter extends CustomPainter {

@@ -2,8 +2,8 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
+import 'hud.dart';
 import 'arm_style.dart';
-import 'game_modal.dart';
 import 'part_glyph.dart';
 import 'tokens.dart';
 
@@ -43,7 +43,7 @@ class PartSheet extends StatelessWidget {
         PrototypeSimulation.maxPartLevel ~/
         PrototypeSimulation.levelsPerGeneration;
 
-    return GameModal(
+    return HudModal(
       title: style.label.toUpperCase(),
       // The piece itself rather than a symbol standing in for it, at the mark
       // it is built to -- the same drawing the ladder below repeats five
@@ -66,26 +66,19 @@ class PartSheet extends StatelessWidget {
       // panel's edges the way they do between the parts on the screen behind.
       // Only 5 at the foot: the last mark row already carries 9 of its own,
       // and the two stacked read as the panel forgetting to end.
-      contentPadding: const EdgeInsets.fromLTRB(0, 4, 0, 5),
+      // No air at the top: the sheet already rules a line under its title,
+      // and a gap between that and the first mark reads as an empty strip.
+      contentPadding: const EdgeInsets.fromLTRB(0, 0, 0, 5),
       onClose: onClose,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-            child: Text(
-              style.note,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppText.body(9.5, color: Palette.textFaint),
-            ),
-          ),
           // A list, not a tray of cards. Which mark the part stands at is
           // told by its lit piece and its gold type; a frame around it would
           // be one more island inside an island.
           for (var mk = 0; mk < count; mk++) ...[
-            const _Rule(),
+            if (mk > 0) const _Rule(),
             _Generation(
               part: part,
               generation: mk,
@@ -216,8 +209,8 @@ class _Generation extends StatelessWidget {
                   )
                 else
                   for (final buff in opened)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
+                    HudRow(
+                      margin: const EdgeInsets.only(bottom: 2),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.baseline,
                         textBaseline: TextBaseline.alphabetic,

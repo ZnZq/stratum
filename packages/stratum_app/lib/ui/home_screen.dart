@@ -5,6 +5,7 @@ import '../game.dart';
 import 'resource_style.dart';
 import 'hud.dart';
 import 'server_rack.dart';
+import 'tree_sheet.dart';
 import 'tokens.dart';
 
 /// The Data Centre: the machine the digging is FOR.
@@ -18,9 +19,13 @@ import 'tokens.dart';
 /// One surface, like the rest of the game: the racks run edge to edge, the
 /// readouts fade in over their floor, and nothing below is boxed.
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({required this.game, super.key});
+  const HomeScreen({required this.game, required this.onTree, super.key});
 
   final Game game;
+
+  /// Opening a tree. A sheet over this screen rather than a screen of its
+  /// own: what a tree spends is banked one line above it.
+  final ValueChanged<TreeKind> onTree;
 
   /// One size for every readout on this screen. The left column was set at 13
   /// and the right at 26, and the two sides did not read as a pair; the middle
@@ -32,6 +37,7 @@ class HomeScreen extends StatelessWidget {
     final sim = game.sim;
     final now = DateTime.now().millisecondsSinceEpoch;
     final ready = sim.pendingCollapses(now);
+    final open = sim.unlockedServers;
     const racks = PrototypeSimulation.maxPendingCollapses;
     final fills = [for (var r = 0; r < racks; r++) sim.rackFill(r, now)];
     final costs = [
@@ -55,7 +61,7 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 22),
-          Expanded(child: _panel(sim, fills, costs, ready)),
+          Expanded(child: _panel(sim, fills, costs, ready, open)),
         ],
       ),
     );
@@ -66,9 +72,14 @@ class HomeScreen extends StatelessWidget {
     List<double> fills,
     List<String> costs,
     int ready,
+    int open,
   ) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, AppMetrics.navTotal + 12),
+      // Clears the section bar, NOT the strip above it. The strip keeps its
+      // height even when empty so panels anchored at navTotal do not float --
+      // but on the shell it holds nothing, and reserving 44 px for nothing is
+      // 44 px the console could have.
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, AppMetrics.navBar + 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -161,26 +172,30 @@ class HomeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _Act(
-                  lamp: Palette.gold,
                   label: 'перезапуск',
                   colour: Palette.gold,
                   figure: '+${sim.bankableData.value}',
                   unit: const _Unit(size: 22, child: CubesIcon(size: 22)),
-                  note: 'згортає симуляцію · глибина, ресурси і бури з нею',
+                  // What the act does, and where what it pays is spent.
                   action: 'ЗГОРНУТИ',
                   onAct: null,
+                  spend: 'ДЕРЕВО СИМУЛЯЦІЇ',
+                  onSpend: () => onTree(TreeKind.simulation),
                 ),
-                const SizedBox(height: 15),
+                const SizedBox(height: 13),
                 _Act(
-                  lamp: ready > 0 ? Palette.alarm : Palette.tech,
                   label: 'колапс',
                   colour: ready > 0 ? Palette.alarm : Palette.quantonium,
-                  figure: '$ready / ${PrototypeSimulation.maxPendingCollapses}',
-                  note: ready >= PrototypeSimulation.maxPendingCollapses
-                      ? 'стіна повна · далі складати нікуди'
-                      : 'сервер = очко колапсу і цикл · поріг тане 3% за добу',
+                  // Against what is OPEN, not against the wall's ceiling:
+                  // "0 / 5" would promise capacity the player has not bought.
+                  figure: '$ready / $open',
                   action: ready > 0 ? 'ЗАБРАТИ $ready' : 'ЗАБРАТИ',
                   onAct: null,
+                  // Not a second "tree": the simulation tree tunes what this
+                  // cycle's runs get, collapse points rewrite what every
+                  // future cycle runs ON. A level below, so a different word.
+                  spend: 'ПРОШИВКА',
+                  onSpend: () => onTree(TreeKind.firmware),
                   // No height given: a rack knows how tall it has to be to
                   // still look like a rack, and says so.
                   body: Row(
@@ -192,6 +207,7 @@ class HomeScreen extends StatelessWidget {
                             fill: fills[r],
                             cost: costs[r],
                             phase: r,
+                            locked: r >= open,
                           ),
                         ),
                         if (r < fills.length - 1) const SizedBox(width: 10),
@@ -239,24 +255,28 @@ class _Unit extends StatelessWidget {
 
 class _Act extends StatelessWidget {
   const _Act({
-    required this.lamp,
     required this.label,
     required this.colour,
     required this.figure,
-    required this.note,
     required this.action,
     required this.onAct,
+    required this.spend,
+    required this.onSpend,
     this.unit,
     this.body,
   });
 
-  final Color lamp;
   final String label;
   final Color colour;
   final String figure;
-  final String note;
+
+  /// The act itself, and the place its payout is spent. Side by side, because
+  /// they are the two halves of one decision: end this, then go spend it.
   final String action;
   final VoidCallback? onAct;
+  final String spend;
+  final VoidCallback? onSpend;
+
   final Widget? unit;
   final Widget? body;
 
@@ -269,7 +289,10 @@ class _Act extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            HudLamp(colour: lamp),
+            // The lamp wears the line's own colour, not the capacity
+            // language of the racks below it: within one console line the
+            // lamp, the name and the figure have to say the same thing.
+            HudLamp(colour: colour),
             const SizedBox(width: 8),
             Text(
               label.toUpperCase(),
@@ -303,16 +326,24 @@ class _Act extends StatelessWidget {
         if (body case final body?) ...[const SizedBox(height: 11), body],
         const SizedBox(height: 9),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
-              child: Text(
-                note,
-                style: AppText.body(9, color: Palette.textFaint),
+              child: HudButton(
+                onTap: onAct,
+                label: action,
+                accent: colour,
+                padding: const EdgeInsets.symmetric(vertical: 8),
               ),
             ),
-            const SizedBox(width: 12),
-            HudButton(label: action, accent: colour, onTap: onAct),
+            const SizedBox(width: 9),
+            Expanded(
+              child: HudButton(
+                onTap: onSpend,
+                label: spend,
+                accent: Palette.tech,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
           ],
         ),
       ],

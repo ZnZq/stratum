@@ -345,6 +345,17 @@ class PrototypeSimulation {
   /// Collapses performed, ever.
   final Signal<int> collapses = Signal(0, name: 'collapses');
 
+  /// How many racks the centre can actually use, 1 to [maxPendingCollapses].
+  ///
+  /// Starts at one. Holding five collapses at once is capacity the player
+  /// buys, not something the wall comes with: the whole decision the wall
+  /// exists for -- take one now or wait for more -- has to be earned before
+  /// it can be made.
+  final Signal<int> servers = Signal(1, name: 'servers');
+
+  int get unlockedServers =>
+      servers.value.clamp(1, maxPendingCollapses).toInt();
+
   /// Wall-clock epoch ms the cycle began, for the drift formula. Zero means
   /// not stamped yet: the app stamps it, keeping DateTime out of the core.
   final Signal<int> cycleStartMs = Signal(0, name: 'cycle start');
@@ -592,7 +603,7 @@ class PrototypeSimulation {
   /// cycle, so taking three at once is three of both.
   int pendingCollapses(int nowMs) {
     var full = 0;
-    for (var rack = 0; rack < maxPendingCollapses; rack++) {
+    for (var rack = 0; rack < unlockedServers; rack++) {
       if (!walletEarned.gteWithTolerance(collapseCost(rack, nowMs))) break;
       full++;
     }
@@ -1368,6 +1379,7 @@ class PrototypeSimulation {
     'modules': modules.value,
     'restarts': restarts.value,
     'collapses': collapses.value,
+    'servers': servers.value,
     'data': {
       'raw': rawData.value.toJson(),
       'gross': cycleData.value.toJson(),
@@ -1419,6 +1431,7 @@ class PrototypeSimulation {
     modules.value = _readInt(json['modules'], 0);
     restarts.value = _readInt(json['restarts'], 0);
     collapses.value = _readInt(json['collapses'], 0);
+    servers.value = _readInt(json['servers'], 1).clamp(1, maxPendingCollapses);
     final data = json['data'];
     if (data is Map) {
       rawData.value = _readBig(data['raw']);

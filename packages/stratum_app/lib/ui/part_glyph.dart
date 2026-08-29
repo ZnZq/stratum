@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
+import 'hud.dart';
 import 'tokens.dart';
 
 /// A part of the arm, drawn as the piece it is -- and drawn RICHER the higher
@@ -144,21 +145,22 @@ class MarkGlyph extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: lit ? Palette.goldWell : Palette.shell,
-        borderRadius: BorderRadius.circular(size * 0.3),
-        border: Border.all(color: lit ? Palette.amber : Palette.lineBar),
-      ),
-      child: CustomPaint(
-        size: Size(size * 0.64, size * 0.64),
-        painter: PartGlyph(
-          part,
-          mark: mark,
-          tint: hidden ? Palette.line : null,
+      child: HudPlate(
+        cut: size * 0.24,
+        fill: lit ? Palette.goldWell : Palette.shell,
+        edge: lit ? Palette.amber : Palette.lineBar,
+        child: Center(
+          child: CustomPaint(
+            size: Size(size * 0.64, size * 0.64),
+            painter: PartGlyph(
+              part,
+              mark: mark,
+              tint: hidden ? Palette.line : null,
+            ),
+          ),
         ),
       ),
     );
@@ -195,18 +197,19 @@ class PartFace extends StatelessWidget {
           Positioned(
             left: 4,
             top: 4,
-            child: Container(
+            child: SizedBox(
               width: well,
               height: well,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: lit ? Palette.goldWell : Palette.shell,
-                borderRadius: BorderRadius.circular(size * 0.28),
-                border: Border.all(color: lit ? Palette.amber : Palette.line),
-              ),
-              child: CustomPaint(
-                size: Size(well * 0.62, well * 0.62),
-                painter: PartGlyph(part, mark: mark),
+              child: HudPlate(
+                cut: size * 0.24,
+                fill: lit ? Palette.goldWell : Palette.shell,
+                edge: lit ? Palette.amber : Palette.line,
+                child: Center(
+                  child: CustomPaint(
+                    size: Size(well * 0.62, well * 0.62),
+                    painter: PartGlyph(part, mark: mark),
+                  ),
+                ),
               ),
             ),
           ),

@@ -2,7 +2,6 @@ import 'package:flutter/widgets.dart';
 
 import 'navigation.dart';
 import 'game_icons.dart';
-import 'game_modal.dart';
 import 'hud.dart';
 import 'tokens.dart';
 

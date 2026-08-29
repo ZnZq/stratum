@@ -8,7 +8,6 @@ import 'evolve_overlay.dart';
 import 'hud.dart';
 import 'part_glyph.dart';
 import 'part_sheet.dart';
-import 'stat.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
 
@@ -207,26 +206,31 @@ class _BlowSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sim = game.sim;
-    // No wells around them. They are the diagram's caption, not two more
-    // panels stacked over the three below -- and dropping the frames is the
-    // cheapest height the screen had left to give the cards.
+    // Cut as ONE panel, not two plates: only the pair's outer corners are
+    // struck, so the seam between them stays square.
     return Row(
       children: [
         Expanded(
-          child: Stat(
+          child: HudStat(
             label: 'сила удару',
+            corners: const HudCorners(topLeft: true, bottomLeft: true),
             value: '${sim.strikePower}',
             size: 13,
+            accent: Palette.gold,
             colour: Palette.gold,
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
-          child: Stat(
+          child: HudStat(
             label: 'реголіт за удар',
+            align: CrossAxisAlignment.end,
+            corners: const HudCorners(topRight: true, bottomRight: true),
             value: '${sim.strikeRegolithMin} – ${sim.strikeRegolithMax}',
             size: 13,
+            accent: Palette.ore,
             colour: Palette.ore,
+            labelColour: Palette.ore,
           ),
         ),
       ],
@@ -244,38 +248,33 @@ class _BatchPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: Palette.lineBar),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final (value, label) in const [
-            (1, '×1'),
-            (10, '×10'),
-            (0, 'макс'),
-          ])
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => onPick(value),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(8, 3, 8, 4),
-                color: value == batch ? Palette.goldWell : null,
-                child: Text(
-                  label,
-                  style: AppText.body(
-                    9,
-                    weight: FontWeight.w700,
-                    color: value == batch ? Palette.gold : Palette.textFaint,
-                  ),
-                ),
+    // Three slots of one strip, like the navigation: the same cell shape
+    // wherever the game asks the player to pick one of a set.
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final (value, label) in const [
+          (1, '×1'),
+          (10, '×10'),
+          (0, 'макс'),
+        ]) ...[
+          HudMenu(
+            onTap: () => onPick(value),
+            active: value == batch,
+            cut: 5,
+            padding: const EdgeInsets.fromLTRB(9, 4, 9, 5),
+            child: Text(
+              label,
+              style: AppText.body(
+                9,
+                weight: FontWeight.w700,
+                color: value == batch ? Palette.gold : Palette.textFaint,
               ),
             ),
+          ),
+          if (value != 0) const SizedBox(width: 4),
         ],
-      ),
+      ],
     );
   }
 }
@@ -443,12 +442,10 @@ class _MarkTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final opened = generation > 0;
-    return Container(
+    return HudPlate(
+      cut: 4,
+      fill: opened ? Palette.goldWell : Palette.card,
       padding: const EdgeInsets.fromLTRB(6, 2, 6, 3),
-      decoration: BoxDecoration(
-        color: opened ? Palette.goldWell : Palette.card,
-        borderRadius: BorderRadius.circular(5),
-      ),
       child: Text(
         _marks[generation],
         style: AppText.display(
@@ -613,8 +610,8 @@ class _BuffRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: scale),
+    return HudRow(
+      margin: EdgeInsets.only(bottom: scale),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.baseline,
         textBaseline: TextBaseline.alphabetic,

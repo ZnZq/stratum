@@ -1,7 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
-import 'game_modal.dart';
 import 'hud.dart';
 import 'resource_style.dart';
 import 'tabler_icons.dart';
@@ -34,7 +33,7 @@ class OfflineWindow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GameModal(
+    return HudModal(
       leading: const Icon(Ti.moon, size: 16, color: Palette.tech),
       title: 'ОФЛАЙН ДОХІД',
       inset: 46,

@@ -5,7 +5,6 @@ import 'package:stratum_core/stratum_core.dart';
 
 import 'arm_style.dart';
 import 'game_icons.dart';
-import 'game_modal.dart';
 import 'hud.dart';
 import 'part_glyph.dart';
 import 'tokens.dart';
@@ -58,7 +57,7 @@ class _EvolveOverlayState extends State<EvolveOverlay>
     final style = armPartStyles[widget.part]!;
     final gained = buffsOpenedBy(widget.part, widget.to);
 
-    return GameModal(
+    return HudModal(
       icon: Ic.arm,
       title: 'ЕВОЛЮЦІЯ',
       accent: Palette.gold,

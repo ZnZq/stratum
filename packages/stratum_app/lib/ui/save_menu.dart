@@ -2,9 +2,9 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
+import 'hud.dart';
 import '../save_store.dart';
 import 'game_icons.dart';
-import 'game_modal.dart';
 import 'resource_style.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
@@ -70,7 +70,7 @@ class _SaveMenuState extends State<SaveMenu> {
 
   @override
   Widget build(BuildContext context) {
-    return GameModal(
+    return HudModal(
       icon: Ic.saves,
       title: 'ЗБЕРЕЖЕННЯ',
       anchor: ModalAnchor.stretch,

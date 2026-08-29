@@ -1,9 +1,6 @@
 import 'package:flutter/widgets.dart';
 
 import 'game_icons.dart';
-// For ModalAnchor, which both sheets share. If the chamfered panel
-// wins, the anchor moves here and game_modal.dart goes.
-import 'game_modal.dart';
 import 'stat.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
@@ -340,11 +337,15 @@ class _CellPainter extends CustomPainter {
     canvas.save();
     canvas.clipPath(track);
     for (var i = 0; i < count; i++) {
-      final ahead = i - filled;
-      if (ahead >= 1) break;
+      // How much of THIS cell is filled, 0 to 1. Measured from the cell's
+      // start rather than its index: comparing the index to the frontier
+      // counted cell zero as done at zero progress, so an empty track showed
+      // one lit segment.
+      final done = filled - i;
+      if (done <= 0) break;
       // Full behind the frontier, faint at it: the cell being worked on
       // reads as in progress rather than as done.
-      final alpha = ahead <= 0 ? 1.0 : 0.34;
+      final alpha = done >= 1 ? 1.0 : 0.34;
       canvas.drawRect(
         Rect.fromLTWH(i * step, 0, cellW, h),
         Paint()
@@ -419,6 +420,21 @@ class HudMenu extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Where a sheet sits over the screen it covers.
+enum ModalAnchor {
+  /// Over the middle. For a sheet the player opens to read.
+  centre,
+
+  /// Just above the tabs. For a menu reached for with a thumb, where the
+  /// bottom of the screen is the shortest distance from the hand.
+  bottom,
+
+  /// Every pixel between the resource strip and the tabs. For a sheet with a
+  /// list long enough to scroll, which would otherwise resize itself every
+  /// time its contents changed.
+  stretch,
 }
 
 /// A panel cut out of the console, rather than a card laid on top of it.
@@ -697,6 +713,7 @@ class HudBox extends StatelessWidget {
     this.bracketWidth = 1.6,
     this.bracketArm = 0,
     this.padding = EdgeInsets.zero,
+    this.over = false,
     super.key,
   });
 
@@ -724,20 +741,27 @@ class HudBox extends StatelessWidget {
 
   final EdgeInsets padding;
 
+  /// Draws the outline OVER the child instead of behind it. For a box whose
+  /// content fills it to the edge -- a screen, a clipped panel -- where an
+  /// outline underneath is simply covered up.
+  final bool over;
+
   @override
   Widget build(BuildContext context) {
+    final painter = _BoxPainter(
+      corners: corners,
+      sides: sides,
+      cut: cut,
+      fill: fill,
+      edge: edge,
+      edgeWidth: edgeWidth,
+      bracket: bracket,
+      bracketWidth: bracketWidth,
+      bracketArm: bracketArm,
+    );
     return CustomPaint(
-      painter: _BoxPainter(
-        corners: corners,
-        sides: sides,
-        cut: cut,
-        fill: fill,
-        edge: edge,
-        edgeWidth: edgeWidth,
-        bracket: bracket,
-        bracketWidth: bracketWidth,
-        bracketArm: bracketArm,
-      ),
+      painter: over ? null : painter,
+      foregroundPainter: over ? painter : null,
       child: Padding(padding: padding, child: child),
     );
   }
@@ -1006,6 +1030,113 @@ class HudStat extends StatelessWidget {
         unit: unit,
         child: child,
       ),
+    );
+  }
+}
+
+/// The frame a whole screen lives in.
+///
+/// The island every screen sat on was a rounded card with a shadow, which is
+/// the one place the app still looked like an app. Same job -- clip the screen
+/// and mark its edge -- with the console's outline: corners cut, a quiet edge,
+/// and the four corners struck.
+///
+/// The screen is clipped to the chamfer, so a full-bleed scene (the borehole,
+/// the arm's rock band) stops on the cut instead of running past it, and the
+/// outline is painted OVER the content, because an opaque screen fills the
+/// clip right to its edge.
+class HudScreen extends StatelessWidget {
+  const HudScreen({
+    required this.child,
+    this.cut = 18,
+    this.edge = Palette.line,
+    this.accent = Palette.tech,
+    super.key,
+  });
+
+  final Widget child;
+  final double cut;
+
+  /// The quiet run along each side.
+  final Color edge;
+
+  /// The corners, in a colour of their own. Struck in the same grey as the
+  /// sides they simply read as a slightly thicker line; the point of a
+  /// bracket is that the eye finds the shape from it, and it cannot do that
+  /// while the bracket is the same thing as the edge.
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return HudBox(
+      corners: HudCorners.centred,
+      cut: cut,
+      edge: edge,
+      bracket: accent.withValues(alpha: 0.7),
+      bracketWidth: 1.8,
+      bracketArm: 16,
+      over: true,
+      child: ClipPath(
+        clipper: _CornerClipper(HudCorners.centred, cut),
+        child: child,
+      ),
+    );
+  }
+}
+
+/// Clips to the same outline a [HudBox] draws, so content and frame agree.
+class _CornerClipper extends CustomClipper<Path> {
+  const _CornerClipper(this.corners, this.cut);
+
+  final HudCorners corners;
+  final double cut;
+
+  @override
+  Path getClip(Size size) => corners.path(size, cut);
+
+  @override
+  bool shouldReclip(_CornerClipper old) =>
+      old.corners != corners || old.cut != cut;
+}
+
+/// A line of a list, marked by a rule down its left edge and washed with the
+/// accent behind it.
+///
+/// Costs NO height: the wash and the rule are decoration -- painted behind
+/// the row and along its edge -- so a dense list keeps the height it had.
+/// Only the side insets are new, and insets on the side are free vertically.
+/// That is the whole reason this shape works where a framed card would not.
+class HudRow extends StatelessWidget {
+  const HudRow({
+    required this.child,
+    this.accent = Palette.amber,
+    this.rule = 2,
+    this.padding = const EdgeInsets.only(left: 5, right: 6),
+    this.margin = EdgeInsets.zero,
+    super.key,
+  });
+
+  final Widget child;
+
+  /// The rule and, at a fraction of its opacity, the wash.
+  final Color accent;
+
+  final double rule;
+  final EdgeInsets padding;
+  final EdgeInsets margin;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: margin,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.05),
+        border: Border(
+          left: BorderSide(color: accent, width: rule),
+        ),
+      ),
+      child: child,
     );
   }
 }

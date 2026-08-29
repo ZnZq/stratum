@@ -2,7 +2,6 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
-import 'game_modal.dart';
 import 'hud.dart';
 import 'resource_plate.dart';
 import 'resource_style.dart';
