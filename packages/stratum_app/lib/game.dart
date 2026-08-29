@@ -761,7 +761,27 @@ class Game extends ChangeNotifier {
   static String secondsLabel(Duration interval) =>
       '${(interval.inMilliseconds / 1000).toStringAsFixed(1)} с';
 
+  /// The requests the player has already laid eyes on. Attention state,
+  /// not progress -- it lives here rather than in the save, and a reload
+  /// lighting the dot once is the honest outcome: the board IS news again.
+  final Set<TradeRequest> _seenRequests = {};
+
+  /// Whether the board holds a request the player has not seen. This is
+  /// what the trade tab's dot answers -- "a courier came", not "you can
+  /// afford something", which at these odds would burn the dot always-on.
+  bool get hasUnseenRequests =>
+      sim.requests.any((request) => !_seenRequests.contains(request));
+
+  /// The board is on screen: everything on it stops being news.
+  void markRequestsSeen() {
+    if (!hasUnseenRequests) return;
+    _seenRequests.addAll(sim.requests);
+    notifyListeners();
+  }
+
   void _onDrillBatch(TickBatch batch) {
+    sim.syncRequests(DateTime.now().millisecondsSinceEpoch);
+    _seenRequests.retainAll(sim.requests);
     for (var i = 0; i < batch.ticks; i++) {
       final outcome = sim.tick();
       // The drill's tick is a strike of its own: mine, then hit the face.

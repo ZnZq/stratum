@@ -433,6 +433,108 @@ class _CellPainter extends CustomPainter {
       old.fraction != fraction || old.accent != accent || old.from != from;
 }
 
+/// One choice among a few, drawn as ONE strip.
+///
+/// Every N-way pick in the game -- a share, a view, a room -- used to be a
+/// row of separate chamfered slots, which is five little cards where the
+/// player sees one control. Here the GROUP owns the outline: outer corners
+/// are struck, inner seams are hairlines, and the lit cell is a fill inside
+/// the shared shape rather than a box of its own.
+class HudChoice<T> extends StatelessWidget {
+  const HudChoice({
+    required this.options,
+    required this.value,
+    required this.onPick,
+    this.stretch = false,
+    this.accent = Palette.gold,
+    this.cut = 7,
+    this.top = true,
+    this.bottom = true,
+    this.size = 9,
+    this.padding = const EdgeInsets.fromLTRB(10, 5, 10, 6),
+    super.key,
+  });
+
+  final List<(T, String)> options;
+  final T value;
+  final ValueChanged<T> onPick;
+
+  /// Share the row's width equally instead of hugging the labels. What a
+  /// control seated across the screen wants; a picker in a heading does not.
+  final bool stretch;
+
+  final Color accent;
+  final double cut;
+
+  /// Which of the GROUP's corners are struck. A control seated on the floor
+  /// of a screen keeps its top square -- the cut marks where the shape ends,
+  /// and against an edge it does not end.
+  final bool top;
+  final bool bottom;
+
+  final double size;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final corners = HudCorners(
+      topLeft: top,
+      topRight: top,
+      bottomLeft: bottom,
+      bottomRight: bottom,
+    );
+    final cells = <Widget>[];
+    for (final (option, label) in options) {
+      final active = option == value;
+      Widget cell = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onPick(option),
+        child: ColoredBox(
+          color: active
+              ? accent.withValues(alpha: 0.16)
+              : const Color(0x00000000),
+          child: Padding(
+            padding: padding,
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: AppText.body(
+                size,
+                weight: FontWeight.w700,
+                letterSpacing: 1.2,
+                color: active ? accent : Palette.textFaint,
+              ),
+            ),
+          ),
+        ),
+      );
+      if (stretch) cell = Expanded(child: cell);
+      if (cells.isNotEmpty) {
+        cells.add(
+          const SizedBox(width: 1, child: ColoredBox(color: Palette.lineBar)),
+        );
+      }
+      cells.add(cell);
+    }
+    return HudBox(
+      corners: corners,
+      cut: cut,
+      edge: Palette.lineBar,
+      child: ClipPath(
+        clipper: _CornerClipper(corners, cut),
+        // IntrinsicHeight so the hairline seams run the full height of the
+        // strip instead of collapsing to the text's.
+        child: IntrinsicHeight(
+          child: Row(
+            mainAxisSize: stretch ? MainAxisSize.max : MainAxisSize.min,
+            children: cells,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// A navigation cell: the button's chamfer with its top and bottom opened.
 ///
 /// A menu is a run of slots, not a row of separate controls. Closing every

@@ -17,6 +17,7 @@ import 'offline_window.dart';
 import 'save_menu.dart';
 import 'strikes_screen.dart';
 import 'simulation_screen.dart';
+import 'trade_screen.dart';
 import 'tree_screen.dart';
 import 'shell_backdrop.dart';
 import 'resource_style.dart';
@@ -106,6 +107,7 @@ class _GameShellState extends State<GameShell> {
         GameScreen.drill => DrillScreen(game: _game),
         GameScreen.upgrades => DrillsScreen(game: _game),
         GameScreen.strikes => StrikesScreen(game: _game),
+        GameScreen.trade => TradeScreen(game: _game),
         GameScreen.simulation => SimulationScreen(
           game: _game,
           onOpen: _pickScreen,
@@ -744,10 +746,11 @@ class _NavBar extends StatelessWidget {
             children: [
               for (final section in NavSection.values)
                 // A centred cluster: the seated well is 46 wide, and a fixed
-                // 78 per tab keeps the four together in the middle instead of
-                // scattering them across the full width.
+                // slot keeps the tabs together in the middle. 78 was a
+                // cluster while there were four sections; at five it filled
+                // the row exactly, which reads as spread, not seated.
                 SizedBox(
-                  width: 78,
+                  width: 64,
                   child: _SectionTab(
                     section: section,
                     current: section == screen?.section,

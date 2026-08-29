@@ -248,33 +248,12 @@ class _BatchPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Three slots of one strip, like the navigation: the same cell shape
-    // wherever the game asks the player to pick one of a set.
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final (value, label) in const [
-          (1, '×1'),
-          (10, '×10'),
-          (0, 'макс'),
-        ]) ...[
-          HudMenu(
-            onTap: () => onPick(value),
-            active: value == batch,
-            cut: 5,
-            padding: const EdgeInsets.fromLTRB(9, 4, 9, 5),
-            child: Text(
-              label,
-              style: AppText.body(
-                9,
-                weight: FontWeight.w700,
-                color: value == batch ? Palette.gold : Palette.textFaint,
-              ),
-            ),
-          ),
-          if (value != 0) const SizedBox(width: 4),
-        ],
-      ],
+    return HudChoice<int>(
+      options: const [(1, '×1'), (10, '×10'), (0, 'макс')],
+      value: batch,
+      onPick: onPick,
+      cut: 5,
+      padding: const EdgeInsets.fromLTRB(9, 4, 9, 5),
     );
   }
 }

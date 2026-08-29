@@ -54,6 +54,11 @@ enum GameScreen {
   upgrades(NavSection.extraction, 'Бури', Ic.drills),
   planets(NavSection.extraction, 'Планети', Ic.planets),
 
+  /// Selling what the shaft brings up. First in the section because it is
+  /// the first thing a player does with a pile of regolith -- turn it into
+  /// credits and buy the drill that digs the next pile.
+  trade(NavSection.production, 'Торгівля', Ic.trade),
+
   craft(NavSection.production, 'Крафт', Ic.craft),
   building(NavSection.production, 'Будівництво', Ic.building),
   lab(NavSection.production, 'Лабораторія', Ic.lab),
@@ -128,6 +133,7 @@ enum GameScreen {
 /// than being left out, so wiring one up later is a case here and nothing
 /// else.
 bool screenNeedsAttention(GameScreen screen, Game game) => switch (screen) {
+  GameScreen.trade => game.hasUnseenRequests,
   GameScreen.simulation =>
     game.sim.pendingCollapses(DateTime.now().millisecondsSinceEpoch) > 0,
   GameScreen.upgrades => game.sim.canBuyDrill || game.sim.canBuyPowerUpgrade,

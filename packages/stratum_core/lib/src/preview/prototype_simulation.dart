@@ -173,6 +173,55 @@ class DrillState {
   };
 }
 
+/// One buyer's order: hand over the listed amounts, get paid over list price.
+///
+/// A plain object rather than signals: a request never changes after it is
+/// posted -- it is fulfilled or it expires -- and the list it lives in is
+/// redrawn by the clock that expires it.
+class TradeRequest {
+  TradeRequest({
+    required this.needs,
+    required this.premium,
+    required this.expiresAtMs,
+  });
+
+  final List<({ResourceId id, BigDouble amount})> needs;
+
+  /// Paid on top of list price, as a fraction (0.24 reads "премія +24%").
+  final double premium;
+
+  /// Wall-clock, like the drift: a courier does not pause with the engines.
+  final int expiresAtMs;
+
+  Map<String, Object?> toJson() => {
+    'premium': premium,
+    'expires': expiresAtMs,
+    'needs': {for (final need in needs) need.id.name: need.amount.toJson()},
+  };
+
+  static TradeRequest? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final needs = <({ResourceId id, BigDouble amount})>[];
+    final raw = json['needs'];
+    if (raw is Map) {
+      for (final id in ResourceId.values) {
+        final amount = raw[id.name];
+        if (amount is String) {
+          needs.add((id: id, amount: BigDouble.parse(amount)));
+        }
+      }
+    }
+    if (needs.isEmpty) return null;
+    final premium = json['premium'];
+    final expires = json['expires'];
+    return TradeRequest(
+      needs: needs,
+      premium: premium is num ? premium.toDouble() : 0.2,
+      expiresAtMs: expires is int ? expires : 0,
+    );
+  }
+}
+
 /// A provisional model of the drilling loop, carrying the prototype's numbers.
 ///
 /// PROVISIONAL. The balance reference is still undecided — the prototype's
@@ -1393,6 +1442,200 @@ class PrototypeSimulation {
     });
   }
 
+  // -------------------------------------------------------------- trade
+
+  /// The price list. Fixed by design: no depth scaling, no market swings --
+  /// a pile of regolith is worth the same credits whenever it is sold, so
+  /// "when to sell" is about what the player needs, never about timing.
+  /// PROVISIONAL numbers, like every other constant here.
+  static const List<({ResourceId id, double price})> priceTable = [
+    (id: ResourceId.regolith, price: 0.4),
+    (id: ResourceId.cuprite, price: 820),
+    (id: ResourceId.ferrite, price: 1400),
+    (id: ResourceId.silicite, price: 2900),
+    (id: ResourceId.crystals, price: 12),
+  ];
+
+  /// The shares a position can sell at. Steps rather than a free slider:
+  /// four honest notches read at a glance, and the setting survives being
+  /// toggled off without inventing a fifth "0%" state.
+  static const List<int> sellShares = [25, 50, 75, 100];
+
+  final Map<ResourceId, Signal<bool>> _selling = {
+    for (final row in priceTable)
+      row.id: Signal(true, name: 'selling ${row.id.name}'),
+  };
+
+  final Map<ResourceId, Signal<int>> _sellShare = {
+    for (final row in priceTable)
+      row.id: Signal(100, name: 'sell share ${row.id.name}'),
+  };
+
+  /// Whether "sell everything" takes this position. An off position keeps
+  /// its colour, its share and its own sell button -- the toggle means one
+  /// thing only.
+  Signal<bool> sellingOf(ResourceId id) => _selling[id]!;
+
+  /// The whole shelf's switch, INDEPENDENT of the positions' own: turning
+  /// the group off does not rewrite what each position chose, so turning it
+  /// back on restores the exact picture the player had set up.
+  final Signal<bool> sellingResources = Signal(true, name: 'selling group');
+
+  /// Whether "sell everything" takes [id] right now: its own switch AND the
+  /// shelf's.
+  bool sellsInSweep(ResourceId id) =>
+      sellingResources.value && _selling[id]!.value;
+
+  /// What share of the held amount a sale moves, in percent.
+  Signal<int> sellShareOf(ResourceId id) => _sellShare[id]!;
+
+  BigDouble sellPrice(ResourceId id) =>
+      BigDouble.fromNum(priceTable.firstWhere((row) => row.id == id).price);
+
+  /// The amount one manual sale of [id] would move right now.
+  BigDouble sellLot(ResourceId id) =>
+      stock.amount(id) * BigDouble.fromNum(_sellShare[id]!.value / 100);
+
+  /// What one manual sale of [id] pays right now.
+  BigDouble sellYield(ResourceId id) => sellLot(id) * sellPrice(id);
+
+  /// What "sell everything" pays: only positions left switched on. The
+  /// button quotes this same number, so it can never surprise.
+  BigDouble sellAllYield() {
+    var sum = BigDouble.zero;
+    for (final row in priceTable) {
+      if (sellsInSweep(row.id)) sum += sellYield(row.id);
+    }
+    return sum;
+  }
+
+  /// Sells [id] at its share, toggle or no toggle: the per-position button
+  /// is a manual override, and a manual act obeys the finger, not the flag.
+  BigDouble sellPosition(ResourceId id) {
+    final lot = sellLot(id);
+    if (lot.isZero) return BigDouble.zero;
+    final paid = lot * sellPrice(id);
+    batch(() {
+      stock.spend(id, lot);
+      stock.add(ResourceId.credits, paid);
+    });
+    return paid;
+  }
+
+  /// Sells every position that is switched on. Returns the credits paid.
+  BigDouble sellAll() {
+    var paid = BigDouble.zero;
+    batch(() {
+      for (final row in priceTable) {
+        if (sellsInSweep(row.id)) paid += sellPosition(row.id);
+      }
+    });
+    return paid;
+  }
+
+  // ------------------------------------------------------------- requests
+
+  /// How many requests can wait at once. A future tree node raises it.
+  int get requestSlots => 3;
+
+  /// How often a new request arrives, wall-clock. PROVISIONAL.
+  static const int requestIntervalMs = 10 * 60 * 1000;
+
+  /// How long a request waits before leaving. Expiry costs nothing: the
+  /// premium is a bonus on top of list price, never a gate (safeguard 4).
+  static const int requestLifetimeMs = 12 * 60 * 1000;
+
+  static const double requestShareFloor = 0.15;
+  static const double requestShareCeil = 0.45;
+  static const double requestPremiumFloor = 0.15;
+  static const double requestPremiumCeil = 0.40;
+  static const double requestSecondLineChance = 0.45;
+
+  /// The requests on the board, oldest first. Mutated only by
+  /// [syncRequests] and [fulfilRequest]; redraws ride the app's own clock.
+  final List<TradeRequest> requests = [];
+
+  /// When the next courier is due. Zero means the board has never been
+  /// looked at -- the first sync posts a request immediately, so the tab is
+  /// never empty on first visit.
+  int nextRequestAtMs = 0;
+
+  /// Retires the expired, posts the due. Wall-clock like the drift, and for
+  /// the same reason: couriers do not pause with the engines. A long absence
+  /// posts at most a boardful -- the backlog is not replayed one by one.
+  void syncRequests(int nowMs) {
+    requests.removeWhere((request) => request.expiresAtMs <= nowMs);
+    if (nextRequestAtMs == 0) nextRequestAtMs = nowMs;
+    while (nextRequestAtMs <= nowMs) {
+      if (requests.length >= requestSlots || !_spawnRequest(nowMs)) {
+        // The board is full, or there is nothing to ask for yet: the next
+        // courier comes a full interval from NOW, not the moment a slot
+        // frees -- a freed slot is not a delivery.
+        nextRequestAtMs = nowMs + requestIntervalMs;
+        break;
+      }
+      nextRequestAtMs += requestIntervalMs;
+    }
+  }
+
+  bool _spawnRequest(int nowMs) {
+    // Only what the player actually holds is asked for: a request for an ore
+    // the run has never seen would be a wall, and the amounts are shares of
+    // the pile so they scale with progress by construction.
+    final pool = [
+      for (final row in priceTable)
+        if (!stock.amount(row.id).isZero) row.id,
+    ];
+    if (pool.isEmpty) return false;
+    final roll = random.stream('trade.request');
+    final lines = pool.length > 1 && roll.chance(requestSecondLineChance)
+        ? 2
+        : 1;
+    final needs = <({ResourceId id, BigDouble amount})>[];
+    for (var line = 0; line < lines; line++) {
+      final id = pool.removeAt(roll.nextInt(pool.length));
+      final share =
+          requestShareFloor +
+          (requestShareCeil - requestShareFloor) * roll.nextDouble();
+      needs.add((id: id, amount: stock.amount(id) * BigDouble.fromNum(share)));
+    }
+    final premium =
+        requestPremiumFloor +
+        (requestPremiumCeil - requestPremiumFloor) * roll.nextDouble();
+    requests.add(
+      TradeRequest(
+        needs: needs,
+        premium: premium,
+        expiresAtMs: nowMs + requestLifetimeMs,
+      ),
+    );
+    return true;
+  }
+
+  /// List price of everything the request wants, plus its premium.
+  BigDouble requestPayout(TradeRequest request) {
+    var sum = BigDouble.zero;
+    for (final need in request.needs) {
+      sum += need.amount * sellPrice(need.id);
+    }
+    return sum * BigDouble.fromNum(1 + request.premium);
+  }
+
+  bool canFulfil(TradeRequest request) =>
+      request.needs.every((need) => stock.has(need.id, need.amount));
+
+  bool fulfilRequest(TradeRequest request) {
+    if (!requests.contains(request) || !canFulfil(request)) return false;
+    batch(() {
+      for (final need in request.needs) {
+        stock.spend(need.id, need.amount);
+      }
+      stock.add(ResourceId.credits, requestPayout(request));
+    });
+    requests.remove(request);
+    return true;
+  }
+
   /// The run, as a plain map.
   ///
   /// Derived values are left out and recomputed on the way back in: writing
@@ -1442,6 +1685,22 @@ class PrototypeSimulation {
       'quantonium': quantoniumLevel.value,
     },
     'stock': stock.toJson(),
+    'trade': {
+      // Only departures from the defaults are written: a fresh build reads
+      // an old save and every position simply sells whole, switched on.
+      'off': [
+        for (final row in priceTable)
+          if (!_selling[row.id]!.value) row.id.name,
+      ],
+      if (!sellingResources.value) 'groupOff': true,
+      'share': {
+        for (final row in priceTable)
+          if (_sellShare[row.id]!.value != 100)
+            row.id.name: _sellShare[row.id]!.value,
+      },
+      'nextAt': nextRequestAtMs,
+      'requests': [for (final request in requests) request.toJson()],
+    },
     'random': random.toJson(),
   };
 
@@ -1532,6 +1791,36 @@ class PrototypeSimulation {
     final held = json['stock'];
     if (held is Map) {
       stock.readJson(Map<String, Object?>.from(held));
+    }
+
+    final trade = json['trade'];
+    requests.clear();
+    if (trade is Map) {
+      final off = trade['off'];
+      final share = trade['share'];
+      for (final row in priceTable) {
+        _selling[row.id]!.value = off is! List || !off.contains(row.id.name);
+        final stored = share is Map ? share[row.id.name] : null;
+        _sellShare[row.id]!.value = sellShares.contains(stored)
+            ? stored as int
+            : 100;
+      }
+      sellingResources.value = trade['groupOff'] != true;
+      nextRequestAtMs = _readInt(trade['nextAt'], 0);
+      final posted = trade['requests'];
+      if (posted is List) {
+        for (final entry in posted) {
+          final request = TradeRequest.fromJson(entry);
+          if (request != null) requests.add(request);
+        }
+      }
+    } else {
+      for (final row in priceTable) {
+        _selling[row.id]!.value = true;
+        _sellShare[row.id]!.value = 100;
+      }
+      sellingResources.value = true;
+      nextRequestAtMs = 0;
     }
 
     final rolls = json['random'];
