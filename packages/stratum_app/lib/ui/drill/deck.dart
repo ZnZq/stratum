@@ -190,7 +190,9 @@ class LootTable extends StatelessWidget {
                 // needs the width.
                 ResourcePlate(
                   id: ResourceId.regolith,
-                  amount: '${sim.strikeRegolithMin} – ${sim.strikeRegolithMax}',
+                  amount:
+                      '${sim.strikeRegolithMin * sim.fundScaleOf(ResourceId.regolith)}'
+                      ' – ${sim.strikeRegolithMax * sim.fundScaleOf(ResourceId.regolith)}',
                   width: constraints.maxWidth,
                   shadows: true,
                 ),
@@ -199,7 +201,8 @@ class LootTable extends StatelessWidget {
                     ResourcePlate(
                       id: row.id,
                       aside: '${(row.chance * 100).round()}%',
-                      amount: '${PrototypeSimulation.oreDropAt(layer)}',
+                      amount:
+                          '${PrototypeSimulation.oreDropAt(layer) * sim.fundScaleOf(row.id)}',
                       width: half,
                       shadows: true,
                     )
@@ -234,7 +237,8 @@ class LootTable extends StatelessWidget {
                   id: ResourceId.rawData,
                   aside:
                       '${(PrototypeSimulation.rawDataChance * 100).toStringAsFixed(0)}%',
-                  amount: '${PrototypeSimulation.rawDataDropAt(layer)}',
+                  amount:
+                      '${PrototypeSimulation.rawDataDropAt(layer) * sim.fundScaleOf(ResourceId.rawData)}',
                   width: half,
                   shadows: true,
                 ),

@@ -17,10 +17,14 @@ void main() {
       sim.sellShareOf(ResourceId.regolith).value = 25;
       final paid = sim.sellPosition(ResourceId.regolith);
       expect(paid.toDouble(), closeTo(250 * 0.4, 1e-9));
-      expect(sim.stock.amount(ResourceId.regolith).toDouble(),
-          closeTo(750, 1e-9));
-      expect(sim.stock.amount(ResourceId.credits).toDouble(),
-          closeTo(100, 1e-9));
+      expect(
+        sim.stock.amount(ResourceId.regolith).toDouble(),
+        closeTo(750, 1e-9),
+      );
+      expect(
+        sim.stock.amount(ResourceId.credits).toDouble(),
+        closeTo(100, 1e-9),
+      );
     });
 
     test('sell-all skips a switched-off position', () {
@@ -30,8 +34,10 @@ void main() {
       final paid = sim.sellAll();
       expect(paid.toDouble(), closeTo(quoted.toDouble(), 1e-6));
       expect(paid.toDouble(), closeTo(1000 * 0.4, 1e-9));
-      expect(sim.stock.amount(ResourceId.cuprite).toDouble(),
-          closeTo(100, 1e-9));
+      expect(
+        sim.stock.amount(ResourceId.cuprite).toDouble(),
+        closeTo(100, 1e-9),
+      );
     });
 
     test('the toggle does not disarm the manual button', () {
@@ -57,8 +63,10 @@ void main() {
       sim.syncRequests(
         minute + PrototypeSimulation.requestLifetimeMs + minute * 30,
       );
-      expect(sim.stock.amount(ResourceId.credits).toDouble(),
-          before.toDouble());
+      expect(
+        sim.stock.amount(ResourceId.credits).toDouble(),
+        before.toDouble(),
+      );
       // The board refills on the same sync: expiry is not a drought.
       expect(sim.requests, isNotEmpty);
     });
@@ -70,32 +78,39 @@ void main() {
       expect(sim.requests.length, lessThanOrEqualTo(sim.requestSlots));
     });
 
-    test('fulfilling pays list price plus the premium and spends the needs',
-        () {
-      final sim = stocked();
-      sim.syncRequests(minute);
-      final request = sim.requests.single;
-      final payout = sim.requestPayout(request);
-      var list = BigDouble.zero;
-      for (final need in request.needs) {
-        list += need.amount * sim.sellPrice(need.id);
-      }
-      expect(payout.toDouble(),
-          closeTo(list.toDouble() * (1 + request.premium), 1e-6));
-      expect(sim.canFulfil(request), isTrue);
-      final held = {
-        for (final need in request.needs)
-          need.id: sim.stock.amount(need.id),
-      };
-      expect(sim.fulfilRequest(request), isTrue);
-      expect(sim.requests, isEmpty);
-      expect(sim.stock.amount(ResourceId.credits).toDouble(),
-          closeTo(payout.toDouble(), 1e-6));
-      for (final need in request.needs) {
-        expect(sim.stock.amount(need.id).toDouble(),
-            closeTo((held[need.id]! - need.amount).toDouble(), 1e-6));
-      }
-    });
+    test(
+      'fulfilling pays list price plus the premium and spends the needs',
+      () {
+        final sim = stocked();
+        sim.syncRequests(minute);
+        final request = sim.requests.single;
+        final payout = sim.requestPayout(request);
+        var list = BigDouble.zero;
+        for (final need in request.needs) {
+          list += need.amount * sim.sellPrice(need.id);
+        }
+        expect(
+          payout.toDouble(),
+          closeTo(list.toDouble() * (1 + request.premium), 1e-6),
+        );
+        expect(sim.canFulfil(request), isTrue);
+        final held = {
+          for (final need in request.needs) need.id: sim.stock.amount(need.id),
+        };
+        expect(sim.fulfilRequest(request), isTrue);
+        expect(sim.requests, isEmpty);
+        expect(
+          sim.stock.amount(ResourceId.credits).toDouble(),
+          closeTo(payout.toDouble(), 1e-6),
+        );
+        for (final need in request.needs) {
+          expect(
+            sim.stock.amount(need.id).toDouble(),
+            closeTo((held[need.id]! - need.amount).toDouble(), 1e-6),
+          );
+        }
+      },
+    );
 
     test('a request never asks for what the run has not seen', () {
       final sim = PrototypeSimulation();
@@ -126,7 +141,9 @@ void main() {
     expect(back.sellingOf(ResourceId.cuprite).value, isTrue);
     expect(back.nextRequestAtMs, sim.nextRequestAtMs);
     expect(back.requests, hasLength(sim.requests.length));
-    expect(back.requestPayout(back.requests.first).toDouble(),
-        closeTo(sim.requestPayout(sim.requests.first).toDouble(), 1e-6));
+    expect(
+      back.requestPayout(back.requests.first).toDouble(),
+      closeTo(sim.requestPayout(sim.requests.first).toDouble(), 1e-6),
+    );
   });
 }

@@ -465,6 +465,13 @@ class Game extends ChangeNotifier {
       );
     }
     _stampCycleStart();
+    if (sim.fundingWasReset) {
+      sim.fundingWasReset = false;
+      _announce(
+        'баланс змінився — розподіліть транші фінансування заново',
+        NoticeKind.info,
+      );
+    }
     _muteGains = false;
     // A clean slot lifts a standing breach; a tampered one raises it. The
     // engines re-arm through the exit path, not here.

@@ -75,9 +75,6 @@ void main() {
     expect(back.cycleStartMs.value, 0);
     // The absence between the save and the load is one gap: a week later
     // the restored run has banked three lived days plus two capped ones.
-    expect(
-      back.driftDays(sim.lastWallMs + 7 * day),
-      closeTo(5.0, 1e-9),
-    );
+    expect(back.driftDays(sim.lastWallMs + 7 * day), closeTo(5.0, 1e-9));
   });
 }

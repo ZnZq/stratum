@@ -428,9 +428,12 @@ class _ResourceBar extends StatelessWidget {
                       children: [
                         Transform.translate(
                           offset: const Offset(0, 0.8),
+                          // Both numbers CUMULATIVE: the eye compares this
+                          // pair against the lifetime turnover anyway, so
+                          // the pair is written on that same scale.
                           child: Text(
-                            '${sim.creditsEarned.value - sim.roundFloor(sim.financeRound)}'
-                            ' / ${sim.nextRoundCost}',
+                            '${sim.creditsEarned.value}'
+                            ' / ${sim.roundFloor(sim.financeRound + 1)}',
                             style: AppText.display(
                               8.5,
                               weight: FontWeight.w700,

@@ -222,19 +222,6 @@ class TradeRequest {
   }
 }
 
-/// Where a financing tranche can be poured.
-enum FundLine {
-  /// Multiplies every mined drop except substrate and quantonium.
-  extraction,
-
-  /// Multiplies the substrate lane alone: raw data is the prestige fuel,
-  /// so it gets its own tap rather than riding the ore multiplier.
-  telemetry,
-
-  /// Multiplies credits from every sale -- direct and requests alike.
-  sales,
-}
-
 /// A provisional model of the drilling loop, carrying the prototype's numbers.
 ///
 /// PROVISIONAL. The balance reference is still undecided — the prototype's
@@ -300,6 +287,61 @@ class PrototypeSimulation {
     // subtraction against what past restarts banked -- the run is the unit,
     // so each one is paid in full for what it dug.
     bankableData = Computed(() => walletEarned, name: 'bankable data');
+
+    // The financing chain. Every link is a Computed so that whatever moves
+    // -- a level poured, a sale landing in creditsEarned, a gifted tranche
+    // -- invalidates exactly its dependents and nothing recomputes twice:
+    // fundScaleOf() sits on the strike's hot path five lanes at a time.
+    _financeRound = Computed(() {
+      final earned = creditsEarned.value;
+      if (earned <= BigDouble.zero) return 0;
+      final g = BigDouble.fromNum(roundCostGrowth);
+      final ratio =
+          earned * (g - BigDouble.one) / roundCostBase + BigDouble.one;
+      final rounds = (ratio.ln() / math.log(roundCostGrowth)).floorToDouble();
+      return rounds < 0 ? 0 : rounds.toInt();
+    }, name: 'finance round');
+    _tranchesSpent = Computed(() {
+      var spent = 0;
+      for (final row in fundTable) {
+        spent += tranchesInto(_funding[row.id]!.value);
+      }
+      return spent;
+    }, name: 'tranches spent');
+    _financeRank = Computed(() {
+      var rank = 0;
+      while (_tranchesSpent.value >= rankThreshold(rank + 1)) {
+        rank++;
+      }
+      return rank;
+    }, name: 'finance rank');
+    _fundCap = Computed(
+      () => fundCapBase + fundCapPerRank * _financeRank.value,
+      name: 'fund cap',
+    );
+    _tranchesFree = Computed(() {
+      final free =
+          _financeRound.value * tranchesPerRound +
+          tranchesGranted.value -
+          _tranchesSpent.value;
+      return free < 0 ? 0 : free;
+    }, name: 'tranches free');
+    _fundGlobalScale = Computed(
+      () =>
+          BigDouble.fromNum(fundSpentStep)
+              .pow(_tranchesSpent.value.toDouble()) *
+          BigDouble.fromNum(fundRankStep).pow(_financeRank.value.toDouble()),
+      name: 'fund global scale',
+    );
+    for (final row in fundTable) {
+      _fundScales[row.id] = Computed(
+        () =>
+            BigDouble.fromNum(row.step)
+                .pow(_funding[row.id]!.value.toDouble()) *
+            _fundGlobalScale.value,
+        name: 'fund scale ${row.id.name}',
+      );
+    }
 
     _resetLayer();
   }
@@ -1209,25 +1251,25 @@ class PrototypeSimulation {
   BigDouble expectedPerStrike(ResourceId id) {
     switch (id) {
       case ResourceId.regolith:
-        return _strikeRegolithMean * extractionScale;
+        return _strikeRegolithMean * fundScaleOf(ResourceId.regolith);
       case ResourceId.crystals:
         return crystalDropAt(layer.value) *
             BigDouble.fromNum(crystalChance) *
-            extractionScale;
+            fundScaleOf(ResourceId.crystals);
       case ResourceId.quantonium:
         return quantoniumDropAt(layer.value).big *
             BigDouble.fromNum(strikeQuantoniumChance);
       case ResourceId.rawData:
         return rawDataDropAt(layer.value) *
             BigDouble.fromNum(rawDataChance) *
-            telemetryScale;
+            fundScaleOf(ResourceId.rawData);
       default:
         for (final row in oreTable) {
           if (row.id != id) continue;
           if (layer.value < row.unlockAt) return BigDouble.zero;
           return oreDropAt(layer.value) *
               BigDouble.fromNum(row.chance) *
-              extractionScale;
+              fundScaleOf(row.id);
         }
         return BigDouble.zero;
     }
@@ -1320,21 +1362,26 @@ class PrototypeSimulation {
     final span = strikeRegolithMax - low;
     final spread = random.stream('${prefix}regolith').nextDouble();
     final regolith =
-        (low + span * BigDouble.fromNum(spread)) * multiplier * extractionScale;
+        (low + span * BigDouble.fromNum(spread)) *
+        multiplier *
+        fundScaleOf(ResourceId.regolith);
     stock.add(ResourceId.regolith, regolith);
     loot[ResourceId.regolith] = regolith;
 
     for (final row in oreTable) {
       if (layer.value < row.unlockAt) continue;
       if (random.stream('$prefix${row.stream}').chance(row.chance)) {
-        final drop = oreDropAt(layer.value) * multiplier * extractionScale;
+        final drop = oreDropAt(layer.value) * multiplier * fundScaleOf(row.id);
         stock.add(row.id, drop);
         loot[row.id] = drop;
       }
     }
 
     if (random.stream('${prefix}crystal').chance(crystalChance)) {
-      final drop = crystalDropAt(layer.value) * multiplier * extractionScale;
+      final drop =
+          crystalDropAt(layer.value) *
+          multiplier *
+          fundScaleOf(ResourceId.crystals);
       stock.add(ResourceId.crystals, drop);
       loot[ResourceId.crystals] = drop;
     }
@@ -1352,7 +1399,10 @@ class PrototypeSimulation {
     // The substrate lane. Its own stream, named apart from everything else,
     // so adding it shifted no roll that came before it.
     if (random.stream('${prefix}rawdata').chance(rawDataChance)) {
-      final drop = rawDataDropAt(layer.value) * multiplier * telemetryScale;
+      final drop =
+          rawDataDropAt(layer.value) *
+          multiplier *
+          fundScaleOf(ResourceId.rawData);
       _recordData(drop);
       loot[ResourceId.rawData] = drop;
     }
@@ -1445,16 +1495,17 @@ class PrototypeSimulation {
       payout =
           rawDataDropAt(layer.value) *
           BigDouble.fromNum(thickSpan) *
-          telemetryScale;
+          fundScaleOf(ResourceId.rawData);
       final bonus = BigDouble.fromNum(thickSpan);
       final regolith = regolithPerCycle.value * bonus;
-      final crystals = crystalDropAt(layer.value) * bonus * extractionScale;
+      final crystals =
+          crystalDropAt(layer.value) * bonus * fundScaleOf(ResourceId.crystals);
       final quantonium = (quantoniumDropAt(layer.value) * thickSpan).big;
       stock.add(ResourceId.regolith, regolith);
       stock.add(ResourceId.crystals, crystals);
       for (final row in oreTable) {
         if (layer.value < row.unlockAt) continue;
-        stock.add(row.id, oreDropAt(layer.value) * bonus * extractionScale);
+        stock.add(row.id, oreDropAt(layer.value) * bonus * fundScaleOf(row.id));
       }
       stock.add(ResourceId.quantonium, quantonium);
       stock.add(ResourceId.samples, BigDouble.one);
@@ -1513,9 +1564,34 @@ class PrototypeSimulation {
   static final BigDouble roundCostBase = BigDouble.fromNum(500);
   static const double roundCostGrowth = 1.9;
 
-  /// What one budget-line level is worth. One number for all three lines --
-  /// the lines differ in WHAT they multiply, not in how hard. PROVISIONAL.
-  static const double fundStepPerLevel = 0.05;
+  /// Each fundable resource and its per-level step. THE RULE: financing
+  /// funds what earns credits -- the price list plus credits themselves --
+  /// plus ONE owner's exception: raw data, at the slowest step, because the
+  /// substrate is the product the simulation is mined FOR. Quantonium stays
+  /// with the trees. Steps UNEQUAL on purpose (owner's numbers).
+  /// PROVISIONAL.
+  static const List<({ResourceId id, double step})> fundTable = [
+    (id: ResourceId.credits, step: 1.07),
+    (id: ResourceId.regolith, step: 1.05),
+    (id: ResourceId.cuprite, step: 1.06),
+    (id: ResourceId.ferrite, step: 1.05),
+    (id: ResourceId.rawData, step: 1.01),
+  ];
+
+  /// Tranches paid per closed round. A future tree node raises it.
+  int get tranchesPerRound => 3;
+
+  /// The global compounding for every tranche SPENT and every rank climbed.
+  static const double fundSpentStep = 1.01;
+  static const double fundRankStep = 1.02;
+
+  /// How many more levels every multiplier gains per rank. TEN, not the
+  /// five first asked for: cap room grows lanes×this per rank against a
+  /// threshold step that settles at 40, and with four lanes a five left
+  /// nowhere to spend past rank four -- the same lock the thresholds were
+  /// already capped against, reopened from the other side.
+  static const int fundCapBase = 10;
+  static const int fundCapPerRank = 10;
 
   /// Credits earned over this simulation's whole life -- income only, never
   /// reduced by spending. This is what financing rounds are raised against:
@@ -1525,24 +1601,21 @@ class PrototypeSimulation {
     name: 'credits earned',
   );
 
-  final Map<FundLine, Signal<int>> _funding = {
-    for (final line in FundLine.values)
-      line: Signal(0, name: 'funding ${line.name}'),
+  final Map<ResourceId, Signal<int>> _funding = {
+    for (final row in fundTable)
+      row.id: Signal(0, name: 'funding ${row.id.name}'),
   };
 
-  Signal<int> fundingOf(FundLine line) => _funding[line]!;
+  Signal<int> fundingOf(ResourceId id) => _funding[id]!;
+
+  static double fundStep(ResourceId id) =>
+      fundTable.firstWhere((row) => row.id == id).step;
 
   /// Rounds closed so far, from lifetime turnover. Geometric ladder:
   /// total to reach round n is base·(g^n − 1)/(g − 1), inverted with a log
   /// so a qa-scale turnover does not loop a million times.
-  int get financeRound {
-    final earned = creditsEarned.value;
-    if (earned <= BigDouble.zero) return 0;
-    final g = BigDouble.fromNum(roundCostGrowth);
-    final ratio = earned * (g - BigDouble.one) / roundCostBase + BigDouble.one;
-    final rounds = (ratio.ln() / math.log(roundCostGrowth)).floorToDouble();
-    return rounds < 0 ? 0 : rounds.toInt();
-  }
+  late final Computed<int> _financeRound;
+  int get financeRound => _financeRound.value;
 
   /// Lifetime turnover at which [round] is reached.
   BigDouble roundFloor(int round) =>
@@ -1563,30 +1636,153 @@ class PrototypeSimulation {
     return frac > 1 ? 1 : frac;
   }
 
-  /// One tranche per closed round, minus what is already invested.
-  int get tranchesFree {
-    var spent = 0;
-    for (final line in FundLine.values) {
-      spent += _funding[line]!.value;
-    }
-    final free = financeRound - spent;
-    return free < 0 ? 0 : free;
+  /// What buying the NEXT level of a lane costs, in tranches: one for the
+  /// first twenty levels, two for the next twenty, and so on. Deep levels
+  /// cost more -- and, through the spent-multiplier, also pump the global
+  /// harder per level: the price is its own compensation.
+  static int investCostAt(int level) => 1 + level ~/ 20;
+
+  int investCost(ResourceId id) => investCostAt(_funding[id]!.value);
+
+  /// Tranches sunk into [levels] of one lane, price tiers included.
+  /// Closed form of summing [investCostAt] over 0..levels-1.
+  static int tranchesInto(int levels) {
+    final blocks = levels ~/ 20;
+    final rest = levels % 20;
+    return 10 * blocks * (blocks + 1) + rest * (blocks + 1);
   }
 
-  bool investTranche(FundLine line) {
-    if (tranchesFree < 1) return false;
-    final signal = _funding[line]!;
+  /// Tranches ever invested, whatever they were invested in -- COST-
+  /// weighted, so a deep level counts for what it actually drained. This is
+  /// what ranks are climbed on and what the global spent-multiplier
+  /// compounds from: the backer rewards commitment, not hoarding.
+  late final Computed<int> _tranchesSpent;
+  int get tranchesSpent => _tranchesSpent.value;
+
+  /// Tranches granted outright -- by a tree node that gifts levels, or any
+  /// future source. Counted as both given AND spent, so a gift climbs ranks
+  /// and pumps the global exactly like poured tranches, without silently
+  /// draining the player's own free pool. A Signal, not a field: the free
+  /// pool depends on it, and a grant must invalidate that chain.
+  final Signal<int> tranchesGranted = Signal(0, name: 'tranches granted');
+
+  /// Gifted levels per lane, remembered apart from bought ones: when a
+  /// balance change makes a saved distribution impossible, the reset melts
+  /// only what the player poured -- gifts are the floor it melts down to.
+  final Map<ResourceId, int> _grantedLevels = {
+    for (final row in fundTable) row.id: 0,
+  };
+
+  int grantedLevelsOf(ResourceId id) => _grantedLevels[id] ?? 0;
+
+  /// Set by [readJson] when it had to melt an impossible distribution, so
+  /// the app can tell the player to redistribute. Cleared by the reader.
+  bool fundingWasReset = false;
+
+  /// Whether the loaded funding books balance: no lane above its cap, and
+  /// the free pool not in the negative. A save from a build with different
+  /// prices, tranche pay or thresholds can violate either.
+  bool get _fundingBooksBalance {
+    if (financeRound * tranchesPerRound +
+            tranchesGranted.value -
+            tranchesSpent <
+        0) {
+      return false;
+    }
+    for (final row in fundTable) {
+      if (_funding[row.id]!.value > fundCap) return false;
+    }
+    return true;
+  }
+
+  /// Melts every lane down to its gifted floor and re-credits the gifts at
+  /// today's prices. Free tranches come back in full for the player to pour
+  /// again -- correctly this time.
+  void _resetFunding() {
+    var granted = 0;
+    for (final row in fundTable) {
+      final floor = _grantedLevels[row.id] ?? 0;
+      _funding[row.id]!.value = floor;
+      granted += tranchesInto(floor);
+    }
+    tranchesGranted.value = granted;
+    fundingWasReset = true;
+  }
+
+  late final Computed<int> _tranchesFree;
+  int get tranchesFree => _tranchesFree.value;
+
+  /// Gifts [levels] of [id], cap-clamped, at no cost to the free pool: each
+  /// level's tiered price is credited to [tranchesGranted] as it is spent.
+  /// Returns how many levels actually landed.
+  int grantFundLevels(ResourceId id, int levels) {
+    final signal = _funding[id]!;
+    var landed = 0;
+    while (landed < levels && signal.value < fundCap) {
+      tranchesGranted.value =
+          tranchesGranted.value + investCostAt(signal.value);
+      signal.value = signal.value + 1;
+      landed++;
+    }
+    _grantedLevels[id] = (_grantedLevels[id] ?? 0) + landed;
+    return landed;
+  }
+
+  /// What climbing to rank [rank] costs in TOTAL tranches spent.
+  ///
+  /// The step walks 20, 25, 30, 35, 40 and then stays at 40 -- capped on
+  /// purpose. Uncapped it grew quadratically against level caps that grow
+  /// linearly, and past rank ~10 there was nowhere left to spend enough:
+  /// a hard lock by arithmetic. Flat steps keep both lines linear, with a
+  /// margin of 50 tranches for ever (pinned by test).
+  static int rankThreshold(int rank) {
+    var total = 0;
+    for (var step = 1; step <= rank; step++) {
+      final increment = step < 5 ? 15 + 5 * step : 40;
+      total += increment;
+    }
+    return total;
+  }
+
+  /// The financing rank: how far the SPENDING has climbed.
+  late final Computed<int> _financeRank;
+  int get financeRank => _financeRank.value;
+
+  /// How far along the next rank's requirement the spending is, 0 to 1.
+  double get rankProgress {
+    final floor = rankThreshold(financeRank);
+    final ceiling = rankThreshold(financeRank + 1);
+    if (ceiling <= floor) return 0;
+    return ((tranchesSpent - floor) / (ceiling - floor)).clamp(0.0, 1.0);
+  }
+
+  /// Where every multiplier's level stops at the current rank.
+  late final Computed<int> _fundCap;
+  int get fundCap => _fundCap.value;
+
+  bool canInvest(ResourceId id) =>
+      tranchesFree >= investCost(id) && _funding[id]!.value < fundCap;
+
+  bool investTranche(ResourceId id) {
+    if (!canInvest(id)) return false;
+    final signal = _funding[id]!;
     signal.value = signal.value + 1;
     return true;
   }
 
-  BigDouble _fundScale(FundLine line) =>
-      BigDouble.fromNum(1 + fundStepPerLevel * _funding[line]!.value);
+  /// The global compounding: every spent tranche and every rank multiply
+  /// EVERY funded lane, whatever the tranche was spent on.
+  late final Computed<BigDouble> _fundGlobalScale;
+  BigDouble get fundGlobalScale => _fundGlobalScale.value;
 
-  /// The three levers, spelled out where the formulas read them.
-  BigDouble get extractionScale => _fundScale(FundLine.extraction);
-  BigDouble get telemetryScale => _fundScale(FundLine.telemetry);
-  BigDouble get salesScale => _fundScale(FundLine.sales);
+  /// The effective multiplier a resource's income wears -- one cached
+  /// Computed per lane, because the strike loot reads all of them on every
+  /// blow. A lane outside the table is untouched: not even the global rides
+  /// it -- prestige fuel answers to the trees, not to the backer.
+  final Map<ResourceId, Computed<BigDouble>> _fundScales = {};
+
+  BigDouble fundScaleOf(ResourceId id) =>
+      _fundScales[id]?.value ?? BigDouble.one;
 
   /// Every credit income lands here, whatever sold it: the wallet gets the
   /// money, the financing ladder gets the proof of turnover.
@@ -1605,8 +1801,6 @@ class PrototypeSimulation {
     (id: ResourceId.regolith, price: 0.4),
     (id: ResourceId.cuprite, price: 820),
     (id: ResourceId.ferrite, price: 1400),
-    (id: ResourceId.silicite, price: 2900),
-    (id: ResourceId.crystals, price: 12),
   ];
 
   /// The shares a position can sell at. Steps rather than a free slider:
@@ -1649,9 +1843,9 @@ class PrototypeSimulation {
   BigDouble sellLot(ResourceId id) =>
       stock.amount(id) * BigDouble.fromNum(_sellShare[id]!.value / 100);
 
-  /// What one manual sale of [id] pays right now, sales funding included.
+  /// What one manual sale of [id] pays right now, credit funding included.
   BigDouble sellYield(ResourceId id) =>
-      sellLot(id) * sellPrice(id) * salesScale;
+      sellLot(id) * sellPrice(id) * fundScaleOf(ResourceId.credits);
 
   /// What "sell everything" pays: only positions left switched on. The
   /// button quotes this same number, so it can never surprise.
@@ -1772,8 +1966,10 @@ class PrototypeSimulation {
     for (final need in request.needs) {
       sum += need.amount * sellPrice(need.id);
     }
-    // A request is a sale: the sales line pays here too.
-    return sum * BigDouble.fromNum(1 + request.premium) * salesScale;
+    // A request is a sale: the credits lane pays here too.
+    return sum *
+        BigDouble.fromNum(1 + request.premium) *
+        fundScaleOf(ResourceId.credits);
   }
 
   bool canFulfil(TradeRequest request) =>
@@ -1843,8 +2039,12 @@ class PrototypeSimulation {
     'clock': {'seen': wallSeenMs, 'last': lastWallMs},
     'finance': {
       'earned': creditsEarned.value.toJson(),
-      for (final line in FundLine.values)
-        if (_funding[line]!.value != 0) line.name: _funding[line]!.value,
+      if (tranchesGranted.value != 0) 'granted': tranchesGranted.value,
+      for (final row in fundTable)
+        if ((_grantedLevels[row.id] ?? 0) != 0)
+          'granted.${row.id.name}': _grantedLevels[row.id],
+      for (final row in fundTable)
+        if (_funding[row.id]!.value != 0) row.id.name: _funding[row.id]!.value,
     },
     'trade': {
       // Only departures from the defaults are written: a fresh build reads
@@ -1969,13 +2169,24 @@ class PrototypeSimulation {
     final finance = json['finance'];
     if (finance is Map) {
       creditsEarned.value = _readBig(finance['earned']);
-      for (final line in FundLine.values) {
-        _funding[line]!.value = _readInt(finance[line.name], 0);
+      tranchesGranted.value = _readInt(finance['granted'], 0);
+      // Keys from the three-line era (extraction/telemetry/sales) simply
+      // miss: those tranches come back as free ones and are re-poured.
+      for (final row in fundTable) {
+        _funding[row.id]!.value = _readInt(finance[row.id.name], 0);
+        _grantedLevels[row.id] = _readInt(finance['granted.${row.id.name}'], 0);
       }
+      // A distribution this build's numbers cannot account for -- prices
+      // moved, the tranche pay shrank, thresholds shifted -- is not carried
+      // as a debt the player never took. It melts to the gifted floor and
+      // the tranches come back to be poured again.
+      if (!_fundingBooksBalance) _resetFunding();
     } else {
       creditsEarned.value = BigDouble.zero;
-      for (final line in FundLine.values) {
-        _funding[line]!.value = 0;
+      tranchesGranted.value = 0;
+      for (final row in fundTable) {
+        _funding[row.id]!.value = 0;
+        _grantedLevels[row.id] = 0;
       }
     }
 
