@@ -40,6 +40,10 @@ abstract final class Palette {
   static const Color ferrite = Color(0xFFAABBD0);
   static const Color silicite = Color(0xFFEDE2C8);
 
+  /// Money. Its own green on purpose: gold already means "action" and the
+  /// cubes, and a wallet that shares their metal disappears among them.
+  static const Color credit = Color(0xFF9FD86E);
+
   /// Instrument accent: rulers, tick marks, technical captions.
   static const Color tech = Color(0xFF7FD9C4);
   static const Color steel = Color(0xFF85B7EB);

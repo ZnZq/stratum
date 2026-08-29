@@ -897,6 +897,10 @@ class Game extends ChangeNotifier {
       ..addAll(_affordableTracks());
   }
 
+  /// A UI act changed sim state no stockpile signal reports (a tranche
+  /// poured, a setting flipped): repaint whoever listens.
+  void pokeListeners() => notifyListeners();
+
   /// The board is on screen: everything on it stops being news.
   void markRequestsSeen() {
     if (!hasUnseenRequests) return;

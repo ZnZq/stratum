@@ -7,8 +7,10 @@ import '../game.dart';
 import '../preferences.dart';
 import 'console_menu.dart';
 import 'drills_screen.dart';
+import 'financing_sheet.dart';
 import 'drill_screen.dart';
 import 'game_icons.dart';
+import 'gauge.dart';
 import 'hud.dart';
 import 'home_screen.dart';
 import 'navigation.dart';
@@ -56,8 +58,8 @@ class _GameShellState extends State<GameShell> {
   /// player was doing in it rather than to its first entry.
   final Map<NavSection, GameScreen> _lastIn = {};
 
-  bool _warehouse = false;
   bool _saves = false;
+  bool _finance = false;
 
   bool _console = false;
 
@@ -65,8 +67,8 @@ class _GameShellState extends State<GameShell> {
     if (section.opensAsPanel) {
       setState(() {
         _console = !_console;
-        _warehouse = false;
         _saves = false;
+        _finance = false;
       });
       return;
     }
@@ -76,6 +78,8 @@ class _GameShellState extends State<GameShell> {
         _screen = null;
         return;
       }
+      _saves = false;
+      _finance = false;
       _screen = _lastIn[section] ?? section.landing;
     });
     _syncAudience();
@@ -107,6 +111,7 @@ class _GameShellState extends State<GameShell> {
         GameScreen.drill => DrillScreen(game: _game),
         GameScreen.upgrades => DrillsScreen(game: _game),
         GameScreen.strikes => StrikesScreen(game: _game),
+        GameScreen.warehouse => WarehouseScreen(game: _game),
         GameScreen.trade => TradeScreen(game: _game),
         GameScreen.simulation => SimulationScreen(
           game: _game,
@@ -125,7 +130,12 @@ class _GameShellState extends State<GameShell> {
       return;
     }
     setState(() {
+      // Moving anywhere dismisses whatever sheet was open: navigation under
+      // a modal that stays put switches the WRONG layer -- the screens
+      // changed behind the sheet while the sheet pretended to be the room.
       _console = false;
+      _saves = false;
+      _finance = false;
       _screen = screen;
       _lastIn[screen.section] = screen;
     });
@@ -139,7 +149,7 @@ class _GameShellState extends State<GameShell> {
     setState(() {
       _saves = true;
       _console = false;
-      _warehouse = false;
+      _finance = false;
     });
   }
 
@@ -254,22 +264,18 @@ class _GameShellState extends State<GameShell> {
                               Positioned.fill(
                                 child: AnimatedSwitcher(
                                   duration: const Duration(milliseconds: 180),
-                                  child: switch ((
-                                    _warehouse,
-                                    _saves,
-                                    _console,
-                                  )) {
-                                    (true, _, _) => WarehouseSheet(
-                                      game: _game,
-                                      onClose: () =>
-                                          setState(() => _warehouse = false),
-                                    ),
-                                    (_, true, _) => SaveMenu(
+                                  child: switch ((_saves, _console, _finance)) {
+                                    (true, _, _) => SaveMenu(
                                       game: _game,
                                       onClose: () =>
                                           setState(() => _saves = false),
                                     ),
-                                    (_, _, true) => ConsoleMenu(
+                                    (_, _, true) => FinancingSheet(
+                                      game: _game,
+                                      onClose: () =>
+                                          setState(() => _finance = false),
+                                    ),
+                                    (_, true, _) => ConsoleMenu(
                                       onPick: _pickScreen,
                                       onPause: () {
                                         setState(() => _console = false);
@@ -306,9 +312,8 @@ class _GameShellState extends State<GameShell> {
                                 right: 0,
                                 child: _ResourceBar(
                                   game: _game,
-                                  open: _warehouse,
                                   onTap: () => setState(() {
-                                    _warehouse = !_warehouse;
+                                    _finance = !_finance;
                                     _saves = false;
                                     _console = false;
                                   }),
@@ -362,14 +367,13 @@ class _GameShellState extends State<GameShell> {
 }
 
 class _ResourceBar extends StatelessWidget {
-  const _ResourceBar({
-    required this.game,
-    required this.open,
-    required this.onTap,
-  });
+  const _ResourceBar({required this.game, required this.onTap});
 
   final Game game;
-  final bool open;
+
+  /// The strip means ONE thing now: the whole of it opens financing. The
+  /// warehouse moved to its own production tab when the strip stopped being
+  /// its short form.
   final VoidCallback onTap;
 
   @override
@@ -377,6 +381,10 @@ class _ResourceBar extends StatelessWidget {
     final sim = game.sim;
     return HudTap(
       onTap: onTap,
+      // The strip is a full-width surface over the scene: a rectangular
+      // hover film across it reads as a glitch, the same lesson as the
+      // overlays. The hand cursor alone says it opens something.
+      wash: false,
       child: Container(
         height: AppMetrics.resourceBar,
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
@@ -387,46 +395,57 @@ class _ResourceBar extends StatelessWidget {
             colors: [Color(0xF20B0C10), Color(0xB30B0C10), Color(0x000B0C10)],
           ),
         ),
+        // Financing wears the strip now; the resources moved wholly into
+        // the warehouse the chevron still opens. The strip was already the
+        // warehouse's short form -- the round gauge is the financing
+        // sheet's short form by the same rule.
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Flexible(
-              child: Row(
+            Expanded(
+              // The badge SITS ON the gauge: the bar slides in from behind
+              // the round it is filling, so the two read as one instrument
+              // rather than a chip beside a stripe.
+              child: Stack(
+                alignment: Alignment.centerLeft,
                 children: [
-                  _ResourceFace(
-                    id: ResourceId.regolith,
-                    value: '${sim.regolith.value}',
+                  // Slides under the badge's straight edge only: shorter
+                  // and the track's cells peek through the chamfer notches,
+                  // which read as a glitch, not an overlap.
+                  Padding(
+                    padding: const EdgeInsets.only(left: 44),
+                    child: _RoundGauge(
+                      round: sim.financeRound,
+                      target: sim.roundProgress,
+                    ),
                   ),
-                  const SizedBox(width: 13),
-                  _ResourceFace(
-                    id: ResourceId.quantonium,
-                    value: '${sim.quantonium.value}',
+                  // The reading with the currency's own face after it --
+                  // composed here rather than through the bar's reading,
+                  // which speaks text alone.
+                  Positioned(
+                    right: 6,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Transform.translate(
+                          offset: const Offset(0, 0.8),
+                          child: Text(
+                            '${sim.creditsEarned.value - sim.roundFloor(sim.financeRound)}'
+                            ' / ${sim.nextRoundCost}',
+                            style: AppText.display(
+                              8.5,
+                              weight: FontWeight.w700,
+                              color: Palette.text,
+                              height: 1,
+                            ).copyWith(shadows: AppText.halo),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const ResourceIcon(ResourceId.credits, size: 11),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 13),
-                  _ResourceFace(
-                    id: ResourceId.crystals,
-                    value: '${sim.crystals.value}',
-                  ),
-                  const SizedBox(width: 13),
-                  _ResourceFace(
-                    id: ResourceId.compute,
-                    value: '${sim.backgroundCompute.value}',
-                  ),
+                  _RoundBadge(game: game, onTap: onTap),
                 ],
-              ),
-            ),
-            _ResourceFace(
-              id: ResourceId.capsules,
-              value: '${sim.capsules.value}',
-            ),
-            const SizedBox(width: 6),
-            AnimatedRotation(
-              turns: open ? 0.5 : 0,
-              duration: const Duration(milliseconds: 180),
-              child: const Icon(
-                Ti.chevronDown,
-                size: 13,
-                color: Palette.textFaint,
               ),
             ),
           ],
@@ -513,6 +532,9 @@ class _BackgroundOverlay extends StatelessWidget {
     final sim = game.sim;
     return HudTap(
       onTap: onExit,
+      // Tap-anywhere surfaces keep the hand but not the film: a wash the
+      // size of the screen reads as a glitch, not an affordance.
+      wash: false,
       child: ColoredBox(
         color: const Color(0xFF03050A),
         child: Column(
@@ -622,6 +644,7 @@ class _PauseOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return HudTap(
       onTap: onResume,
+      wash: false,
       child: ColoredBox(
         color: const Color(0x8A0B1018),
         child: Column(
@@ -663,30 +686,6 @@ class _PauseOverlay extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// A strip entry with a bespoke resource face.
-class _ResourceFace extends StatelessWidget {
-  const _ResourceFace({required this.id, required this.value});
-
-  final ResourceId id;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final colour = resourceStyles[id]!.colour;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ResourceIcon(id, size: 19),
-        const SizedBox(width: 4),
-        Text(
-          value,
-          style: AppText.display(12.5, weight: FontWeight.w700, color: colour),
-        ),
-      ],
     );
   }
 }
@@ -870,6 +869,149 @@ class _BreachOverlayState extends State<_BreachOverlay> {
             onClose: () => setState(() => _saves = false),
           ),
       ],
+    );
+  }
+}
+
+/// The strip's round gauge, chasing its own money.
+///
+/// New income lands in a pale lane INSTANTLY; the credit-green fill then
+/// animates up to it. Two frames of truth on one track: where you are, and
+/// what just arrived -- the chase is what makes a sale feel banked.
+class _RoundGauge extends StatefulWidget {
+  const _RoundGauge({required this.round, required this.target});
+
+  /// The round the bar is filling. A change means the ladder rolled over:
+  /// the fill snaps to zero and climbs the new rung rather than easing
+  /// backwards through it.
+  final int round;
+
+  final double target;
+
+  @override
+  State<_RoundGauge> createState() => _RoundGaugeState();
+}
+
+class _RoundGaugeState extends State<_RoundGauge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _chase;
+
+  @override
+  void initState() {
+    super.initState();
+    _chase = AnimationController(vsync: this, value: widget.target);
+  }
+
+  @override
+  void didUpdateWidget(_RoundGauge old) {
+    super.didUpdateWidget(old);
+    if (widget.round != old.round) _chase.value = 0;
+    if (_chase.value != widget.target) {
+      // The duration is EXPLICIT because animateTo without one scales the
+      // controller's duration by the remaining distance -- a small sale got
+      // a chase of eighty milliseconds and read as a plain jump. Measured,
+      // not guessed: the diagnostics log said "done" 83 ms after the start.
+      _chase.animateTo(
+        widget.target,
+        duration: const Duration(milliseconds: 900),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _chase.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // A POUR, not cells: money is continuous, and a cell lane swallowed any
+    // arrival smaller than one cell -- the chase was real and invisible.
+    // Two gauges on one track: the pale one snaps to what just arrived, the
+    // credit-green one rides the controller frame by frame underneath it.
+    return SizedBox(
+      height: 14,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Near-white, not a lighter green: the two lanes sit on a
+          // 14-px strip, and two light greens read as one -- caught on a
+          // frame grab, present and invisible at once.
+          Gauge(
+            fraction: widget.target,
+            height: 14,
+            radius: 0,
+            fill: Palette.text,
+          ),
+          Gauge.live(
+            value: _chase,
+            height: 14,
+            radius: 0,
+            track: const Color(0x00000000),
+            fill: Palette.credit,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The financing round, worn on the strip: the level the turnover bought,
+/// and the dot when a tranche waits to be poured.
+class _RoundBadge extends StatelessWidget {
+  const _RoundBadge({required this.game, required this.onTap});
+
+  final Game game;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final sim = game.sim;
+    final free = sim.tranchesFree;
+    return HudTap(
+      onTap: onTap,
+      corners: HudCorners.centred,
+      cut: 6,
+      child: HudPlate(
+        cut: 6,
+        fill: Palette.goldWell,
+        edge: Palette.amber,
+        padding: const EdgeInsets.fromLTRB(7, 2, 7, 3),
+        // A floor under the width so the bar's fixed underlap always meets
+        // the straight edge, whatever the round number's length.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 40),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Р${sim.financeRound}',
+                style: AppText.display(
+                  13,
+                  weight: FontWeight.w700,
+                  color: Palette.gold,
+                  height: 1.1,
+                ),
+              ),
+              if (free > 0) ...[
+                const SizedBox(width: 5),
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: Palette.tech,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Palette.page, width: 1.5),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

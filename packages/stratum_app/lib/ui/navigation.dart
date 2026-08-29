@@ -63,6 +63,11 @@ enum GameScreen {
   building(NavSection.production, 'Будівництво', Ic.building),
   lab(NavSection.production, 'Лабораторія', Ic.lab),
 
+  /// Everything the player owns, on shelves. Last in the section: the pile
+  /// is where the chain ENDS UP, and the tabs before it are what happens
+  /// to it on the way.
+  warehouse(NavSection.production, 'Склад', Ic.warehouse),
+
   avatar(NavSection.research, 'Аватар', Ic.avatar),
   samples(NavSection.research, 'Зразки', Ic.samples),
 

@@ -222,6 +222,19 @@ class TradeRequest {
   }
 }
 
+/// Where a financing tranche can be poured.
+enum FundLine {
+  /// Multiplies every mined drop except substrate and quantonium.
+  extraction,
+
+  /// Multiplies the substrate lane alone: raw data is the prestige fuel,
+  /// so it gets its own tap rather than riding the ore multiplier.
+  telemetry,
+
+  /// Multiplies credits from every sale -- direct and requests alike.
+  sales,
+}
+
 /// A provisional model of the drilling loop, carrying the prototype's numbers.
 ///
 /// PROVISIONAL. The balance reference is still undecided — the prototype's
@@ -1196,19 +1209,25 @@ class PrototypeSimulation {
   BigDouble expectedPerStrike(ResourceId id) {
     switch (id) {
       case ResourceId.regolith:
-        return _strikeRegolithMean;
+        return _strikeRegolithMean * extractionScale;
       case ResourceId.crystals:
-        return crystalDropAt(layer.value) * BigDouble.fromNum(crystalChance);
+        return crystalDropAt(layer.value) *
+            BigDouble.fromNum(crystalChance) *
+            extractionScale;
       case ResourceId.quantonium:
         return quantoniumDropAt(layer.value).big *
             BigDouble.fromNum(strikeQuantoniumChance);
       case ResourceId.rawData:
-        return rawDataDropAt(layer.value) * BigDouble.fromNum(rawDataChance);
+        return rawDataDropAt(layer.value) *
+            BigDouble.fromNum(rawDataChance) *
+            telemetryScale;
       default:
         for (final row in oreTable) {
           if (row.id != id) continue;
           if (layer.value < row.unlockAt) return BigDouble.zero;
-          return oreDropAt(layer.value) * BigDouble.fromNum(row.chance);
+          return oreDropAt(layer.value) *
+              BigDouble.fromNum(row.chance) *
+              extractionScale;
         }
         return BigDouble.zero;
     }
@@ -1300,21 +1319,22 @@ class PrototypeSimulation {
     final low = strikeRegolithMin;
     final span = strikeRegolithMax - low;
     final spread = random.stream('${prefix}regolith').nextDouble();
-    final regolith = (low + span * BigDouble.fromNum(spread)) * multiplier;
+    final regolith =
+        (low + span * BigDouble.fromNum(spread)) * multiplier * extractionScale;
     stock.add(ResourceId.regolith, regolith);
     loot[ResourceId.regolith] = regolith;
 
     for (final row in oreTable) {
       if (layer.value < row.unlockAt) continue;
       if (random.stream('$prefix${row.stream}').chance(row.chance)) {
-        final drop = oreDropAt(layer.value) * multiplier;
+        final drop = oreDropAt(layer.value) * multiplier * extractionScale;
         stock.add(row.id, drop);
         loot[row.id] = drop;
       }
     }
 
     if (random.stream('${prefix}crystal').chance(crystalChance)) {
-      final drop = crystalDropAt(layer.value) * multiplier;
+      final drop = crystalDropAt(layer.value) * multiplier * extractionScale;
       stock.add(ResourceId.crystals, drop);
       loot[ResourceId.crystals] = drop;
     }
@@ -1332,7 +1352,7 @@ class PrototypeSimulation {
     // The substrate lane. Its own stream, named apart from everything else,
     // so adding it shifted no roll that came before it.
     if (random.stream('${prefix}rawdata').chance(rawDataChance)) {
-      final drop = rawDataDropAt(layer.value) * multiplier;
+      final drop = rawDataDropAt(layer.value) * multiplier * telemetryScale;
       _recordData(drop);
       loot[ResourceId.rawData] = drop;
     }
@@ -1422,16 +1442,19 @@ class PrototypeSimulation {
     if (thick) {
       // A thick break opens three metres of face at once, so the substrate
       // it exposes is certain rather than rolled.
-      payout = rawDataDropAt(layer.value) * BigDouble.fromNum(thickSpan);
+      payout =
+          rawDataDropAt(layer.value) *
+          BigDouble.fromNum(thickSpan) *
+          telemetryScale;
       final bonus = BigDouble.fromNum(thickSpan);
       final regolith = regolithPerCycle.value * bonus;
-      final crystals = crystalDropAt(layer.value) * bonus;
+      final crystals = crystalDropAt(layer.value) * bonus * extractionScale;
       final quantonium = (quantoniumDropAt(layer.value) * thickSpan).big;
       stock.add(ResourceId.regolith, regolith);
       stock.add(ResourceId.crystals, crystals);
       for (final row in oreTable) {
         if (layer.value < row.unlockAt) continue;
-        stock.add(row.id, oreDropAt(layer.value) * bonus);
+        stock.add(row.id, oreDropAt(layer.value) * bonus * extractionScale);
       }
       stock.add(ResourceId.quantonium, quantonium);
       stock.add(ResourceId.samples, BigDouble.one);
@@ -1481,6 +1504,95 @@ class PrototypeSimulation {
       if (!stock.spend(ResourceId.regolith, powerUpgradeCost.value)) return;
       drillPowerLevel.value = drillPowerLevel.value + 1;
     });
+  }
+
+  // ---------------------------------------------------------- financing
+
+  /// What the first round costs; every next costs [trancheCostGrowth] more.
+  /// PROVISIONAL, like every constant here.
+  static final BigDouble roundCostBase = BigDouble.fromNum(500);
+  static const double roundCostGrowth = 1.9;
+
+  /// What one budget-line level is worth. One number for all three lines --
+  /// the lines differ in WHAT they multiply, not in how hard. PROVISIONAL.
+  static const double fundStepPerLevel = 0.05;
+
+  /// Credits earned over this simulation's whole life -- income only, never
+  /// reduced by spending. This is what financing rounds are raised against:
+  /// the AI proves turnover, the backer opens the next round.
+  final Signal<BigDouble> creditsEarned = Signal(
+    BigDouble.zero,
+    name: 'credits earned',
+  );
+
+  final Map<FundLine, Signal<int>> _funding = {
+    for (final line in FundLine.values)
+      line: Signal(0, name: 'funding ${line.name}'),
+  };
+
+  Signal<int> fundingOf(FundLine line) => _funding[line]!;
+
+  /// Rounds closed so far, from lifetime turnover. Geometric ladder:
+  /// total to reach round n is base·(g^n − 1)/(g − 1), inverted with a log
+  /// so a qa-scale turnover does not loop a million times.
+  int get financeRound {
+    final earned = creditsEarned.value;
+    if (earned <= BigDouble.zero) return 0;
+    final g = BigDouble.fromNum(roundCostGrowth);
+    final ratio = earned * (g - BigDouble.one) / roundCostBase + BigDouble.one;
+    final rounds = (ratio.ln() / math.log(roundCostGrowth)).floorToDouble();
+    return rounds < 0 ? 0 : rounds.toInt();
+  }
+
+  /// Lifetime turnover at which [round] is reached.
+  BigDouble roundFloor(int round) =>
+      roundCostBase *
+      (BigDouble.fromNum(roundCostGrowth).pow(round.toDouble()) -
+          BigDouble.one) /
+      BigDouble.fromNum(roundCostGrowth - 1);
+
+  /// What the NEXT round still wants, and how far along it is.
+  BigDouble get nextRoundCost =>
+      roundCostBase *
+      BigDouble.fromNum(roundCostGrowth).pow(financeRound.toDouble());
+
+  double get roundProgress {
+    final into = creditsEarned.value - roundFloor(financeRound);
+    if (into <= BigDouble.zero) return 0;
+    final frac = (into / nextRoundCost).toDouble();
+    return frac > 1 ? 1 : frac;
+  }
+
+  /// One tranche per closed round, minus what is already invested.
+  int get tranchesFree {
+    var spent = 0;
+    for (final line in FundLine.values) {
+      spent += _funding[line]!.value;
+    }
+    final free = financeRound - spent;
+    return free < 0 ? 0 : free;
+  }
+
+  bool investTranche(FundLine line) {
+    if (tranchesFree < 1) return false;
+    final signal = _funding[line]!;
+    signal.value = signal.value + 1;
+    return true;
+  }
+
+  BigDouble _fundScale(FundLine line) =>
+      BigDouble.fromNum(1 + fundStepPerLevel * _funding[line]!.value);
+
+  /// The three levers, spelled out where the formulas read them.
+  BigDouble get extractionScale => _fundScale(FundLine.extraction);
+  BigDouble get telemetryScale => _fundScale(FundLine.telemetry);
+  BigDouble get salesScale => _fundScale(FundLine.sales);
+
+  /// Every credit income lands here, whatever sold it: the wallet gets the
+  /// money, the financing ladder gets the proof of turnover.
+  void _earnCredits(BigDouble paid) {
+    stock.add(ResourceId.credits, paid);
+    creditsEarned.value = creditsEarned.value + paid;
   }
 
   // -------------------------------------------------------------- trade
@@ -1537,8 +1649,9 @@ class PrototypeSimulation {
   BigDouble sellLot(ResourceId id) =>
       stock.amount(id) * BigDouble.fromNum(_sellShare[id]!.value / 100);
 
-  /// What one manual sale of [id] pays right now.
-  BigDouble sellYield(ResourceId id) => sellLot(id) * sellPrice(id);
+  /// What one manual sale of [id] pays right now, sales funding included.
+  BigDouble sellYield(ResourceId id) =>
+      sellLot(id) * sellPrice(id) * salesScale;
 
   /// What "sell everything" pays: only positions left switched on. The
   /// button quotes this same number, so it can never surprise.
@@ -1555,10 +1668,10 @@ class PrototypeSimulation {
   BigDouble sellPosition(ResourceId id) {
     final lot = sellLot(id);
     if (lot.isZero) return BigDouble.zero;
-    final paid = lot * sellPrice(id);
+    final paid = sellYield(id);
     batch(() {
       stock.spend(id, lot);
-      stock.add(ResourceId.credits, paid);
+      _earnCredits(paid);
     });
     return paid;
   }
@@ -1659,7 +1772,8 @@ class PrototypeSimulation {
     for (final need in request.needs) {
       sum += need.amount * sellPrice(need.id);
     }
-    return sum * BigDouble.fromNum(1 + request.premium);
+    // A request is a sale: the sales line pays here too.
+    return sum * BigDouble.fromNum(1 + request.premium) * salesScale;
   }
 
   bool canFulfil(TradeRequest request) =>
@@ -1671,7 +1785,7 @@ class PrototypeSimulation {
       for (final need in request.needs) {
         stock.spend(need.id, need.amount);
       }
-      stock.add(ResourceId.credits, requestPayout(request));
+      _earnCredits(requestPayout(request));
     });
     requests.remove(request);
     return true;
@@ -1727,6 +1841,11 @@ class PrototypeSimulation {
     },
     'stock': stock.toJson(),
     'clock': {'seen': wallSeenMs, 'last': lastWallMs},
+    'finance': {
+      'earned': creditsEarned.value.toJson(),
+      for (final line in FundLine.values)
+        if (_funding[line]!.value != 0) line.name: _funding[line]!.value,
+    },
     'trade': {
       // Only departures from the defaults are written: a fresh build reads
       // an old save and every position simply sells whole, switched on.
@@ -1845,6 +1964,19 @@ class PrototypeSimulation {
     } else {
       wallSeenMs = 0;
       lastWallMs = 0;
+    }
+
+    final finance = json['finance'];
+    if (finance is Map) {
+      creditsEarned.value = _readBig(finance['earned']);
+      for (final line in FundLine.values) {
+        _funding[line]!.value = _readInt(finance[line.name], 0);
+      }
+    } else {
+      creditsEarned.value = BigDouble.zero;
+      for (final line in FundLine.values) {
+        _funding[line]!.value = 0;
+      }
     }
 
     final trade = json['trade'];

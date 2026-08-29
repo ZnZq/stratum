@@ -166,6 +166,10 @@ class _TradeScreenState extends State<TradeScreen> {
   void _poke(VoidCallback act) {
     act();
     setState(() {});
+    // The financing strip lives outside this screen and normally hears
+    // about money on the next engine batch -- a second late, which unhooks
+    // the chase animation from the tap that caused it.
+    widget.game.pokeListeners();
   }
 
   // -------------------------------------------------------------- requests

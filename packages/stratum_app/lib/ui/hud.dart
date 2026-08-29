@@ -313,6 +313,8 @@ class HudProgress extends StatelessWidget {
     this.height = 13,
     this.accent = Palette.gold,
     this.from,
+    this.lead,
+    this.leadColour,
     this.label,
     this.reading,
     this.readingColour,
@@ -330,6 +332,14 @@ class HudProgress extends StatelessWidget {
   /// what a track being walked wants; a cold bar passes its own so the run
   /// does not begin in amber.
   final Color? from;
+
+  /// A second frontier AHEAD of [fraction], for a chasing bar: what just
+  /// arrived is shown here instantly while the main fill animates up to it.
+  final double? lead;
+
+  /// The arrival's own colour -- "інший колір" is the whole point: the eye
+  /// must see the new money as new before the fill swallows it.
+  final Color? leadColour;
 
   /// What the bar measures, written at its head. Without it a bar is a
   /// quantity with no noun: the player can see that something is 3% along and
@@ -350,13 +360,19 @@ class HudProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final inside = place == HudReading.inside && reading != null;
+    // Width pinned to infinity on purpose: a bare CustomPaint sizes to the
+    // SMALLEST loose constraint, and a bar dropped into a Stack quietly
+    // became zero pixels wide. Infinity clamps to whatever room there is.
     Widget bar = SizedBox(
       height: height,
+      width: double.infinity,
       child: CustomPaint(
         painter: _CellPainter(
           fraction: fraction.clamp(0.0, 1.0),
           accent: accent,
           from: from ?? Palette.amber,
+          lead: (lead ?? 0).clamp(0.0, 1.0),
+          leadTone: leadColour ?? accent.withValues(alpha: 0.4),
         ),
       ),
     );
@@ -444,11 +460,18 @@ class _CellPainter extends CustomPainter {
     required this.fraction,
     required this.accent,
     required this.from,
+    this.lead = 0,
+    this.leadTone = const Color(0x00000000),
   });
 
   final double fraction;
   final Color accent;
   final Color from;
+
+  /// Cells past [fraction] up to here wear [leadTone]: the just-arrived
+  /// stretch the fill has not caught up with yet.
+  final double lead;
+  final Color leadTone;
 
   /// About how wide one cell wants to be. The count is derived from the room
   /// available rather than fixed, so the same bar reads the same whether it
@@ -483,6 +506,21 @@ class _CellPainter extends CustomPainter {
 
     canvas.save();
     canvas.clipPath(track);
+
+    // The arrival lane first, so the fill paints over the part it has
+    // already claimed and only the fresh stretch shows through.
+    if (lead > fraction) {
+      final ahead = lead * count;
+      for (var i = 0; i < count; i++) {
+        final done = ahead - i;
+        if (done <= 0) break;
+        canvas.drawRect(
+          Rect.fromLTWH(i * step, 0, cellW, h),
+          Paint()..color = leadTone.withValues(alpha: done >= 1 ? 1.0 : 0.34),
+        );
+      }
+    }
+
     for (var i = 0; i < count; i++) {
       // How much of THIS cell is filled, 0 to 1. Measured from the cell's
       // start rather than its index: comparing the index to the frontier
@@ -517,7 +555,11 @@ class _CellPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CellPainter old) =>
-      old.fraction != fraction || old.accent != accent || old.from != from;
+      old.fraction != fraction ||
+      old.accent != accent ||
+      old.from != from ||
+      old.lead != lead ||
+      old.leadTone != leadTone;
 }
 
 /// One choice among a few, drawn as ONE strip.
@@ -828,7 +870,12 @@ class HudModal extends StatelessWidget {
     return Stack(
       children: [
         Positioned.fill(
-          child: HudTap(
+          // A raw detector on purpose: the scrim closes on a click, but its
+          // affordance is the cross in the header -- a hand cursor and a
+          // hover film across half the screen would claim the BACKDROP is
+          // the control.
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: onClose,
             child: const ColoredBox(color: Color(0x99070A10)),
           ),

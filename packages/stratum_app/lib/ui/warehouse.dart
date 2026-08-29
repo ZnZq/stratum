@@ -2,43 +2,33 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
-import 'hud.dart';
 import 'resource_plate.dart';
 import 'resource_style.dart';
 import 'stat.dart';
-import 'tabler_icons.dart';
-import 'tokens.dart';
 
 /// Everything the player owns, on shelves.
 ///
-/// Opens over whatever screen is showing rather than taking a tab of its own:
-/// the resource strip at the top is already the short version of this, so
-/// pulling it open is the gesture, and the navigation stays five wide.
-class WarehouseSheet extends StatelessWidget {
-  const WarehouseSheet({required this.game, required this.onClose, super.key});
+/// A production tab now, not an overlay. The overlay's whole justification
+/// was the resource strip being its short form -- when the strip became the
+/// financing gauge, that anchor died, and storage took its honest place in
+/// the production section.
+class WarehouseScreen extends StatelessWidget {
+  const WarehouseScreen({required this.game, super.key});
 
   final Game game;
-  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
-    return HudModal(
-      leading: const Icon(Ti.buildingWarehouse, size: 16, color: Palette.tech),
-      title: 'СКЛАД',
-      anchor: ModalAnchor.stretch,
-      contentPadding: EdgeInsets.zero,
-      onClose: onClose,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(14, 4, 14, 16),
-        children: [
-          for (final shelf in ResourceShelf.values)
-            _Shelf(
-              shelf: shelf,
-              game: game,
-              first: shelf == ResourceShelf.values.first,
-            ),
-        ],
-      ),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 16),
+      children: [
+        for (final shelf in ResourceShelf.values)
+          _Shelf(
+            shelf: shelf,
+            game: game,
+            first: shelf == ResourceShelf.values.first,
+          ),
+      ],
     );
   }
 }
@@ -95,6 +85,7 @@ class _Shelf extends StatelessWidget {
                     aside: _hint(id),
                     width: half,
                     dim: game.sim.stock.amount(id).isZero,
+                    plated: true,
                   ),
               ],
             );

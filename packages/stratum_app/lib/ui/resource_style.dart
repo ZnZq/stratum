@@ -79,8 +79,8 @@ const Map<ResourceId, ResourceStyle> resourceStyles = {
   ResourceId.credits: (
     label: 'Кредити',
     note: 'з продажу видобутого · покращення рига',
-    icon: Ti.stack2,
-    colour: Palette.gold,
+    icon: Ti.coins,
+    colour: Palette.credit,
     shelf: ResourceShelf.currency,
   ),
   ResourceId.capsules: (

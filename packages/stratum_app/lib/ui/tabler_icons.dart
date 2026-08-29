@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 /// thousand sitting in the file.
 abstract final class Ti {
   static const IconData stack2 = IconData(0xeef7, fontFamily: 'TablerIcons');
+  static const IconData coins = IconData(0xec55, fontFamily: 'TablerIcons');
   static const IconData atom2 = IconData(0xebdf, fontFamily: 'TablerIcons');
   static const IconData diamond = IconData(0xeb65, fontFamily: 'TablerIcons');
   static const IconData cpu = IconData(0xef8e, fontFamily: 'TablerIcons');
