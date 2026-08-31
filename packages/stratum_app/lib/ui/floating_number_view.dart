@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-import '../game.dart';
+import '../floating_number.dart';
 import 'tokens.dart';
 
 /// A number that rises out of the scene and fades, then removes itself.

@@ -4,7 +4,7 @@ import 'package:stratum_core/stratum_core.dart';
 import '../game.dart';
 import 'hud.dart';
 import 'arm_style.dart';
-import 'part_glyph.dart';
+import 'mark_glyph.dart';
 import 'tokens.dart';
 
 /// One part of the arm, generation by generation.
@@ -78,7 +78,7 @@ class PartSheet extends StatelessWidget {
           // told by its lit piece and its gold type; a frame around it would
           // be one more island inside an island.
           for (var mk = 0; mk < count; mk++) ...[
-            if (mk > 0) const _Rule(),
+            if (mk > 0) const HudRule(),
             _Generation(
               part: part,
               generation: mk,
@@ -95,14 +95,6 @@ class PartSheet extends StatelessWidget {
       ),
     );
   }
-}
-
-class _Rule extends StatelessWidget {
-  const _Rule();
-
-  @override
-  Widget build(BuildContext context) =>
-      const SizedBox(height: 1, child: ColoredBox(color: Palette.lineBar));
 }
 
 /// Where the player stands relative to one generation.

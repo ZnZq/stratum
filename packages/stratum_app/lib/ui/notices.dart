@@ -3,9 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 
 import '../game.dart';
+import '../notice.dart';
 import 'resource_style.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
+import 'resource_icon.dart';
 
 /// Transient reports -- resources coming in, a save that landed, a load that
 /// failed -- flush against the left edge, vertically centred, gone seconds

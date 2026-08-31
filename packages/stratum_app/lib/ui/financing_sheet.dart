@@ -6,6 +6,7 @@ import 'game_icons.dart';
 import 'hud.dart';
 import 'resource_style.dart';
 import 'tokens.dart';
+import 'resource_icon.dart';
 
 /// Financing: the backer's answer to proven turnover.
 ///

@@ -1,9 +1,9 @@
 import 'package:stratum_core/stratum_core.dart';
 import 'package:test/test.dart';
 
-PrototypeSimulation _funded([double regolith = 1e9]) {
+PrototypeSimulation _funded([double credits = 1e9]) {
   final sim = PrototypeSimulation(seed: 5150);
-  sim.stock.add(ResourceId.regolith, BigDouble.fromNum(regolith));
+  sim.stock.add(ResourceId.credits, BigDouble.fromNum(credits));
   return sim;
 }
 
@@ -99,7 +99,7 @@ void main() {
       expect(bought, 3);
       expect(sim.bitLevel.value, 3);
       expect(
-        sim.stock.amount(ResourceId.regolith).toDouble(),
+        sim.stock.amount(ResourceId.credits).toDouble(),
         lessThan(PrototypeSimulation.costOf(ArmPart.bit, 3).toDouble()),
         reason: 'it stopped because the next level was out of reach',
       );

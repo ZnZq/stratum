@@ -2,7 +2,8 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
-import 'resource_style.dart';
+import 'cubes_icon.dart';
+import 'resource_icon.dart';
 import 'hud.dart';
 import 'navigation.dart';
 import 'server_rack.dart';

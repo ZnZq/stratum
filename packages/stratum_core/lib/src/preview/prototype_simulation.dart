@@ -4,223 +4,15 @@ import '../big_double.dart';
 import '../random_source.dart';
 import '../reactive_graph.dart';
 import '../stockpile.dart';
-
-/// What one manual strike did.
-class StrikeOutcome {
-  const StrikeOutcome({
-    required this.spent,
-    required this.layersBroken,
-    required this.thickLayersBroken,
-    required this.regolithGained,
-    required this.oresGained,
-    required this.critical,
-  });
-
-  static const StrikeOutcome none = StrikeOutcome(
-    spent: 0,
-    layersBroken: 0,
-    thickLayersBroken: 0,
-    regolithGained: BigDouble.zero,
-    oresGained: {},
-    critical: false,
-  );
-
-  final int spent;
-  final int layersBroken;
-  final int thickLayersBroken;
-  final BigDouble regolithGained;
-
-  /// Whether this blow critted, multiplying its damage and haul alike.
-  final bool critical;
-
-  /// The chance ores this blow happened to shake loose.
-  final Map<ResourceId, BigDouble> oresGained;
-
-  bool get landed => spent > 0;
-}
-
-/// What one drilling cycle produced, for the UI to turn into feedback.
-class CycleOutcome {
-  const CycleOutcome({
-    required this.regolithGained,
-    required this.crystalsGained,
-    required this.quantoniumGained,
-    required this.critical,
-    required this.layersBroken,
-    required this.thickLayersBroken,
-    required this.echoes,
-  });
-
-  static const CycleOutcome none = CycleOutcome(
-    regolithGained: BigDouble.zero,
-    crystalsGained: BigDouble.zero,
-    quantoniumGained: 0,
-    critical: false,
-    layersBroken: 0,
-    thickLayersBroken: 0,
-    echoes: 0,
-  );
-
-  final BigDouble regolithGained;
-  final BigDouble crystalsGained;
-  final int quantoniumGained;
-  final bool critical;
-  final int layersBroken;
-  final int thickLayersBroken;
-  final int echoes;
-}
-
-/// What an absence paid out.
-class OfflineGain {
-  const OfflineGain({
-    required this.seconds,
-    required this.cycles,
-    required this.efficiency,
-    required this.gained,
-  });
-
-  static const OfflineGain none = OfflineGain(
-    seconds: 0,
-    cycles: 0,
-    efficiency: 0,
-    gained: {},
-  );
-
-  /// How long the player was away.
-  final double seconds;
-
-  /// The same span counted in drill cycles, for a readout that speaks in
-  /// heartbeats rather than in seconds.
-  final int cycles;
-
-  final double efficiency;
-
-  /// Everything earned, by resource. One flat map for the same reason the
-  /// stockpile is one: a resource added later is an entry here, not a new
-  /// field wired into every place that shows the haul.
-  final Map<ResourceId, BigDouble> gained;
-
-  bool get isEmpty => gained.isEmpty;
-}
-
-/// The three parts of the manipulator arm the player upgrades.
-///
-/// Named after the hardware rather than the stat, because a part carries
-/// several buffs at once and grows more of them as it evolves.
-enum ArmPart {
-  /// What the arm strikes with: the blow's own power, and the floor of what
-  /// it brings back.
-  bit,
-
-  /// What drives the bit into the face: how deep a blow bites into what is
-  /// still standing, and the ceiling of the haul.
-  drive,
-
-  /// The pack in the shoulder: how many blows are in the magazine and how
-  /// fast it refills.
-  supply,
-}
-
-/// The three tracks every drill carries.
-enum DrillPart {
-  /// How wide a face the bore covers. Additive on the radius, quadratic on
-  /// the area -- the same level is worth more the wider the bore already is.
-  radius,
-
-  /// How often it cycles. Multiplicative on the interval, so the track is
-  /// finite: it ends where the interval meets the floor.
-  drive,
-
-  /// How lucky it is: the odds of a crit and of an echo, bought together.
-  calibration,
-}
-
-/// Which drill. Each works its own resource; the regolith bore is the one
-/// the player starts with.
-enum DrillId { regolith, cuprite, ferrite, silicite, crystal }
-
-/// One row of the drill table: what a drill is, before any levels.
-class DrillRow {
-  const DrillRow(this.id, this.mines, this.label, this.intervalBase);
-
-  final DrillId id;
-
-  /// The one resource this drill brings up.
-  final ResourceId mines;
-
-  final String label;
-
-  /// Seconds between cycles before the drive track touches it. A typed drill
-  /// starts SLOW on purpose: the drive track's whole lifetime value is
-  /// base / floor, so a drill that starts near the floor has nothing to sell.
-  final double intervalBase;
-}
-
-/// Where one drill stands on its three tracks.
-class DrillState {
-  DrillState(this.id);
-
-  final DrillId id;
-
-  final Signal<int> radius = Signal(0, name: 'drill radius');
-  final Signal<int> drive = Signal(0, name: 'drill drive');
-  final Signal<int> calibration = Signal(0, name: 'drill calibration');
-
-  Signal<int> levelOf(DrillPart part) => switch (part) {
-    DrillPart.radius => radius,
-    DrillPart.drive => drive,
-    DrillPart.calibration => calibration,
-  };
-}
-
-/// One buyer's order: hand over the listed amounts, get paid over list price.
-///
-/// A plain object rather than signals: a request never changes after it is
-/// posted -- it is fulfilled or it expires -- and the list it lives in is
-/// redrawn by the clock that expires it.
-class TradeRequest {
-  TradeRequest({
-    required this.needs,
-    required this.premium,
-    required this.expiresAtMs,
-  });
-
-  final List<({ResourceId id, BigDouble amount})> needs;
-
-  /// Paid on top of list price, as a fraction (0.24 reads "премія +24%").
-  final double premium;
-
-  /// Wall-clock, like the drift: a courier does not pause with the engines.
-  final int expiresAtMs;
-
-  Map<String, Object?> toJson() => {
-    'premium': premium,
-    'expires': expiresAtMs,
-    'needs': {for (final need in needs) need.id.name: need.amount.toJson()},
-  };
-
-  static TradeRequest? fromJson(Object? json) {
-    if (json is! Map) return null;
-    final needs = <({ResourceId id, BigDouble amount})>[];
-    final raw = json['needs'];
-    if (raw is Map) {
-      for (final id in ResourceId.values) {
-        final amount = raw[id.name];
-        if (amount is String) {
-          needs.add((id: id, amount: BigDouble.parse(amount)));
-        }
-      }
-    }
-    if (needs.isEmpty) return null;
-    final premium = json['premium'];
-    final expires = json['expires'];
-    return TradeRequest(
-      needs: needs,
-      premium: premium is num ? premium.toDouble() : 0.2,
-      expiresAtMs: expires is int ? expires : 0,
-    );
-  }
-}
+import 'arm_part.dart';
+import 'cycle_outcome.dart';
+import 'drill_id.dart';
+import 'drill_part.dart';
+import 'drill_row.dart';
+import 'drill_state.dart';
+import 'offline_gain.dart';
+import 'strike_outcome.dart';
+import 'trade_request.dart';
 
 /// A provisional model of the drilling loop, carrying the prototype's numbers.
 ///
@@ -1077,7 +869,7 @@ class PrototypeSimulation {
   bool canUpgradeDrill(DrillId id, DrillPart part) =>
       drillOwned(id) &&
       !drillAtCap(id, part) &&
-      stock.has(ResourceId.regolith, drillUpgradeCost(id, part));
+      stock.has(ResourceId.credits, drillUpgradeCost(id, part));
 
   int upgradeDrill(DrillId id, DrillPart part, {int levels = 1}) => batch(() {
     if (!drillOwned(id)) return 0;
@@ -1085,7 +877,7 @@ class PrototypeSimulation {
     final cap = drillCap(id, part);
     var bought = 0;
     while (bought < levels && signal.value < cap) {
-      if (!stock.spend(ResourceId.regolith, drillCostOf(part, signal.value))) {
+      if (!stock.spend(ResourceId.credits, drillCostOf(part, signal.value))) {
         break;
       }
       signal.value = signal.value + 1;
@@ -1095,7 +887,7 @@ class PrototypeSimulation {
   });
 
   int affordableDrillLevels(DrillId id, DrillPart part) {
-    var purse = stock.amount(ResourceId.regolith);
+    var purse = stock.amount(ResourceId.credits);
     var level = drill(id).levelOf(part).value;
     final cap = drillCap(id, part);
     var count = 0;
@@ -1213,7 +1005,7 @@ class PrototypeSimulation {
   BigDouble upgradeCost(ArmPart part) => costOf(part, levelOf(part).value);
 
   bool canUpgrade(ArmPart part) =>
-      !atMarkCeiling(part) && stock.has(ResourceId.regolith, upgradeCost(part));
+      !atMarkCeiling(part) && stock.has(ResourceId.credits, upgradeCost(part));
 
   /// Buys [levels] of [part], stopping at the cap or at what the store can
   /// pay for -- whichever comes first. Returns how many actually landed.
@@ -1223,7 +1015,7 @@ class PrototypeSimulation {
     var bought = 0;
     while (bought < levels && signal.value < ceiling) {
       final price = costOf(part, signal.value);
-      if (!stock.spend(ResourceId.regolith, price)) break;
+      if (!stock.spend(ResourceId.credits, price)) break;
       signal.value = signal.value + 1;
       bought++;
     }
@@ -1232,7 +1024,7 @@ class PrototypeSimulation {
 
   /// How many levels of [part] the store could pay for right now.
   int affordableLevels(ArmPart part) {
-    var purse = stock.amount(ResourceId.regolith);
+    var purse = stock.amount(ResourceId.credits);
     var level = levelOf(part).value;
     final ceiling = ceilingOf(part);
     var count = 0;
@@ -1887,7 +1679,7 @@ class PrototypeSimulation {
   int get requestSlots => 3;
 
   /// How often a new request arrives, wall-clock. PROVISIONAL.
-  static const int requestIntervalMs = 10 * 60 * 1000;
+  static const int requestIntervalMs = 8 * 60 * 1000;
 
   /// How long a request waits before leaving. Expiry costs nothing: the
   /// premium is a bonus on top of list price, never a gate (safeguard 4).

@@ -1,0 +1,50 @@
+import 'package:flutter/widgets.dart';
+
+import '../game.dart';
+import 'hud.dart';
+import 'tokens.dart';
+
+/// What a blow is worth right now: the power it lands with, and the band of
+/// regolith it comes back with.
+///
+/// The two ends of that band are what the bit and the drive buy, so the
+/// screen states them before it offers to sell anything.
+class BlowSummary extends StatelessWidget {
+  const BlowSummary({required this.game, super.key});
+
+  final Game game;
+
+  @override
+  Widget build(BuildContext context) {
+    final sim = game.sim;
+    // Cut as ONE panel, not two plates: only the pair's outer corners are
+    // struck, so the seam between them stays square.
+    return Row(
+      children: [
+        Expanded(
+          child: HudStat(
+            label: 'сила удару',
+            corners: const HudCorners(topLeft: true, bottomLeft: true),
+            value: '${sim.strikePower}',
+            size: 13,
+            accent: Palette.gold,
+            colour: Palette.gold,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: HudStat(
+            label: 'реголіт за удар',
+            align: CrossAxisAlignment.end,
+            corners: const HudCorners(topRight: true, bottomRight: true),
+            value: '${sim.strikeRegolithMin} – ${sim.strikeRegolithMax}',
+            size: 13,
+            accent: Palette.ore,
+            colour: Palette.ore,
+            labelColour: Palette.ore,
+          ),
+        ),
+      ],
+    );
+  }
+}

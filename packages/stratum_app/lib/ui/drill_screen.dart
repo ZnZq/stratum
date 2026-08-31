@@ -2,8 +2,10 @@ import 'package:flutter/widgets.dart';
 
 import '../game.dart';
 import 'drill/deck.dart';
-import 'drill/overlays.dart';
-import 'drill/rig.dart';
+import 'drill/flash.dart';
+import 'drill/float_layer.dart';
+import 'drill/drill_string.dart';
+import 'drill/strike_zone.dart';
 import 'drill/rock.dart';
 import 'drill/shaft.dart';
 import 'tokens.dart';

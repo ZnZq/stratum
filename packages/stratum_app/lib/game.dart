@@ -1,66 +1,15 @@
 import 'dart:async';
+
+import 'save_slot.dart';
+
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
+import 'floating_number.dart';
+import 'notice.dart';
 import 'save_store.dart';
-
-/// A transient report: something happened, said once, gone in seconds.
-enum NoticeKind { success, error, info, gain }
-
-class Notice {
-  Notice({
-    required this.id,
-    required this.text,
-    required this.kind,
-    this.key,
-    this.resource,
-  });
-
-  final int id;
-
-  /// Mutable on purpose: a keyed notice is updated in place while its kin
-  /// keep arriving, instead of stacking a card per event.
-  String text;
-
-  final NoticeKind kind;
-
-  /// Coalescing identity: a new report with the same key refreshes this card
-  /// and its lifetime rather than adding another.
-  final String? key;
-
-  /// For [NoticeKind.gain]: which resource the card is about.
-  final ResourceId? resource;
-
-  /// Bumped on every in-place refresh, so the card can visibly flinch when
-  /// its number moves without growing a new card.
-  int revision = 0;
-
-  /// Set shortly before removal, so the card can fade instead of popping.
-  bool leaving = false;
-
-  Timer? life;
-}
-
-/// A number that flew off a cycle, for the scene to animate and forget.
-class FloatingNumber {
-  FloatingNumber({
-    required this.id,
-    required this.text,
-    required this.color,
-    required this.left,
-    required this.top,
-    required this.size,
-  });
-
-  final int id;
-  final String text;
-  final int color;
-  final double left;
-  final double top;
-  final double size;
-}
 
 /// Owns the simulation and the loops that drive it.
 ///
@@ -499,6 +448,11 @@ class Game extends ChangeNotifier {
       final run = document.sections['run'];
       if (run is! Map) throw const SaveFormatException('no run section');
       sim.readJson(Map<String, Object?>.from(run));
+      // A board restored from disk is the dot's news, not toast news: only
+      // a request that ARRIVES in this session gets a corner card.
+      _announcedRequests
+        ..clear()
+        ..addAll(sim.requests);
 
       final meta = document.sections['meta'];
       _restoredAt = meta is Map
@@ -875,6 +829,23 @@ class Game extends ChangeNotifier {
   bool get hasUnseenRequests =>
       sim.requests.any((request) => !_seenRequests.contains(request));
 
+  /// Requests already toasted. Kept apart from [_seenRequests]: a toast in
+  /// the corner is not the player LOOKING at the board, so the dot stays
+  /// lit until they actually visit it.
+  final Set<TradeRequest> _announcedRequests = {};
+
+  void _announceNewRequests() {
+    _announcedRequests.retainAll(sim.requests);
+    for (final request in sim.requests) {
+      if (_announcedRequests.add(request)) {
+        _announce(
+          'новий запит · премія +${(request.premium * 100).round()}%',
+          NoticeKind.info,
+        );
+      }
+    }
+  }
+
   /// Drill tracks that were affordable the last time the player LOOKED at
   /// the drills screen. Same discipline as the request board: a dot that
   /// answers "can you afford something" is always lit in an idle game and
@@ -921,6 +892,7 @@ class Game extends ChangeNotifier {
     sim.observeWall(wallNow);
     sim.syncRequests(wallNow);
     _seenRequests.retainAll(sim.requests);
+    _announceNewRequests();
     for (var i = 0; i < batch.ticks; i++) {
       final outcome = sim.tick();
       // The drill's tick is a strike of its own: mine, then hit the face.

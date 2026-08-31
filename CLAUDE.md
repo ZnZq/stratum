@@ -161,6 +161,13 @@ CIFI/ISEPS/CHAD, бенчмарки ретеншну): `docs/research-report.md`
   [min..max], а не навколо середнього — один той самий тяг, тож RNG-потоки не
   зсунулись. Привід також качає `pierceShare` (+0.001%/рів. до структурної
   шкоди).
+- **Апгрейди руки і бурів платяться КРЕДИТАМИ (рішення власника 2026-08-30;
+  було реголітом).** Перемкнуто всі шість платіжних точок (`canUpgrade` /
+  `upgrade` / `affordableLevels` і бурові тріо), числа цін НЕ мінялись
+  (ПОПЕРЕДНІ; у кредитах та сама цифра фактично дорожча — реголіт іде по
+  0.4). `BuyButton` носить монету кредитів замість загальної іконки стосу.
+  Мертва пара `buyDrill`/`buyPowerUpgrade` скасованої економіки лишилась на
+  реголіті — її ніхто не викликає.
 - **Купівля пачками**: `upgrade(part, levels:)` бере скільки влізе в гаманець і
   зупиняється на капі; `affordableLevels` рахує те саме наперед для кнопки
   «макс». 500 рівнів по одному — не рішення, а рутина.
@@ -249,7 +256,7 @@ CIFI/ISEPS/CHAD, бенчмарки ретеншну): `docs/research-report.md`
   знизу під ними кімната, і зріз при підлозі читався б як картка, що плаває.
   Підписи-примітки («не продаються», «без штрафу») прибрані на запит власника.
 - **Запити** (колишні «контракти», перейменовано власником): до `requestSlots`
-  (3) на дошці, новий кожні 10 хв (`requestIntervalMs`), живе 12 хв
+  (3) на дошці, новий кожні 8 хв (`requestIntervalMs`; було 10, зменшено 2026-08-30), живе 12 хв
   (`requestLifetimeMs`), 1–2 позиції в запиті, обсяг = 15–45% ПОТОЧНОГО складу
   (запит ніколи не просить того, чого ран не бачив, і масштабується сам),
   премія +15–40% ПОВЕРХ прейскуранта. **Невиконаний зникає без штрафу** —
@@ -268,6 +275,10 @@ CIFI/ISEPS/CHAD, бенчмарки ретеншну): `docs/research-report.md`
   пари), кнопка «ВИКОНАТИ» третьою колонкою на висоті плит.
 - Сейв: секція `trade` всередині рану (off/share/nextAt/requests), пишуться
   лише відхилення від дефолтів — старий сейв читається без міграції.
+  Новий запит ще й ТОСТИТЬ нотисом у кутку («новий запит · премія +N%»,
+  там же, де «автозбереження»); облік окремий від крапки — тост не гасить
+  крапку, бо тост не є поглядом на дошку, а відновлена з сейву дошка не
+  тостить (новина крапки, не тосту). 2026-08-30.
   Крапка уваги на «Торгівлі» = НОВИЙ (непобачений) запит, не «є що
   виконати»: виконуване тут майже завжди, і крапка-спроможність горіла б
   вічно. Той самий принцип 2026-08-29 переведено на «Бури»: стара умова
@@ -610,6 +621,57 @@ CIFI/ISEPS/CHAD, бенчмарки ретеншну): `docs/research-report.md`
   перенасичення, і назва тепер описує те, що видно. У КОДІ й у решті цього
   журналу механіка лишається `collapse` / «Колапс» — перейменування
   ідентифікаторів і ключів сейву коштувало б міграції заради слова.
+
+### Один клас — один файл (рефакторинг 2026-08-30, правило власника)
+**У файлі живе ОДИН публічний клас/віджет** плюс його власні одноразові
+приватні листки (State, painter, приватний рядок списку, який ніхто інший
+не бачить). Багатокласові файли розрізано:
+- `ui/hud.dart` (23 класи) → тека `ui/hud/` по файлу на віджет; сам
+  `hud.dart` став БАРЕЛЕМ з export'ів, тож імпорти гри не змінились.
+  `_CornerClipper` став публічним `CornerClipper` у `hud/corners.dart`
+  (він потрібен і `HudTap`, і `HudChoice`).
+- `ui/game_shell.dart` (19) → `ui/shell/` (resource_bar, round_gauge,
+  round_badge, since_clock, background_overlay, pause_overlay,
+  breach_overlay, nav_bar, dotted, screen_strip, screen_placeholder);
+  приватні класи промоуті в публічні.
+- `ui/drill/rig.dart` (14) → drill_string / energy_plate / energy_meter /
+  pipe / bit / strike_zone; `rock.dart` → rock / hit_shake / layer_tile /
+  stone_painter / crack_painter / noise; `overlays.dart` → depth_readout /
+  float_layer / flash; `deck.dart` → deck / loot_table / deck_handle.
+  rig.dart і overlays.dart ВИДАЛЕНІ, імпортери переведені на конкретні
+  файли (діаграми беруть лише painter'и, не віджети).
+- Екрани віддали свої картки: part_card (+blow_summary) зі StrikesScreen,
+  track_row із DrillDetail, trade_group_card / trade_locked_group /
+  trade_request_card із TradeScreen, save_slot_card із SaveMenu,
+  cubes_icon / resource_icon із resource_style, mark_glyph / part_face із
+  part_glyph. Моделі `Notice`/`NoticeKind` і `FloatingNumber` виїхали з
+  `game.dart` у власні файли; `ui/floating_number.dart` перейменовано в
+  `floating_number_view.dart` (файл зветься за класом).
+- Ядро: support-типи (`StrikeOutcome`, `CycleOutcome`, `OfflineGain`,
+  `ArmPart`, `DrillPart`, `DrillId`, `DrillRow`, `DrillState`,
+  `TradeRequest`) виїхали з `prototype_simulation.dart` у власні файли
+  `src/preview/`, барель `stratum_core.dart` експортує кожен.
+- СВІДОМО НЕ розрізане (когезивні сім'ї, а не «різні класи»):
+  `tokens.dart` (Palette/Strata/AppMetrics/AppText — токени однієї мови),
+  `gauge.dart` (Gauge+ProgressPainter — обгортка і її двигун),
+  `reactive_graph`, `tick_engine`, `tick_scheduler`, `number_style`,
+  `save_codec`, `random_source`, `balance_harness`, `stockpile` — кожен
+  файл і є одна підсистема.
+
+### Дублікати, злиті 2026-08-30 (той самий рефакторинг)
+- `_Rule` жив у П'ЯТИ файлах → `HudRule` (`hud/rule.dart`).
+- `_Dissolve` ×2 → `ui/dissolve.dart`.
+- `_BatchPicker` ×2 → `ui/batch_picker.dart`; версія drill_detail була
+  СТАРІША (рукописний ряд зі скругленнями) — обидва екрани тепер на
+  HudChoice, тобто пікер бурів заразом перейшов на мову пульта.
+- `_BuyButton`/`_Buy` (однакове тіло, різні виклики sim) →
+  `ui/buy_button.dart` (`BuyButton(cost, enabled, onTap)`) — цінова
+  кнопка більше не знає про sim, їй дають готові факти.
+- `_FlatButton`/`_Flat` — обидва були обгорткою `HudButton(onTap: null)`;
+  класи видалені, виклик інлайновий.
+- **`upgrades_screen.dart` ВИДАЛЕНО як мертвий**: UpgradesScreen /
+  UpgradeRow / PressButton не імпортував ніхто (економіка екрана
+  скасована ще журналом 2026-08-29).
 
 ### Спільні компоненти UI (рішення 2026-08-28)
 - **`GameModal`** — одна модалка на гру: скрим, панель, шапка з іконкою, назвою,

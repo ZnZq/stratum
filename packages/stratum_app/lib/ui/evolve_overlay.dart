@@ -6,7 +6,7 @@ import 'package:stratum_core/stratum_core.dart';
 import 'arm_style.dart';
 import 'game_icons.dart';
 import 'hud.dart';
-import 'part_glyph.dart';
+import 'part_face.dart';
 import 'tokens.dart';
 
 /// The moment a part is rebuilt into its next mark.

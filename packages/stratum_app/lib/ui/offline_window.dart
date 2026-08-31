@@ -5,6 +5,7 @@ import 'hud.dart';
 import 'resource_style.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
+import 'resource_icon.dart';
 
 /// What the absence earned, said once on the way back in.
 ///

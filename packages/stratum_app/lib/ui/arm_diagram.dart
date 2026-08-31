@@ -6,8 +6,10 @@ import 'package:flutter/widgets.dart';
 
 import '../game.dart';
 import 'drill/metrics.dart';
-import 'drill/rig.dart';
-import 'drill/rock.dart';
+import 'drill/bit.dart';
+import 'drill/pipe.dart';
+import 'drill/crack_painter.dart';
+import 'drill/stone_painter.dart';
 import 'drill/shaft.dart';
 import 'tokens.dart';
 

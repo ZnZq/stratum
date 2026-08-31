@@ -3,7 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../game.dart';
 import 'game_icons.dart';
 import 'hud.dart';
-import 'resource_style.dart';
+import 'cubes_icon.dart';
 import 'tokens.dart';
 
 /// The two trees, and what tells them apart.

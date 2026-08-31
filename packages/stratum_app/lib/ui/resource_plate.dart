@@ -5,6 +5,7 @@ import 'hud.dart';
 import 'resource_style.dart';
 import 'stat.dart';
 import 'tokens.dart';
+import 'resource_icon.dart';
 
 /// One resource, as a readout like any other: its name, a small fact about
 /// it, and a figure beside its own icon.

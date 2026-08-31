@@ -7,6 +7,7 @@ import 'resource_style.dart';
 import 'stat.dart';
 import 'hud.dart';
 import 'tokens.dart';
+import 'resource_icon.dart';
 
 /// Every drill the player owns, and the ladder of the ones still to come.
 ///
@@ -55,7 +56,7 @@ class _DrillsScreenState extends State<DrillsScreen> {
             ),
           ),
           for (final row in PrototypeSimulation.drillTable) ...[
-            const _Rule(),
+            const HudRule(),
             _DrillRow(
               game: widget.game,
               row: row,
@@ -65,7 +66,7 @@ class _DrillsScreenState extends State<DrillsScreen> {
                   : null,
             ),
           ],
-          const _Rule(),
+          const HudRule(),
           const Spacer(),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
@@ -78,14 +79,6 @@ class _DrillsScreenState extends State<DrillsScreen> {
       ),
     );
   }
-}
-
-class _Rule extends StatelessWidget {
-  const _Rule();
-
-  @override
-  Widget build(BuildContext context) =>
-      const SizedBox(height: 1, child: ColoredBox(color: Palette.lineBar));
 }
 
 /// One drill, said in the four numbers you would compare drills by.

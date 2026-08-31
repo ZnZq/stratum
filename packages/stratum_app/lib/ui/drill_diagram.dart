@@ -7,8 +7,10 @@ import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
 import 'drill/metrics.dart';
-import 'drill/rig.dart';
-import 'drill/rock.dart';
+import 'drill/bit.dart';
+import 'drill/pipe.dart';
+import 'drill/crack_painter.dart';
+import 'drill/stone_painter.dart';
 import 'drill/shaft.dart';
 import 'resource_style.dart';
 import 'tokens.dart';
