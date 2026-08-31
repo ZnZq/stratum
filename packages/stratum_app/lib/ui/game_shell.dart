@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import '../game.dart';
 import '../preferences.dart';
 import 'console_menu.dart';
+import 'craft_screen.dart';
 import 'drills_screen.dart';
 import 'financing_sheet.dart';
 import 'drill_screen.dart';
@@ -114,6 +115,7 @@ class _GameShellState extends State<GameShell> {
         GameScreen.strikes => StrikesScreen(game: _game),
         GameScreen.warehouse => WarehouseScreen(game: _game),
         GameScreen.trade => TradeScreen(game: _game),
+        GameScreen.craft => CraftScreen(game: _game),
         GameScreen.simulation => SimulationScreen(
           game: _game,
           onOpen: _pickScreen,

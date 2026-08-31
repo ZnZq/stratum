@@ -5,7 +5,6 @@ import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
 import 'trade_group_card.dart';
-import 'trade_locked_group.dart';
 import 'trade_request_card.dart';
 import 'hud.dart';
 import 'tokens.dart';
@@ -29,7 +28,13 @@ class TradeScreen extends StatefulWidget {
 
 class _TradeScreenState extends State<TradeScreen> {
   TradeMode _mode = TradeMode.sell;
-  ResourceId _picked = ResourceId.regolith;
+  final Map<String, ResourceId> _picked = {};
+
+  static const Map<String, String> _groupLabels = {
+    'resources': 'РЕСУРСИ',
+    'materials': 'МАТЕРІАЛИ',
+    'products': 'ПРОДУКЦІЯ',
+  };
 
   /// A wall clock, not a ticker: request timers keep running through pause,
   /// exactly like the drift they share a nature with, so the countdowns must
@@ -140,16 +145,19 @@ class _TradeScreenState extends State<TradeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                GroupCard(
-                  sim: sim,
-                  picked: _picked,
-                  onPick: (id) => setState(() => _picked = id),
-                  onChange: _poke,
-                ),
-                const SizedBox(height: 10),
-                const LockedGroup(label: 'МАТЕРІАЛИ'),
-                const SizedBox(height: 10),
-                const LockedGroup(label: 'ПРОДУКЦІЯ'),
+                for (final group in PrototypeSimulation.tradeGroups) ...[
+                  if (group.key != PrototypeSimulation.tradeGroups.first.key)
+                    const SizedBox(height: 10),
+                  GroupCard(
+                    sim: sim,
+                    label: _groupLabels[group.key]!,
+                    members: group.ids,
+                    group: sim.sellingGroupOf(group.key),
+                    picked: _picked[group.key] ?? group.ids.first,
+                    onPick: (id) => setState(() => _picked[group.key] = id),
+                    onChange: _poke,
+                  ),
+                ],
               ],
             ),
           ),

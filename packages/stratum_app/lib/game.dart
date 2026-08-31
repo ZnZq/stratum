@@ -621,12 +621,27 @@ class Game extends ChangeNotifier {
     const cap = Duration(milliseconds: PrototypeSimulation.absenceCapMs);
     if (away > cap) away = cap;
     _muteGains = true;
-    final gain = sim.claimOffline(
+    var gain = sim.claimOffline(
       seconds: away.inMicroseconds / 1e6,
       energyPerSecond: energyPerSecond,
       cycleSeconds: cycleSeconds,
     );
+    // The lines kept converting through the absence -- same formula, full
+    // pace. Their output joins the arrival window so the report is whole.
+    final crafted = sim.syncCraft(DateTime.now().millisecondsSinceEpoch);
     _muteGains = false;
+    if (crafted.isNotEmpty) {
+      final merged = Map<ResourceId, BigDouble>.of(gain.gained);
+      for (final entry in crafted.entries) {
+        merged[entry.key] = (merged[entry.key] ?? BigDouble.zero) + entry.value;
+      }
+      gain = OfflineGain(
+        seconds: gain.seconds,
+        cycles: gain.cycles,
+        efficiency: gain.efficiency,
+        gained: merged,
+      );
+    }
     if (gain.isEmpty) return;
     if (away >= offlineNoticeThreshold) {
       _offlineArrival = (gain: gain, away: away);
@@ -891,6 +906,7 @@ class Game extends ChangeNotifier {
     final wallNow = DateTime.now().millisecondsSinceEpoch;
     sim.observeWall(wallNow);
     sim.syncRequests(wallNow);
+    sim.syncCraft(wallNow);
     _seenRequests.retainAll(sim.requests);
     _announceNewRequests();
     for (var i = 0; i < batch.ticks; i++) {

@@ -46,6 +46,24 @@ enum ResourceId {
 
   /// Background compute, generated only while offline.
   compute,
+
+  /// Copper smelted out of cuprite. Craft tier one.
+  cuprum,
+
+  /// Iron smelted out of ferrite. Craft tier one.
+  ferrum,
+
+  /// Refined silicon, smelted out of silicite. Craft tier one.
+  silicon,
+
+  /// Drawn wire: cuprum and ferrum. Craft tier two.
+  wire,
+
+  /// A structural frame: ferrum and silicon. Craft tier two.
+  frame,
+
+  /// A silicon chip, the priciest product. Craft tier two.
+  chip,
 }
 
 /// What the player owns.

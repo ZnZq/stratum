@@ -131,6 +131,9 @@ class _SharePicker extends StatelessWidget {
 class GroupCard extends StatelessWidget {
   const GroupCard({
     required this.sim,
+    required this.label,
+    required this.members,
+    required this.group,
     required this.picked,
     required this.onPick,
     required this.onChange,
@@ -138,6 +141,15 @@ class GroupCard extends StatelessWidget {
   });
 
   final PrototypeSimulation sim;
+
+  /// The shelf's headline, e.g. 'РЕСУРСИ'.
+  final String label;
+
+  final List<ResourceId> members;
+
+  /// The whole shelf's sweep switch.
+  final Signal<bool> group;
+
   final ResourceId picked;
   final ValueChanged<ResourceId> onPick;
   final ValueChanged<VoidCallback> onChange;
@@ -149,9 +161,7 @@ class GroupCard extends StatelessWidget {
     final pay = sim.sellYield(picked);
     // The card's edge answers "does this shelf pay?": grey when the group
     // is off or nothing in it is switched on.
-    final live = PrototypeSimulation.priceTable.any(
-      (row) => sim.sellsInSweep(row.id),
-    );
+    final live = members.any(sim.sellsInSweep);
     return HudBox(
       cut: 11,
       fill: Palette.bar.withValues(alpha: 0.6),
@@ -163,7 +173,7 @@ class GroupCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                'РЕСУРСИ · ${PrototypeSimulation.priceTable.length}',
+                '$label · ${members.length}',
                 style: AppText.body(
                   8.5,
                   weight: FontWeight.w700,
@@ -176,11 +186,8 @@ class GroupCard extends StatelessWidget {
               // position chose, so flipping it back restores the set-up.
               _Toggle(
                 label: 'вся група',
-                on: sim.sellingResources.value,
-                onTap: () => onChange(
-                  () =>
-                      sim.sellingResources.value = !sim.sellingResources.value,
-                ),
+                on: group.value,
+                onTap: () => onChange(() => group.value = !group.value),
               ),
             ],
           ),
@@ -249,11 +256,10 @@ class GroupCard extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              for (final row in PrototypeSimulation.priceTable) ...[
-                if (row.id != PrototypeSimulation.priceTable.first.id)
-                  const SizedBox(width: 6),
+              for (final id in members) ...[
+                if (id != members.first) const SizedBox(width: 6),
                 HudTap(
-                  onTap: () => onPick(row.id),
+                  onTap: () => onPick(id),
                   corners: HudCorners.centred,
                   cut: 7,
                   // Chamfered, not rounded: the well sits on a HUD panel,
@@ -263,14 +269,14 @@ class GroupCard extends StatelessWidget {
                   // shelf's together.
                   child: HudPlate(
                     cut: 7,
-                    fill: row.id == picked ? Palette.goldWell : Palette.shell,
-                    edge: sim.sellsInSweep(row.id)
+                    fill: id == picked ? Palette.goldWell : Palette.shell,
+                    edge: sim.sellsInSweep(id)
                         ? Palette.amber
                         : Palette.lineBar,
                     child: SizedBox(
                       width: 30,
                       height: 30,
-                      child: Center(child: ResourceIcon(row.id, size: 17)),
+                      child: Center(child: ResourceIcon(id, size: 17)),
                     ),
                   ),
                 ),

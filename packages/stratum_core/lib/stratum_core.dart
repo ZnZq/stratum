@@ -9,6 +9,8 @@ export 'src/balance_harness.dart';
 export 'src/big_double.dart';
 export 'src/number_style.dart';
 export 'src/preview/arm_part.dart';
+export 'src/preview/craft_line.dart';
+export 'src/preview/craft_recipe.dart';
 export 'src/preview/cycle_outcome.dart';
 export 'src/preview/drill_id.dart';
 export 'src/preview/drill_part.dart';

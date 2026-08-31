@@ -5,6 +5,8 @@ import '../random_source.dart';
 import '../reactive_graph.dart';
 import '../stockpile.dart';
 import 'arm_part.dart';
+import 'craft_line.dart';
+import 'craft_recipe.dart';
 import 'cycle_outcome.dart';
 import 'drill_id.dart';
 import 'drill_part.dart';
@@ -79,6 +81,10 @@ class PrototypeSimulation {
     // subtraction against what past restarts banked -- the run is the unit,
     // so each one is paid in full for what it dug.
     bankableData = Computed(() => walletEarned, name: 'bankable data');
+
+    for (var i = 0; i < craftStartLines; i++) {
+      craftLines.add(CraftLine(stock, i));
+    }
 
     // The financing chain. Every link is a Computed so that whatever moves
     // -- a level poured, a sale landing in creditsEarned, a gifted tranche
@@ -1583,6 +1589,194 @@ class PrototypeSimulation {
     creditsEarned.value = creditsEarned.value + paid;
   }
 
+  // -------------------------------------------------------------- craft
+
+  /// The machines. Two to start with; the rest are bought with credits.
+  final List<CraftLine> craftLines = [];
+
+  /// The last [seenNow] stamp [syncCraft] settled to; -1 = never stamped.
+  /// Acknowledged-clock units, so the 48h absence cap is inherited.
+  int craftLastSeenMs = -1;
+
+  /// Advances every line by the wall time since the last call and returns
+  /// what the span produced, for the offline window. One formula from the
+  /// time delta -- identical online and offline, per the house rule; the
+  /// pause melts under it like the drift and the request board do.
+  Map<ResourceId, BigDouble> syncCraft(int nowMs) {
+    // Bank the wall span first: the acknowledged clock only advances when
+    // observed, and craft must not depend on someone else having looked.
+    observeWall(nowMs);
+    final seen = wallSeenMs;
+    if (craftLastSeenMs < 0) {
+      craftLastSeenMs = seen;
+      return const {};
+    }
+    final span = (seen - craftLastSeenMs) / 1000.0;
+    craftLastSeenMs = seen;
+    if (span <= 0) return const {};
+    final made = <ResourceId, BigDouble>{};
+    batch(() {
+      for (final line in craftLines) {
+        _runCraftLine(line, span, made);
+      }
+    });
+    return made;
+  }
+
+  void _runCraftLine(
+    CraftLine line,
+    double span,
+    Map<ResourceId, BigDouble> made,
+  ) {
+    final row = craftRecipeOf(line.recipe.value);
+    if (row == null || line.done || line.halted.value) {
+      // Standing idle drains the warm-up; a recipe change would not.
+      line.rampSeconds.value = 0;
+      return;
+    }
+    final costScale = math.pow(craftCostStep, line.tier.value).toDouble();
+    final units = line.unitsPerCraft.value;
+    final seconds = line.craftSeconds.value;
+    final r0 = line.rampSeconds.value;
+    // The warm-up integral is exact, so one long span equals any split of
+    // it -- the offline-parity invariant the tests pin.
+    final wantedCrafts = _rampSpeedSeconds(r0, span) / seconds;
+    if (wantedCrafts <= 0) return;
+    var bound = wantedCrafts;
+    for (final entry in row.inputs.entries) {
+      final k = stock.amount(entry.key).toDouble() / (entry.value * costScale);
+      if (k < bound) bound = k;
+    }
+    if (line.limit.value >= 0) {
+      final left = (line.limit.value - line.producedCount.value) / units;
+      if (left < bound) bound = left;
+    }
+    final crafts = bound < 0 ? 0.0 : bound;
+    if (crafts > 0) {
+      for (final entry in row.inputs.entries) {
+        final need = BigDouble.fromNum(entry.value * costScale * crafts);
+        final held = stock.amount(entry.key);
+        stock.spend(entry.key, need.gteWithTolerance(held) ? held : need);
+      }
+      final out = BigDouble.fromNum(units * crafts);
+      stock.add(row.output, out);
+      made[row.output] = (made[row.output] ?? BigDouble.zero) + out;
+      line.producedCount.value = line.producedCount.value + units * crafts;
+    }
+    if (crafts + 1e-9 >= wantedCrafts) {
+      final banked = r0 + span;
+      line.rampSeconds.value = banked > craftRampFullSeconds
+          ? craftRampFullSeconds
+          : banked;
+    } else {
+      // It starved, or the order filled mid-span: the machine stood for the
+      // rest of the window, and warm-up does not survive standing.
+      line.rampSeconds.value = 0;
+    }
+  }
+
+  /// Speed-seconds the warm-up grants over [span] starting from [r0] banked
+  /// seconds: the bonus climbs linearly to [craftRampBonus] over
+  /// [craftRampFullSeconds], so the integral is piecewise quadratic.
+  static double _rampSpeedSeconds(double r0, double span) {
+    const cap = craftRampFullSeconds;
+    const bonus = craftRampBonus;
+    if (r0 >= cap) return span * (1 + bonus);
+    const c = bonus / (2 * cap);
+    final s1 = cap - r0;
+    if (span <= s1) {
+      return span + c * ((r0 + span) * (r0 + span) - r0 * r0);
+    }
+    final pre = s1 + c * (cap * cap - r0 * r0);
+    return pre + (span - s1) * (1 + bonus);
+  }
+
+  /// Assigns what the line makes and the run mode, chosen together in the
+  /// picker. Retargeting is free and keeps the warm-up: the screen is built
+  /// for players who change orders all day. A fresh order restarts the
+  /// count toward [limit] (-1 = endless).
+  /// Assigning is launching a NEW order, so the compression level may be
+  /// chosen with it -- the mid-job lock guards a RUNNING job, not this.
+  void assignCraftRecipe(
+    int index,
+    ResourceId? output, {
+    int limit = -1,
+    int? tier,
+  }) {
+    final line = craftLines[index];
+    line.recipe.value = craftRecipeOf(output)?.output;
+    line.limit.value = limit;
+    line.producedCount.value = 0;
+    line.halted.value = false;
+    if (tier != null) {
+      line.tier.value = tier.clamp(0, line.tierCap.value);
+    }
+  }
+
+  /// Stops or resumes the line by hand. A stopped machine keeps its recipe
+  /// and its order, frees the compression level, and loses its warm-up --
+  /// standing is standing.
+  void setCraftHalted(int index, bool value) {
+    craftLines[index].halted.value = value;
+  }
+
+  /// Picks the compression level. Refused while the line is running: the
+  /// level is fixed for the length of a job, changeable the moment the
+  /// machine stands.
+  bool setCraftTier(int index, int value) {
+    final line = craftLines[index];
+    if (line.running) return false;
+    final clamped = value.clamp(0, line.tierCap.value);
+    line.tier.value = clamped;
+    return true;
+  }
+
+  BigDouble get craftLineCost =>
+      BigDouble.fromNum(2000) *
+      BigDouble.fromNum(6)
+          .pow((craftLines.length - craftStartLines).toDouble());
+
+  bool get canBuyCraftLine => stock.has(ResourceId.credits, craftLineCost);
+
+  bool buyCraftLine() {
+    if (!stock.spend(ResourceId.credits, craftLineCost)) return false;
+    craftLines.add(CraftLine(stock, craftLines.length));
+    return true;
+  }
+
+  BigDouble craftCapCost(int index) =>
+      BigDouble.fromNum(500) *
+      BigDouble.fromNum(4).pow(craftLines[index].tierCap.value.toDouble());
+
+  bool canBuyCraftCap(int index) =>
+      craftLines[index].tierCap.value < craftTierCapMax &&
+      stock.has(ResourceId.credits, craftCapCost(index));
+
+  /// Raises the line's compression ceiling. The CHOSEN level never moves
+  /// with the purchase: standing below the ceiling is a legitimate trade,
+  /// not an oversight.
+  bool buyCraftCap(int index) {
+    if (!canBuyCraftCap(index)) return false;
+    if (!stock.spend(ResourceId.credits, craftCapCost(index))) return false;
+    final line = craftLines[index];
+    line.tierCap.value = line.tierCap.value + 1;
+    return true;
+  }
+
+  BigDouble craftSpeedCost(int index) =>
+      BigDouble.fromNum(300) *
+      BigDouble.fromNum(1.6).pow(craftLines[index].speedLevel.value.toDouble());
+
+  bool canBuyCraftSpeed(int index) =>
+      stock.has(ResourceId.credits, craftSpeedCost(index));
+
+  bool buyCraftSpeed(int index) {
+    if (!stock.spend(ResourceId.credits, craftSpeedCost(index))) return false;
+    final line = craftLines[index];
+    line.speedLevel.value = line.speedLevel.value + 1;
+    return true;
+  }
+
   // -------------------------------------------------------------- trade
 
   /// The price list. Fixed by design: no depth scaling, no market swings --
@@ -1593,6 +1787,15 @@ class PrototypeSimulation {
     (id: ResourceId.regolith, price: 0.4),
     (id: ResourceId.cuprite, price: 820),
     (id: ResourceId.ferrite, price: 1400),
+    // Crafted goods carry a margin over what their inputs would fetch raw
+    // (metals ~+35%, products ~+70%): crafting is meant to become the best
+    // credit channel of the late run. PROVISIONAL.
+    (id: ResourceId.cuprum, price: 9000),
+    (id: ResourceId.ferrum, price: 15500),
+    (id: ResourceId.silicon, price: 8000),
+    (id: ResourceId.wire, price: 145000),
+    (id: ResourceId.frame, price: 265000),
+    (id: ResourceId.chip, price: 200000),
   ];
 
   /// The shares a position can sell at. Steps rather than a free slider:
@@ -1615,15 +1818,45 @@ class PrototypeSimulation {
   /// thing only.
   Signal<bool> sellingOf(ResourceId id) => _selling[id]!;
 
-  /// The whole shelf's switch, INDEPENDENT of the positions' own: turning
-  /// the group off does not rewrite what each position chose, so turning it
-  /// back on restores the exact picture the player had set up.
-  final Signal<bool> sellingResources = Signal(true, name: 'selling group');
+  /// The trade shelves: which sellable ids sit under which group switch.
+  static const List<({String key, List<ResourceId> ids})> tradeGroups = [
+    (
+      key: 'resources',
+      ids: [ResourceId.regolith, ResourceId.cuprite, ResourceId.ferrite],
+    ),
+    (
+      key: 'materials',
+      ids: [ResourceId.cuprum, ResourceId.ferrum, ResourceId.silicon],
+    ),
+    (
+      key: 'products',
+      ids: [ResourceId.wire, ResourceId.frame, ResourceId.chip],
+    ),
+  ];
 
-  /// Whether "sell everything" takes [id] right now: its own switch AND the
+  /// Each shelf's switch, INDEPENDENT of the positions' own: turning the
+  /// group off does not rewrite what each position chose, so turning it
+  /// back on restores the exact picture the player had set up.
+  final Map<String, Signal<bool>> _groupSelling = {
+    for (final group in tradeGroups)
+      group.key: Signal(true, name: 'selling ${group.key}'),
+  };
+
+  Signal<bool> sellingGroupOf(String key) => _groupSelling[key]!;
+
+  /// The resources shelf's switch, kept under its old name for callers.
+  Signal<bool> get sellingResources => _groupSelling['resources']!;
+
+  /// Whether "sell everything" takes [id] right now: its own switch AND its
   /// shelf's.
-  bool sellsInSweep(ResourceId id) =>
-      sellingResources.value && _selling[id]!.value;
+  bool sellsInSweep(ResourceId id) {
+    for (final group in tradeGroups) {
+      if (group.ids.contains(id)) {
+        return _groupSelling[group.key]!.value && _selling[id]!.value;
+      }
+    }
+    return false;
+  }
 
   /// What share of the held amount a sale moves, in percent.
   Signal<int> sellShareOf(ResourceId id) => _sellShare[id]!;
@@ -1838,6 +2071,10 @@ class PrototypeSimulation {
       for (final row in fundTable)
         if (_funding[row.id]!.value != 0) row.id.name: _funding[row.id]!.value,
     },
+    'craft': {
+      'last': craftLastSeenMs,
+      'lines': [for (final line in craftLines) line.toJson()],
+    },
     'trade': {
       // Only departures from the defaults are written: a fresh build reads
       // an old save and every position simply sells whole, switched on.
@@ -1845,7 +2082,11 @@ class PrototypeSimulation {
         for (final row in priceTable)
           if (!_selling[row.id]!.value) row.id.name,
       ],
-      if (!sellingResources.value) 'groupOff': true,
+      if (_groupSelling.values.any((signal) => !signal.value))
+        'groupOff': [
+          for (final group in tradeGroups)
+            if (!_groupSelling[group.key]!.value) group.key,
+        ],
       'share': {
         for (final row in priceTable)
           if (_sellShare[row.id]!.value != 100)
@@ -1994,7 +2235,15 @@ class PrototypeSimulation {
             ? stored as int
             : 100;
       }
-      sellingResources.value = trade['groupOff'] != true;
+      final groupOff = trade['groupOff'];
+      for (final group in tradeGroups) {
+        // The legacy shape was a bare `true` meaning the one shelf of the
+        // three-row era; it lands on the resources shelf.
+        final off = groupOff is List
+            ? groupOff.contains(group.key)
+            : groupOff == true && group.key == 'resources';
+        _groupSelling[group.key]!.value = !off;
+      }
       nextRequestAtMs = _readInt(trade['nextAt'], 0);
       final posted = trade['requests'];
       if (posted is List) {
@@ -2008,8 +2257,29 @@ class PrototypeSimulation {
         _selling[row.id]!.value = true;
         _sellShare[row.id]!.value = 100;
       }
-      sellingResources.value = true;
+      for (final group in tradeGroups) {
+        _groupSelling[group.key]!.value = true;
+      }
       nextRequestAtMs = 0;
+    }
+
+    final craft = json['craft'];
+    craftLines.clear();
+    if (craft is Map) {
+      craftLastSeenMs = craft['last'] is num
+          ? (craft['last'] as num).toInt()
+          : -1;
+      final storedLines = craft['lines'];
+      if (storedLines is List) {
+        for (var i = 0; i < storedLines.length; i++) {
+          craftLines.add(CraftLine(stock, i)..readJson(storedLines[i]));
+        }
+      }
+    } else {
+      craftLastSeenMs = -1;
+    }
+    while (craftLines.length < craftStartLines) {
+      craftLines.add(CraftLine(stock, craftLines.length));
     }
 
     final rolls = json['random'];

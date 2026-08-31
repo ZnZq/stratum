@@ -13,7 +13,13 @@ enum ResourceShelf {
   currency('валюти'),
 
   /// Neither mined nor spent on the rig: what the simulation itself yields.
-  research('дослідження');
+  research('дослідження'),
+
+  /// Craft tier one: metals smelted out of the ores.
+  materials('матеріали'),
+
+  /// Craft tier two: what the metals are worked into.
+  products('продукція');
 
   const ResourceShelf(this.label);
 
@@ -33,6 +39,48 @@ typedef ResourceStyle = ({
 });
 
 const Map<ResourceId, ResourceStyle> resourceStyles = {
+  ResourceId.cuprum: (
+    label: 'Купрум',
+    note: 'виплавлено з куприту',
+    icon: Ti.prism,
+    colour: Color(0xFFF2AE6E),
+    shelf: ResourceShelf.materials,
+  ),
+  ResourceId.ferrum: (
+    label: 'Ферум',
+    note: 'виплавлено з фериту',
+    icon: Ti.magnet,
+    colour: Color(0xFFC3D2E4),
+    shelf: ResourceShelf.materials,
+  ),
+  ResourceId.silicon: (
+    label: 'Силіцій',
+    note: 'виплавлено з силіциту',
+    icon: Ti.sphere,
+    colour: Color(0xFFF4EAD2),
+    shelf: ResourceShelf.materials,
+  ),
+  ResourceId.wire: (
+    label: 'Дріт',
+    note: 'купрум і ферум',
+    icon: Ti.circles,
+    colour: Color(0xFFEFB25C),
+    shelf: ResourceShelf.products,
+  ),
+  ResourceId.frame: (
+    label: 'Каркас',
+    note: 'ферум і силіцій',
+    icon: Ti.crane,
+    colour: Color(0xFF9FB9D8),
+    shelf: ResourceShelf.products,
+  ),
+  ResourceId.chip: (
+    label: 'Чіп',
+    note: 'силіцій, купрум і кристали',
+    icon: Ti.cpu,
+    colour: Color(0xFF8FE0C8),
+    shelf: ResourceShelf.products,
+  ),
   ResourceId.regolith: (
     label: 'Реголіт',
     note: 'перемелена порода · кожен удар',

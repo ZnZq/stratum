@@ -22,6 +22,11 @@ enum ModalAnchor {
   /// list long enough to scroll, which would otherwise resize itself every
   /// time its contents changed.
   stretch,
+
+  /// Fills the AREA THE MODAL IS MOUNTED IN, edge to edge. For sheets that
+  /// live inside a screen's own stack: [stretch] subtracts the shell's
+  /// chrome, which such a stack has already subtracted once.
+  fill,
 }
 
 /// A panel cut out of the console, rather than a card laid on top of it.
@@ -68,7 +73,8 @@ class HudModal extends StatelessWidget {
       bracket: accent.withValues(alpha: 0.85),
       bracketArm: 7,
       child: Column(
-        mainAxisSize: anchor == ModalAnchor.stretch
+        mainAxisSize:
+            anchor == ModalAnchor.stretch || anchor == ModalAnchor.fill
             ? MainAxisSize.max
             : MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -117,7 +123,7 @@ class HudModal extends StatelessWidget {
             height: 1,
             child: ColoredBox(color: accent.withValues(alpha: 0.2)),
           ),
-          if (anchor == ModalAnchor.stretch)
+          if (anchor == ModalAnchor.stretch || anchor == ModalAnchor.fill)
             Expanded(
               child: Padding(padding: contentPadding, child: child),
             )
@@ -159,6 +165,13 @@ class HudModal extends StatelessWidget {
             left: inset,
             right: inset,
             bottom: AppMetrics.navTotal + 10,
+            child: panel,
+          ),
+          ModalAnchor.fill => Positioned(
+            top: 4,
+            left: inset,
+            right: inset,
+            bottom: 6,
             child: panel,
           ),
           ModalAnchor.centre => Positioned.fill(
