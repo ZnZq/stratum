@@ -11,9 +11,12 @@ import 'resource_icon.dart';
 import 'resource_style.dart';
 import 'tokens.dart';
 
-/// The picker: what the line will make AND how it will run, chosen in one
-/// place. The run mode belongs to the order, so it is set here and worn on
-/// the line only as a badge.
+/// The picker, rethought as MENU + PASSPORT: a light list of what the line
+/// could make (icon, name, a sufficiency lamp -- no prices), and one card
+/// below it where ALL the specifics of the chosen recipe live: inputs with
+/// the stock's runway, time and yield at the line's level, the duplicate
+/// odds, the compression track and the run mode. Reading order: pick,
+/// read the passport, launch.
 class CraftRecipeSheet extends StatefulWidget {
   const CraftRecipeSheet({
     required this.game,
@@ -50,6 +53,12 @@ class _CraftRecipeSheetState extends State<CraftRecipeSheet> {
     _tier = line.tier.value;
   }
 
+  /// The pace a NEW job starts at: the speed track alone. The line's live
+  /// speedFactor carries the boost stacks, and assigning resets those --
+  /// the passport must not promise a warm-up the job will not inherit.
+  double get _jobSpeed =>
+      (1 + craftSpeedStep * _line.speedLevel.value) * craftGameSpeed;
+
   /// The order stepper: minus under one unit falls back to AUTO, plus from
   /// AUTO starts a fresh finite order at the step.
   void _bumpN(int delta) {
@@ -71,8 +80,6 @@ class _CraftRecipeSheetState extends State<CraftRecipeSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final line = _line;
-    final pickedStyle = _picked == null ? null : resourceStyles[_picked!]!;
     return HudModal(
       icon: Ic.craft,
       title: 'РЕЦЕПТ І РЕЖИМ',
@@ -92,135 +99,89 @@ class _CraftRecipeSheetState extends State<CraftRecipeSheet> {
         children: [
           const SizedBox(height: 2),
           _section('матеріали', Palette.tech),
-          for (final recipe in craftTable)
-            if (resourceStyles[recipe.output]!.shelf == ResourceShelf.materials)
-              _RecipeRow(
-                game: widget.game,
-                recipe: recipe,
-                tier: _tier,
-                speed: line.speedFactor.value,
-                picked: _picked == recipe.output,
-                onTap: () => setState(() => _picked = recipe.output),
-              ),
-          const SizedBox(height: 3),
+          _menuGrid(ResourceShelf.materials),
+          const SizedBox(height: 5),
           _section('продукція', Palette.steel),
-          for (final recipe in craftTable)
-            if (resourceStyles[recipe.output]!.shelf == ResourceShelf.products)
-              _RecipeRow(
-                game: widget.game,
-                recipe: recipe,
-                tier: _tier,
-                speed: line.speedFactor.value,
-                picked: _picked == recipe.output,
-                onTap: () => setState(() => _picked = recipe.output),
-              ),
-          const Spacer(),
-          const HudRule(),
-          const SizedBox(height: 5),
-          Row(
-            children: [
-              Text(
-                'КОМПРЕСІЯ',
-                style: AppText.body(
-                  8.5,
-                  weight: FontWeight.w700,
-                  color: Palette.textFaint,
-                  letterSpacing: 1.6,
-                ),
-              ),
-              const SizedBox(width: 10),
-              _TierStep(
-                glyph: '−',
-                enabled: _tier > 0,
-                onTap: () => setState(() => _tier--),
-              ),
-              SizedBox(
-                width: 26,
-                child: Center(
-                  child: Text(
-                    '$_tier',
-                    style: AppText.display(
-                      13,
-                      weight: FontWeight.w700,
-                      color: Palette.text,
-                    ),
+          _menuGrid(ResourceShelf.products),
+          const SizedBox(height: 7),
+          Expanded(
+            child: _picked == null
+                ? const _EmptyPassport()
+                : _Passport(
+                    game: widget.game,
+                    recipe: craftRecipeOf(_picked)!,
+                    tier: _tier,
+                    tierCap: _line.tierCap.value,
+                    speed: _jobSpeed,
+                    endless: _endless,
+                    n: _n,
+                    onTier: (v) => setState(() => _tier = v),
+                    onBump: _bumpN,
+                    onAuto: () => setState(() => _endless = true),
                   ),
-                ),
-              ),
-              _TierStep(
-                glyph: '+',
-                enabled: _tier < line.tierCap.value,
-                onTap: () => setState(() => _tier++),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                '/ ${line.tierCap.value}',
-                style: AppText.display(9, color: Palette.textMuted),
-              ),
-              const Spacer(),
-              Text(
-                'вихід ×${1 << _tier} · ціни й час вище — на цьому рівні',
-                style: AppText.body(7.5, color: Palette.textFaint),
-              ),
-            ],
-          ),
-          const SizedBox(height: 5),
-          Row(
-            children: [
-              Text(
-                'РЕЖИМ',
-                style: AppText.body(
-                  8.5,
-                  weight: FontWeight.w700,
-                  color: Palette.textFaint,
-                  letterSpacing: 1.6,
-                ),
-              ),
-              const SizedBox(width: 10),
-              // A fixed box: the infinity glyph's line is shorter than the
-              // digits', and a reading that resizes bounces the sheet.
-              SizedBox(
-                height: 18,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    _endless ? '∞' : '$_n шт',
-                    style: AppText.display(
-                      13,
-                      weight: FontWeight.w700,
-                      color: Palette.gold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          _ModeStepper(
-            endless: _endless,
-            onBump: _bumpN,
-            onAuto: () => setState(() => _endless = true),
           ),
           const SizedBox(height: 6),
-          HudButton(
-            onTap: _picked == null ? null : _launch,
-            padding: const EdgeInsets.symmetric(vertical: 9),
-            child: Center(
-              child: Text(
-                _picked == null
-                    ? 'ОБЕРИ РЕЦЕПТ'
-                    : 'ЗАПУСТИТИ · ${pickedStyle!.label.toUpperCase()} · '
-                          '${_endless ? '∞' : 'N $_n'}',
-                style: AppText.body(
-                  9.5,
-                  weight: FontWeight.w800,
-                  letterSpacing: 1.4,
-                  color: _picked == null ? Palette.textFaint : Palette.gold,
-                ),
-              ),
+          _launchButton(),
+        ],
+      ),
+    );
+  }
+
+  /// The menu: one light row per recipe -- what it is and whether the
+  /// stock can start it at the chosen level. Prices live in the passport.
+  Widget _menuGrid(ResourceShelf shelf) {
+    final rows = [
+      for (final recipe in craftTable)
+        if (resourceStyles[recipe.output]!.shelf == shelf) recipe,
+    ];
+    return Row(
+      children: [
+        for (final recipe in rows) ...[
+          if (recipe != rows.first) const SizedBox(width: 5),
+          Expanded(
+            child: _MenuCell(
+              recipe: recipe,
+              picked: _picked == recipe.output,
+              onTap: () => setState(() => _picked = recipe.output),
             ),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _launchButton() {
+    final style = _picked == null ? null : resourceStyles[_picked!]!;
+    String label;
+    if (_picked == null) {
+      label = 'ОБЕРИ РЕЦЕПТ';
+    } else {
+      final recipe = craftRecipeOf(_picked)!;
+      final yieldPer = BigDouble.fromNum(
+        recipe.baseYield * math.pow(craftYieldStep, _tier),
+      );
+      final seconds = math.max(
+        craftMinSeconds,
+        recipe.baseSeconds * math.pow(craftTimeStep, _tier) / _jobSpeed,
+      );
+      label =
+          'ЗАПУСТИТИ · ${style!.label.toUpperCase()} · '
+          '+$yieldPer / ${craftClock(seconds)}'
+          '${_endless ? '' : ' · $_n шт'}';
+    }
+    return HudButton(
+      onTap: _picked == null ? null : _launch,
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Center(
+        child: Text(
+          label,
+          style: AppText.body(
+            9.5,
+            weight: FontWeight.w800,
+            letterSpacing: 1.4,
+            color: _picked == null ? Palette.textFaint : Palette.gold,
+          ),
+        ),
       ),
     );
   }
@@ -238,7 +199,7 @@ class _CraftRecipeSheetState extends State<CraftRecipeSheet> {
   }
 
   Widget _section(String label, Color colour) => Padding(
-    padding: const EdgeInsets.only(bottom: 3),
+    padding: const EdgeInsets.only(bottom: 4),
     child: Row(
       children: [
         Text(
@@ -262,30 +223,22 @@ class _CraftRecipeSheetState extends State<CraftRecipeSheet> {
   );
 }
 
-/// One recipe on the menu, quoting its inputs and craft time AT THE LINE'S
-/// LEVEL -- the vitrine quotes the product, never the bare base.
-class _RecipeRow extends StatelessWidget {
-  const _RecipeRow({
-    required this.game,
+/// One recipe on the menu: icon and name, nothing else -- the specifics,
+/// affordability included, are the passport's job.
+class _MenuCell extends StatelessWidget {
+  const _MenuCell({
     required this.recipe,
-    required this.tier,
-    required this.speed,
     required this.picked,
     required this.onTap,
   });
 
-  final Game game;
   final CraftRecipe recipe;
-  final int tier;
-  final double speed;
   final bool picked;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final style = resourceStyles[recipe.output]!;
-    final costScale = math.pow(craftCostStep, tier).toDouble();
-    final seconds = recipe.baseSeconds * math.pow(craftTimeStep, tier) / speed;
     return HudTap(
       onTap: onTap,
       cut: 5,
@@ -296,44 +249,371 @@ class _RecipeRow extends StatelessWidget {
             ? Palette.goldWell.withValues(alpha: 0.7)
             : const Color(0x00000000),
         edge: picked ? Palette.gold.withValues(alpha: 0.55) : Palette.lineBar,
-        padding: const EdgeInsets.fromLTRB(9, 4, 9, 5),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(4, 6, 4, 5),
+        child: Column(
           children: [
-            ResourceIcon(recipe.output, size: 16),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    style.label.toUpperCase(),
-                    style: AppText.body(
-                      9.5,
-                      weight: FontWeight.w800,
-                      letterSpacing: 1,
-                      color: style.colour,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      children: [
-                        for (final entry in recipe.inputs.entries) ...[
-                          if (entry.key != recipe.inputs.keys.first)
-                            const SizedBox(width: 10),
-                          _need(entry.key, entry.value * costScale),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+            ResourceIcon(recipe.output, size: 15),
+            const SizedBox(height: 4),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                style.label.toUpperCase(),
+                style: AppText.body(
+                  7.5,
+                  weight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                  color: picked ? style.colour : Palette.textDim,
+                ),
               ),
             ),
-            Text(
-              '${craftClock(seconds)} · +${_yield()}',
-              style: AppText.display(9, color: Palette.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The passport of the chosen recipe: every figure the launch decision
+/// needs, in one card, recomputed live as the level changes. The figures
+/// the level moves FLINCH on a change -- the energy plate's pulse.
+class _Passport extends StatelessWidget {
+  const _Passport({
+    required this.game,
+    required this.recipe,
+    required this.tier,
+    required this.tierCap,
+    required this.speed,
+    required this.endless,
+    required this.n,
+    required this.onTier,
+    required this.onBump,
+    required this.onAuto,
+  });
+
+  final Game game;
+  final CraftRecipe recipe;
+  final int tier;
+  final int tierCap;
+  final double speed;
+  final bool endless;
+  final int n;
+  final ValueChanged<int> onTier;
+  final ValueChanged<int> onBump;
+  final VoidCallback onAuto;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = resourceStyles[recipe.output]!;
+    final costScale = math.pow(craftCostStep, tier).toDouble();
+    final seconds = math.max(
+      craftMinSeconds,
+      recipe.baseSeconds * math.pow(craftTimeStep, tier) / speed,
+    );
+    final yieldPer = BigDouble.fromNum(
+      recipe.baseYield * math.pow(craftYieldStep, tier),
+    );
+    return HudPlate(
+      cut: 5,
+      fill: Palette.well.withValues(alpha: 0.55),
+      edge: Palette.lineBar,
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ResourceIcon(recipe.output, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                style.label.toUpperCase(),
+                style: AppText.body(
+                  11,
+                  weight: FontWeight.w800,
+                  letterSpacing: 1.1,
+                  color: style.colour,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          // The inputs as a panel of HudStat plates, seam to seam: only
+          // the block's outer corners are struck (the group rule).
+          // The inputs as a GRID of stat plates, two to a row (owner's
+          // rule); only the block's outer corners are struck. Each row is
+          // IntrinsicHeight, not bare stretch -- the unbounded-column
+          // lesson.
+          ..._inputGrid(costScale),
+          const Spacer(),
+          const HudRule(),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Text(
+                'КОМПРЕСІЯ',
+                style: AppText.body(
+                  7.5,
+                  weight: FontWeight.w700,
+                  color: Palette.textFaint,
+                  letterSpacing: 1.4,
+                ),
+              ),
+              const Spacer(),
+              _TierStep(
+                glyph: '−',
+                enabled: tier > 0,
+                onTap: () => onTier(tier - 1),
+              ),
+              SizedBox(
+                width: 24,
+                child: Center(
+                  child: Text(
+                    '$tier',
+                    style: AppText.display(
+                      12,
+                      weight: FontWeight.w700,
+                      color: Palette.text,
+                    ),
+                  ),
+                ),
+              ),
+              _TierStep(
+                glyph: '+',
+                enabled: tier < tierCap,
+                onTap: () => onTier(tier + 1),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          // The ladder in the board's own language: chosen cells lit,
+          // bought ones banked, the rest dark.
+          Row(
+            children: [
+              for (var i = 0; i < craftTierCapMax; i++) ...[
+                if (i > 0) const SizedBox(width: 1.5),
+                Expanded(
+                  child: SizedBox(
+                    height: 4.5,
+                    child: ColoredBox(
+                      color: i < tier
+                          ? Palette.gold
+                          : i < tierCap
+                          ? Palette.goldWell
+                          : Palette.card,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                'РЕЖИМ',
+                style: AppText.body(
+                  7.5,
+                  weight: FontWeight.w700,
+                  color: Palette.textFaint,
+                  letterSpacing: 1.4,
+                ),
+              ),
+              const Spacer(),
+              // A fixed box: the infinity glyph's line is shorter than
+              // the digits', and a resizing reading bounces the sheet.
+              SizedBox(
+                height: 16,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    endless ? '\u221E' : '$n шт',
+                    style: AppText.display(
+                      12,
+                      weight: FontWeight.w700,
+                      color: Palette.gold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          _ModeStepper(endless: endless, onBump: onBump, onAuto: onAuto),
+          const SizedBox(height: 8),
+          // The summary the launch is judged by, right above the button:
+          // one plate for the craft, one for the pace it adds up to.
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: HudStat(
+                    label: 'ЗА КРАФТ',
+                    corners: const HudCorners(topLeft: true, bottomLeft: true),
+                    cut: 7,
+                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 7),
+                    child: _Flinch(
+                      trigger: tier,
+                      // One Text.rich, not a baseline Row: inline spans
+                      // share a baseline by the text engine itself, with
+                      // no Row conventions to drift.
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '+$yieldPer',
+                              style: AppText.display(
+                                12,
+                                weight: FontWeight.w700,
+                                color: Palette.tech,
+                              ),
+                            ),
+                            TextSpan(
+                              text: ' / ${craftClock(seconds)}',
+                              style: AppText.display(
+                                9.5,
+                                color: Palette.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: HudStat(
+                    label: 'ТЕМП',
+                    corners: const HudCorners(
+                      topRight: true,
+                      bottomRight: true,
+                    ),
+                    cut: 7,
+                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 7),
+                    child: _Flinch(
+                      trigger: tier,
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text:
+                                  '+${_rateText(yieldPer.toDouble() / seconds)}',
+                              style: AppText.display(
+                                12,
+                                weight: FontWeight.w700,
+                                color: Palette.tech,
+                              ),
+                            ),
+                            TextSpan(
+                              text: ' / с',
+                              style: AppText.display(
+                                9.5,
+                                color: Palette.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The input plates, chunked two to a row. A lone plate on the last
+  /// row takes the full width.
+  List<Widget> _inputGrid(double costScale) {
+    final entries = recipe.inputs.entries.toList();
+    final rows = <List<MapEntry<ResourceId, double>>>[];
+    for (var i = 0; i < entries.length; i += 2) {
+      rows.add(entries.sublist(i, math.min(i + 2, entries.length)));
+    }
+    return [
+      for (var r = 0; r < rows.length; r++) ...[
+        if (r > 0) const SizedBox(height: 4),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var c = 0; c < rows[r].length; c++) ...[
+                if (c > 0) const SizedBox(width: 4),
+                Expanded(
+                  child: _inputStat(
+                    rows[r][c].key,
+                    rows[r][c].value * costScale,
+                    corners: HudCorners(
+                      topLeft: r == 0 && c == 0,
+                      topRight: r == 0 && c == rows[r].length - 1,
+                      bottomLeft: r == rows.length - 1 && c == 0,
+                      bottomRight:
+                          r == rows.length - 1 && c == rows[r].length - 1,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    ];
+  }
+
+  /// One input on a stat plate, quoted as X / Y: what a craft takes
+  /// against what the shelf holds. The pair answers "can I?" without a
+  /// lamp; the plate keeps the inputs in the game's readout language.
+  Widget _inputStat(
+    ResourceId id,
+    double amount, {
+    required HudCorners corners,
+  }) {
+    final need = BigDouble.fromNum(amount);
+    final held = game.sim.stock.amount(id);
+    final short = !held.gteWithTolerance(need);
+    final style = resourceStyles[id]!;
+    return HudStat(
+      label: style.label,
+      accent: style.colour,
+      labelColour: style.colour.withValues(alpha: 0.85),
+      corners: corners,
+      cut: 7,
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 7),
+      child: _Flinch(
+        trigger: tier,
+        child: Row(
+          children: [
+            ResourceIcon(id, size: 13),
+            const SizedBox(width: 5),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      '$need',
+                      style: AppText.display(
+                        11,
+                        weight: FontWeight.w700,
+                        color: short ? Palette.amber : Palette.tech,
+                      ),
+                    ),
+                    Text(
+                      ' / $held',
+                      style: AppText.display(
+                        9,
+                        color: short ? Palette.amber : Palette.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -341,25 +621,82 @@ class _RecipeRow extends StatelessWidget {
     );
   }
 
-  String _yield() =>
-      '${BigDouble.fromNum(recipe.baseYield * math.pow(craftYieldStep, tier))}';
+  /// The line card's own rate format, so the promise reads identically
+  /// on both sides of the launch: three decimals under one, two under
+  /// ten, the house number style above.
+  static String _rateText(double v) {
+    if (v < 1) return v.toStringAsFixed(3);
+    return v < 10
+        ? v.toStringAsFixed(2)
+        : '${BigDouble.fromNum(v)}';
+  }
 
-  Widget _need(ResourceId id, double amount) {
-    final need = BigDouble.fromNum(amount);
-    final short = !game.sim.stock.has(id, need);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ResourceIcon(id, size: 10),
-        const SizedBox(width: 3),
-        Text(
-          '$need',
-          style: AppText.display(
-            9,
-            color: short ? Palette.amber : Palette.tech,
-          ),
+}
+
+/// The energy plate's flinch, borrowed: whatever sits inside swells for a
+/// beat when [trigger] changes. Transform.scale is paint-only, so the
+/// sheet never reflows.
+class _Flinch extends StatefulWidget {
+  const _Flinch({required this.trigger, required this.child});
+
+  final Object trigger;
+  final Widget child;
+
+  @override
+  State<_Flinch> createState() => _FlinchState();
+}
+
+class _FlinchState extends State<_Flinch> with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 170),
+  );
+
+  @override
+  void didUpdateWidget(_Flinch oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.trigger != oldWidget.trigger) _pulse.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _pulse,
+      // Gentler than the energy plate's 0.15: these sit on wide rows,
+      // and a swell scales from the centre -- wide content throws its
+      // ends around at an amplitude a lone figure carries fine.
+      builder: (context, child) => Transform.scale(
+        scale: 1 + 0.05 * math.sin(math.pi * _pulse.value),
+        child: child,
+      ),
+      child: widget.child,
+    );
+  }
+}
+
+/// The passport's empty seat: the card holds its place so the sheet does
+/// not jump when the first recipe is picked.
+class _EmptyPassport extends StatelessWidget {
+  const _EmptyPassport();
+
+  @override
+  Widget build(BuildContext context) {
+    return HudPlate(
+      cut: 5,
+      fill: Palette.well.withValues(alpha: 0.3),
+      edge: Palette.lineBar,
+      child: Center(
+        child: Text(
+          'обери рецепт у меню',
+          style: AppText.body(9, color: Palette.textFaint),
         ),
-      ],
+      ),
     );
   }
 }

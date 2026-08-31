@@ -225,6 +225,7 @@ class _FundRow extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             HudButton(
+              holdRepeat: true,
               onTap: sim.canInvest(id) ? () => onInvest(id) : null,
               accent: style.colour,
               padding: const EdgeInsets.symmetric(horizontal: 12),

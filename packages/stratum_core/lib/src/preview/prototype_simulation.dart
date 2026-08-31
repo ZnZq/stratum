@@ -659,6 +659,72 @@ class PrototypeSimulation {
   /// drilling is the online game; what the store earns while away is ore and
   /// minerals at the current face, which is also why break payouts are not
   /// part of the rate.
+  /// The width of one offline slice: income lands and every line runs
+  /// minute by minute, so a line that FEEDS another does so through the
+  /// absence the way it does online -- to a minute's precision instead of
+  /// a second's, which no report can tell apart. PROVISIONAL.
+  static const double offlineSliceSeconds = 60;
+
+  /// Settles a whole absence: mining income and the craft lines
+  /// interleave in [offlineSliceSeconds] steps over the shared stock.
+  /// One call owns the acknowledged clock and the craft stamp, so the
+  /// app's settlement cannot double-count either.
+  OfflineGain settleAbsence({
+    required int nowMs,
+    required double seconds,
+    required double energyPerSecond,
+    required double cycleSeconds,
+  }) {
+    observeWall(nowMs);
+    final merged = <ResourceId, BigDouble>{};
+    if (seconds > 0) {
+      final crafted = <ResourceId, BigDouble>{};
+      batch(() {
+        var left = seconds;
+        while (left > 1e-9) {
+          final step = left < offlineSliceSeconds
+              ? left
+              : offlineSliceSeconds;
+          final g = claimOffline(
+            seconds: step,
+            energyPerSecond: energyPerSecond,
+            cycleSeconds: cycleSeconds,
+          );
+          for (final entry in g.gained.entries) {
+            merged[entry.key] =
+                (merged[entry.key] ?? BigDouble.zero) + entry.value;
+          }
+          for (final line in craftLines) {
+            // The benches run at the SAME offline efficiency as the
+            // mine: absence throttles everything the AI runs -- one
+            // rule, one number, and the meta node that raises it will
+            // raise both. Time dilation, so a unit in progress simply
+            // advances slower.
+            _runCraftLine(
+              line,
+              step * offlineEfficiency,
+              crafted,
+              offline: true,
+            );
+          }
+          left -= step;
+        }
+      });
+      for (final entry in crafted.entries) {
+        merged[entry.key] =
+            (merged[entry.key] ?? BigDouble.zero) + entry.value;
+      }
+    }
+    craftLastSeenMs = wallSeenMs;
+    if (merged.isEmpty) return OfflineGain.none;
+    return OfflineGain(
+      seconds: seconds,
+      cycles: cycleSeconds > 0 ? (seconds / cycleSeconds).floor() : 0,
+      efficiency: offlineEfficiency,
+      gained: merged,
+    );
+  }
+
   OfflineGain claimOffline({
     required double seconds,
     required double energyPerSecond,
@@ -1626,75 +1692,106 @@ class PrototypeSimulation {
   void _runCraftLine(
     CraftLine line,
     double span,
-    Map<ResourceId, BigDouble> made,
-  ) {
+    Map<ResourceId, BigDouble> made, {
+    bool offline = false,
+  }) {
     final row = craftRecipeOf(line.recipe.value);
-    if (row == null || line.done || line.halted.value) {
-      // Standing idle drains the warm-up; a recipe change would not.
-      line.rampSeconds.value = 0;
+    if (line.halted.value) {
+      // A hand-stop is a FREEZE-FRAME: progress, boost and the picture
+      // all hold exactly where they were until the player resumes.
       return;
     }
-    final costScale = math.pow(craftCostStep, line.tier.value).toDouble();
-    final units = line.unitsPerCraft.value;
-    final seconds = line.craftSeconds.value;
-    final r0 = line.rampSeconds.value;
-    // The warm-up integral is exact, so one long span equals any split of
-    // it -- the offline-parity invariant the tests pin.
-    final wantedCrafts = _rampSpeedSeconds(r0, span) / seconds;
-    if (wantedCrafts <= 0) return;
-    var bound = wantedCrafts;
-    for (final entry in row.inputs.entries) {
-      final k = stock.amount(entry.key).toDouble() / (entry.value * costScale);
-      if (k < bound) bound = k;
-    }
-    if (line.limit.value >= 0) {
-      final left = (line.limit.value - line.producedCount.value) / units;
-      if (left < bound) bound = left;
-    }
-    final crafts = bound < 0 ? 0.0 : bound;
-    if (crafts > 0) {
-      for (final entry in row.inputs.entries) {
-        final need = BigDouble.fromNum(entry.value * costScale * crafts);
-        final held = stock.amount(entry.key);
-        stock.spend(entry.key, need.gteWithTolerance(held) ? held : need);
+    if (row == null || line.done) return;
+    // The walk goes UNIT BY UNIT. A unit is prepaid on start and delivered
+    // whole on finish; each finish may add a boost stack, which speeds up
+    // every unit after it. Stepping through them keeps one long span
+    // identical to the same span in pieces -- the offline-parity invariant.
+    var remaining = span;
+    var guard = 0;
+    while (remaining > 1e-9 && guard++ < 700000) {
+      if (!line.unitLoaded.value && !_loadCraftUnit(line, row)) {
+        // Standing hungry drains the warm-up: a stack dies for every
+        // [craftBoostDecaySeconds] of starvation, the remainder banked
+        // so a long span equals the same span in pieces.
+        final bank = line.starveBank.value + remaining;
+        final lost = bank ~/ craftBoostDecaySeconds;
+        if (lost > 0 && line.boostStacks.value > 0) {
+          final left = line.boostStacks.value - lost;
+          line.boostStacks.value = left < 0 ? 0 : left;
+        }
+        line.starveBank.value = bank % craftBoostDecaySeconds;
+        break;
       }
-      final out = BigDouble.fromNum(units * crafts);
+      // The bench is fed and working: the hunger bank starts over.
+      line.starveBank.value = 0;
+      final eff = line.craftSeconds.value;
+      final timeLeft = (1 - line.unitFraction.value) * eff;
+      if (remaining < timeLeft - 1e-12) {
+        line.unitFraction.value = line.unitFraction.value + remaining / eff;
+        break;
+      }
+      remaining -= timeLeft;
+      final ordinal = line.unitOrdinal.value;
+      // An absence pays the floor: no duplicate rolls and no new boost
+      // stacks (owner's rule) -- chance is a bonus for the present eye.
+      // The ordinal still advances, so the coins resume deterministically
+      // from the right place when the player returns.
+      final doubled = !offline && craftDuplicateRoll(ordinal);
+      if (doubled) line.dupCount.value = line.dupCount.value + 1;
+      final units = line.unitsPerCraft.value * (doubled ? 2 : 1);
+      final out = BigDouble.fromNum(units);
       stock.add(row.output, out);
       made[row.output] = (made[row.output] ?? BigDouble.zero) + out;
-      line.producedCount.value = line.producedCount.value + units * crafts;
-    }
-    if (crafts + 1e-9 >= wantedCrafts) {
-      final banked = r0 + span;
-      line.rampSeconds.value = banked > craftRampFullSeconds
-          ? craftRampFullSeconds
-          : banked;
-    } else {
-      // It starved, or the order filled mid-span: the machine stood for the
-      // rest of the window, and warm-up does not survive standing.
-      line.rampSeconds.value = 0;
+      line.producedCount.value = line.producedCount.value + units;
+      line.unitFraction.value = 0;
+      line.unitLoaded.value = false;
+      line.unitOrdinal.value = ordinal + 1;
+      if (!offline &&
+          line.boostStacks.value < craftBoostCap &&
+          craftBoostRoll(ordinal)) {
+        line.boostStacks.value = line.boostStacks.value + 1;
+      }
+      if (line.done) break;
     }
   }
 
-  /// Speed-seconds the warm-up grants over [span] starting from [r0] banked
-  /// seconds: the bonus climbs linearly to [craftRampBonus] over
-  /// [craftRampFullSeconds], so the integral is piecewise quadratic.
-  static double _rampSpeedSeconds(double r0, double span) {
-    const cap = craftRampFullSeconds;
-    const bonus = craftRampBonus;
-    if (r0 >= cap) return span * (1 + bonus);
-    const c = bonus / (2 * cap);
-    final s1 = cap - r0;
-    if (span <= s1) {
-      return span + c * ((r0 + span) * (r0 + span) - r0 * r0);
+  /// Takes one unit's full inputs from the stock, or refuses untouched:
+  /// the unit is PREPAID, all or nothing.
+  bool _loadCraftUnit(CraftLine line, CraftRecipe row) {
+    final scale = math.pow(craftCostStep, line.tier.value).toDouble();
+    for (final entry in row.inputs.entries) {
+      final need = BigDouble.fromNum(entry.value * scale);
+      if (!stock.amount(entry.key).gteWithTolerance(need)) return false;
     }
-    final pre = s1 + c * (cap * cap - r0 * r0);
-    return pre + (span - s1) * (1 + bonus);
+    for (final entry in row.inputs.entries) {
+      final need = BigDouble.fromNum(entry.value * scale);
+      final held = stock.amount(entry.key);
+      stock.spend(entry.key, need.gteWithTolerance(held) ? held : need);
+    }
+    line.unitLoaded.value = true;
+    return true;
+  }
+
+  /// Puts a loaded, unfinished unit's inputs back on the shelf -- the
+  /// cancel path. Uses the line's CURRENT recipe and tier, so it must run
+  /// before either changes.
+  void _refundCraftUnit(CraftLine line) {
+    if (!line.unitLoaded.value) return;
+    final row = craftRecipeOf(line.recipe.value);
+    if (row != null) {
+      final scale = math.pow(craftCostStep, line.tier.value).toDouble();
+      for (final entry in row.inputs.entries) {
+        stock.add(entry.key, BigDouble.fromNum(entry.value * scale));
+      }
+    }
+    line.unitLoaded.value = false;
   }
 
   /// Assigns what the line makes and the run mode, chosen together in the
-  /// picker. Retargeting is free and keeps the warm-up: the screen is built
-  /// for players who change orders all day. A fresh order restarts the
-  /// count toward [limit] (-1 = endless).
+  /// picker. A fresh order restarts the count toward [limit] (-1 =
+  /// endless) and the warm-up: the boost belongs to the job. The unit in
+  /// progress is scrapped and its prepaid inputs go back on the shelf --
+  /// cancelling never costs resources (owner's rule).
   /// Assigning is launching a NEW order, so the compression level may be
   /// chosen with it -- the mid-job lock guards a RUNNING job, not this.
   void assignCraftRecipe(
@@ -1704,18 +1801,23 @@ class PrototypeSimulation {
     int? tier,
   }) {
     final line = craftLines[index];
+    _refundCraftUnit(line);
     line.recipe.value = craftRecipeOf(output)?.output;
     line.limit.value = limit;
     line.producedCount.value = 0;
     line.halted.value = false;
+    line.unitFraction.value = 0;
+    line.boostStacks.value = 0;
+    line.unitOrdinal.value = 0;
+    line.dupCount.value = 0;
     if (tier != null) {
       line.tier.value = tier.clamp(0, line.tierCap.value);
     }
   }
 
-  /// Stops or resumes the line by hand. A stopped machine keeps its recipe
-  /// and its order, frees the compression level, and loses its warm-up --
-  /// standing is standing.
+  /// Stops or resumes the line by hand: a freeze-frame. The machine keeps
+  /// its recipe, its order, its loaded unit and its boost, and frees the
+  /// compression level while it stands.
   void setCraftHalted(int index, bool value) {
     craftLines[index].halted.value = value;
   }
@@ -1727,7 +1829,17 @@ class PrototypeSimulation {
     final line = craftLines[index];
     if (line.running) return false;
     final clamped = value.clamp(0, line.tierCap.value);
-    line.tier.value = clamped;
+    if (clamped != line.tier.value) {
+      // A different compression is a different JOB: the unit in progress
+      // is refunded (at the OLD tier it was paid at), and the next one
+      // starts from zero with a cold boost (owner's rule).
+      _refundCraftUnit(line);
+      line.tier.value = clamped;
+      line.unitFraction.value = 0;
+      line.boostStacks.value = 0;
+      line.unitOrdinal.value = 0;
+      line.dupCount.value = 0;
+    }
     return true;
   }
 

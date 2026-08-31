@@ -77,6 +77,10 @@ abstract final class Ti {
     0xea5f,
     fontFamily: 'TablerIcons',
   );
+  static const IconData chevronUp = IconData(
+    0xea62,
+    fontFamily: 'TablerIcons',
+  );
   static const IconData buildingWarehouse = IconData(
     0xebe3,
     fontFamily: 'TablerIcons',

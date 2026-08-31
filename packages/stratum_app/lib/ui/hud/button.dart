@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../tokens.dart';
@@ -15,6 +17,7 @@ class HudButton extends StatefulWidget {
     this.accent = Palette.gold,
     this.padding = const EdgeInsets.fromLTRB(14, 8, 14, 9),
     this.width,
+    this.holdRepeat = false,
     super.key,
   }) : assert(label != null || child != null, 'a control needs a face');
 
@@ -38,6 +41,16 @@ class HudButton extends StatefulWidget {
   final Color accent;
   final double? width;
 
+  /// The auto-buy hold, the strike zone's own gesture on a button: the
+  /// press fires once immediately, holding starts repeating after
+  /// [holdDelayMs] (so a click can never buy twice), and the repeats wind
+  /// up like held strikes do. For buttons that PURCHASE something.
+  final bool holdRepeat;
+
+  /// PROVISIONAL: the OS keyboard-repeat classic. A click is under
+  /// 200 ms, so one click is always exactly one purchase.
+  static const int holdDelayMs = 500;
+
   @override
   State<HudButton> createState() => _HudButtonState();
 }
@@ -46,9 +59,54 @@ class _HudButtonState extends State<HudButton> {
   bool _down = false;
   bool _hover = false;
 
+  Timer? _repeat;
+  static const int _startMs = 200;
+  static const int _floorMs = 100;
+  static const int _stepMs = 10;
+  int _intervalMs = _startMs;
+
   void _setDown(bool down) {
     if (widget.onTap == null || _down == down) return;
     setState(() => _down = down);
+  }
+
+  void _holdDown() {
+    _setDown(true);
+    widget.onTap?.call();
+    _intervalMs = _startMs;
+    _repeat?.cancel();
+    _repeat = Timer(
+      const Duration(milliseconds: HudButton.holdDelayMs),
+      _tickRepeat,
+    );
+  }
+
+  void _tickRepeat() {
+    // The wallet can run dry mid-hold: the rebuilt widget carries a null
+    // onTap, and the hold ends by itself.
+    if (widget.onTap == null) {
+      _holdUp();
+      return;
+    }
+    widget.onTap!();
+    if (_intervalMs > _floorMs) {
+      _intervalMs -= _stepMs;
+      if (_intervalMs < _floorMs) _intervalMs = _floorMs;
+    }
+    _repeat = Timer(Duration(milliseconds: _intervalMs), _tickRepeat);
+  }
+
+  void _holdUp() {
+    _repeat?.cancel();
+    _repeat = null;
+    _intervalMs = _startMs;
+    _setDown(false);
+  }
+
+  @override
+  void dispose() {
+    _repeat?.cancel();
+    super.dispose();
   }
 
   @override
@@ -62,10 +120,17 @@ class _HudButtonState extends State<HudButton> {
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => _setDown(true),
-        onTapUp: (_) => _setDown(false),
-        onTapCancel: () => _setDown(false),
-        onTap: widget.onTap,
+        // In hold-repeat mode the DOWN is the act (the strike zone's
+        // language) and the up only ends the hold -- so a click buys once
+        // and never double-fires through onTap.
+        onTapDown: widget.holdRepeat
+            ? (_) => _holdDown()
+            : (_) => _setDown(true),
+        onTapUp: widget.holdRepeat
+            ? (_) => _holdUp()
+            : (_) => _setDown(false),
+        onTapCancel: widget.holdRepeat ? _holdUp : () => _setDown(false),
+        onTap: widget.holdRepeat ? null : widget.onTap,
         child: AnimatedScale(
           scale: _down ? 0.96 : 1,
           duration: const Duration(milliseconds: 90),

@@ -617,31 +617,20 @@ class Game extends ChangeNotifier {
   /// the same clamped span the payout does.
   void _settleAbsence(Duration away) {
     if (away <= Duration.zero) return;
-    sim.observeWall(DateTime.now().millisecondsSinceEpoch);
     const cap = Duration(milliseconds: PrototypeSimulation.absenceCapMs);
     if (away > cap) away = cap;
+    // One core call: income and the craft lines interleave slice by
+    // slice over the shared stock, so a line that feeds another keeps
+    // feeding it through the absence -- and no duplicate or boost luck
+    // is rolled while nobody watches.
     _muteGains = true;
-    var gain = sim.claimOffline(
+    final gain = sim.settleAbsence(
+      nowMs: DateTime.now().millisecondsSinceEpoch,
       seconds: away.inMicroseconds / 1e6,
       energyPerSecond: energyPerSecond,
       cycleSeconds: cycleSeconds,
     );
-    // The lines kept converting through the absence -- same formula, full
-    // pace. Their output joins the arrival window so the report is whole.
-    final crafted = sim.syncCraft(DateTime.now().millisecondsSinceEpoch);
     _muteGains = false;
-    if (crafted.isNotEmpty) {
-      final merged = Map<ResourceId, BigDouble>.of(gain.gained);
-      for (final entry in crafted.entries) {
-        merged[entry.key] = (merged[entry.key] ?? BigDouble.zero) + entry.value;
-      }
-      gain = OfflineGain(
-        seconds: gain.seconds,
-        cycles: gain.cycles,
-        efficiency: gain.efficiency,
-        gained: merged,
-      );
-    }
     if (gain.isEmpty) return;
     if (away >= offlineNoticeThreshold) {
       _offlineArrival = (gain: gain, away: away);

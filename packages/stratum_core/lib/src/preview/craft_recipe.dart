@@ -32,7 +32,9 @@ const List<CraftRecipe> craftTable = [
   CraftRecipe(
     output: ResourceId.cuprum,
     inputs: {ResourceId.cuprite: 8, ResourceId.regolith: 200},
-    baseSeconds: 30,
+    // Short on purpose for now: the owner wants the fast-craft animation
+    // observable at the one-second floor. PROVISIONAL like the rest.
+    baseSeconds: 4,
   ),
   CraftRecipe(
     output: ResourceId.ferrum,
@@ -88,21 +90,43 @@ const int craftTierCapMax = 14;
 /// interval, so the reading cannot cross zero (the energy-regen lesson).
 const double craftSpeedStep = 0.05;
 
-/// A line that keeps converting warms up to this bonus over
-/// [craftRampFullSeconds]. Starving or standing idle resets the warm-up;
-/// changing the recipe does NOT -- the ramp belongs to the line, and the
-/// screen is built for players who retarget it all day.
-const double craftRampBonus = 0.25;
-const double craftRampFullSeconds = 600;
+/// The warm-up, counted in whole STACKS: every finished unit has this
+/// chance to add one, each stack is +[craftBoostStep] craft speed, and the
+/// pile is capped at [craftBoostCap] (a future upgrade raises the cap).
+/// Changing the recipe or the compression resets the pile -- the boost
+/// belongs to the JOB. PROVISIONAL numbers.
+const double craftBoostChance = 0.25;
+const int craftBoostCap = 15;
+const double craftBoostStep = 0.01;
 
-/// The chance a craft pays double, folded into the yield as an expectation:
-/// the conversion is continuous and must stay deterministic for offline
-/// parity. Bonus on top, never a gate. PROVISIONAL.
+/// A starving bench cannot hold its warm-up: every this-many seconds of
+/// standing hungry, one stack dies. A freeze-frame (hand stop) does NOT
+/// decay -- frozen is frozen. PROVISIONAL.
+const double craftBoostDecaySeconds = 5;
+
+/// The chance a finished unit pays double. A real per-unit roll now that
+/// units are whole things. Bonus on top, never a gate. PROVISIONAL.
 const double craftDuplicateChance = 0.05;
+
+/// Both craft rolls are deterministic Knuth-style hashes of the unit's
+/// ordinal within the job: the game's real RNG streams stay untouched, the
+/// walk replays identically, and offline parity holds by construction.
+/// Different primes so the two coins never correlate; the +1 keeps
+/// ordinal zero from hashing to a guaranteed win.
+bool craftBoostRoll(int ordinal) =>
+    (((ordinal + 1) * 2654435761) & 0xFFFF) / 0xFFFF < craftBoostChance;
+
+bool craftDuplicateRoll(int ordinal) =>
+    (((ordinal + 1) * 2246822519) & 0xFFFF) / 0xFFFF < craftDuplicateChance;
 
 /// Global craft-speed sources (tree nodes, ranks) multiply in here; the
 /// backer has nothing yet.
 const double craftGameSpeed = 1;
+
+/// The floor under a craft: however far the speed track and the warm-up
+/// go, one unit can never take less than a second. The ceiling is what
+/// gives the speed track a finite worth -- the drill-drive lesson.
+const double craftMinSeconds = 1;
 
 /// Lines the player starts with; the rest are bought with credits.
 const int craftStartLines = 2;

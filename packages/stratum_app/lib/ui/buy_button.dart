@@ -25,6 +25,7 @@ class BuyButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return HudButton(
       onTap: enabled ? onTap : null,
+      holdRepeat: true,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: Row(
         mainAxisSize: MainAxisSize.min,

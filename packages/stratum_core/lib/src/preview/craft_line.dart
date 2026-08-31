@@ -13,26 +13,32 @@ import 'craft_recipe.dart';
 class CraftLine {
   CraftLine(this._stock, int index) : _name = 'craft.$index' {
     speedFactor = Computed(
-      () => (1 + craftSpeedStep * speedLevel.value) * craftGameSpeed,
+      () =>
+          (1 + craftSpeedStep * speedLevel.value) *
+          craftGameSpeed *
+          (1 + craftBoostStep * boostStacks.value),
       name: '$_name.speed',
     );
     craftSeconds = Computed(() {
       final row = craftRecipeOf(recipe.value);
       if (row == null) return 0;
-      return row.baseSeconds *
+      final raw =
+          row.baseSeconds *
           math.pow(craftTimeStep, tier.value) /
           speedFactor.value;
+      return raw < craftMinSeconds ? craftMinSeconds : raw;
     }, name: '$_name.seconds');
     unitsPerCraft = Computed(() {
       final row = craftRecipeOf(recipe.value);
       if (row == null) return 0;
-      return row.baseYield *
-          math.pow(craftYieldStep, tier.value) *
-          (1 + craftDuplicateChance);
+      return row.baseYield * math.pow(craftYieldStep, tier.value);
     }, name: '$_name.units');
     starving = Computed(() {
       final row = craftRecipeOf(recipe.value);
       if (row == null) return false;
+      // A loaded unit is already paid for: the line finishes it whatever
+      // the stock says. Starving is failing to START the next one.
+      if (unitLoaded.value) return false;
       final scale = math.pow(craftCostStep, tier.value).toDouble();
       for (final entry in row.inputs.entries) {
         final need = BigDouble.fromNum(entry.value * scale);
@@ -40,13 +46,41 @@ class CraftLine {
       }
       return false;
     }, name: '$_name.starving');
-    // The floor rate, like the mine's "X / s": the ramp is a bonus on top
-    // and deliberately not quoted, so the figure never trembles.
+    // How long the line can keep going before something stops it: the
+    // narrowest input, or the tail of a finite order -- whichever is
+    // sooner. Floor pace on purpose (no warm-up), like every vitrine.
+    // -1 means "no recipe, nothing to run out of".
+    runwaySeconds = Computed(() {
+      final row = craftRecipeOf(recipe.value);
+      if (row == null) return -1;
+      final scale = math.pow(craftCostStep, tier.value).toDouble();
+      var crafts = double.infinity;
+      for (final entry in row.inputs.entries) {
+        final k = _stock.amount(entry.key).toDouble() / (entry.value * scale);
+        if (k < crafts) crafts = k;
+      }
+      if (unitLoaded.value) crafts += 1 - unitFraction.value;
+      if (unitLoaded.value) crafts += 1 - unitFraction.value;
+      if (unitLoaded.value) crafts += 1 - unitFraction.value;
+      if (limit.value >= 0) {
+        final left =
+            (limit.value - producedCount.value) / unitsPerCraft.value;
+        if (left < crafts) crafts = left < 0 ? 0 : left;
+      }
+      if (!crafts.isFinite) return -1;
+      return crafts * craftSeconds.value;
+    }, name: '$_name.runway');
+    // The floor rate, like the mine's "X / s": the ramp AND the duplicate
+    // chance are bonuses on top and deliberately not quoted -- the vitrine
+    // shows the floor, and chance-borne extras land as pleasant surprises
+    // (the same rule that keeps crit and echo out of the mine's figure).
     ratePerSecond = Computed(() {
-      if (recipe.value == null || done || halted.value || starving.value) {
+      final row = craftRecipeOf(recipe.value);
+      if (row == null || done || halted.value || starving.value) {
         return BigDouble.zero;
       }
-      return BigDouble.fromNum(unitsPerCraft.value / craftSeconds.value);
+      final baseUnits = row.baseYield * math.pow(craftYieldStep, tier.value);
+      return BigDouble.fromNum(baseUnits / craftSeconds.value);
     }, name: '$_name.rate');
   }
 
@@ -76,14 +110,41 @@ class CraftLine {
   /// compression level is free to change until the player resumes.
   late final Signal<bool> halted = Signal(false, name: '$_name.halted');
 
-  /// Continuous running time banked toward the ramp. Reset by starving and
-  /// by standing idle, NOT by a recipe change.
-  late final Signal<double> rampSeconds = Signal(0, name: '$_name.ramp');
+  /// The warm-up pile: whole stacks, each +1% speed, capped. Rolled per
+  /// finished unit; reset whenever the job changes.
+  late final Signal<int> boostStacks = Signal(0, name: '$_name.boost');
+
+  /// How many whole units this JOB has finished -- the seed of both the
+  /// boost and the duplicate rolls.
+  late final Signal<int> unitOrdinal = Signal(0, name: '$_name.ordinal');
+
+  /// How many of those units won the duplicate roll. Derived from the
+  /// ordinal (the rolls are deterministic), kept incrementally because a
+  /// recount per read would be quadratic over a long job; not saved --
+  /// [readJson] recounts it once.
+  late final Signal<int> dupCount = Signal(0, name: '$_name.dups');
+
+  /// Whether the unit in progress has had its inputs taken. A unit is
+  /// PREPAID: the full cost goes when it starts, and cancelling the job
+  /// refunds it (owner's rule).
+  late final Signal<bool> unitLoaded = Signal(false, name: '$_name.loaded');
+
+  /// Seconds of starvation banked toward the next boost-stack decay:
+  /// the remainder under [craftBoostDecaySeconds], carried so that one
+  /// long hungry span equals the same span in pieces.
+  late final Signal<double> starveBank = Signal(0, name: '$_name.starve');
+
+  /// How far into the CURRENT unit the line is, 0..1 -- its own signal
+  /// rather than a derivation of the produced count, because changing the
+  /// recipe or the compression RESTARTS the unit (owner's rule) without
+  /// touching what the order has already delivered.
+  late final Signal<double> unitFraction = Signal(0, name: '$_name.unit');
 
   late final Computed<double> speedFactor;
   late final Computed<double> craftSeconds;
   late final Computed<double> unitsPerCraft;
   late final Computed<bool> starving;
+  late final Computed<double> runwaySeconds;
   late final Computed<BigDouble> ratePerSecond;
 
   bool get running => recipe.value != null && !done && !halted.value;
@@ -94,26 +155,11 @@ class CraftLine {
       limit.value >= 0 &&
       producedCount.value >= limit.value - 1e-9;
 
-  double get rampProgress {
-    final v = rampSeconds.value / craftRampFullSeconds;
-    return v > 1 ? 1 : v;
-  }
+  /// The craft time as the line actually runs it right now; the boost is
+  /// already inside [speedFactor], so this IS the effective figure.
+  double get effectiveSeconds => craftSeconds.value;
 
-  /// The warm-up's current speed bonus, quoted by the effects strip.
-  double get rampFactor => 1 + craftRampBonus * rampProgress;
-
-  /// The craft time as the line actually runs it right now: the track and
-  /// the warm-up together. Cheap arithmetic over cached values.
-  double get effectiveSeconds => craftSeconds.value / rampFactor;
-
-  /// How far into the CURRENT unit the line is, 0..1. The conversion is
-  /// continuous, so the fraction of finished crafts IS the drum's angle.
-  double get craftProgress {
-    final units = unitsPerCraft.value;
-    if (units <= 0) return 0;
-    final crafts = producedCount.value / units;
-    return crafts - crafts.floorToDouble();
-  }
+  double get craftProgress => unitFraction.value;
 
   Map<String, Object?> toJson() => {
     if (recipe.value != null) 'r': recipe.value!.name,
@@ -123,7 +169,11 @@ class CraftLine {
     if (limit.value != -1) 'n': limit.value,
     if (producedCount.value != 0) 'p': producedCount.value,
     if (halted.value) 'h': true,
-    if (rampSeconds.value != 0) 'w': rampSeconds.value,
+    if (unitFraction.value != 0) 'u': unitFraction.value,
+    if (unitLoaded.value) 'l': true,
+    if (starveBank.value != 0) 'sb': starveBank.value,
+    if (boostStacks.value != 0) 'b': boostStacks.value,
+    if (unitOrdinal.value != 0) 'o': unitOrdinal.value,
   };
 
   void readJson(Object? raw) {
@@ -144,7 +194,20 @@ class CraftLine {
     limit.value = map['n'] is num ? (map['n'] as num).toInt() : -1;
     producedCount.value = _double(map['p']);
     halted.value = map['h'] == true;
-    rampSeconds.value = _double(map['w']);
+    unitLoaded.value = map['l'] == true;
+    // An unpaid unit cannot be in progress: a save from the continuous
+    // era carries a fraction without the prepaid flag, and it melts.
+    unitFraction.value = unitLoaded.value
+        ? _double(map['u']).clamp(0.0, 1.0)
+        : 0.0;
+    starveBank.value = _double(map['sb']);
+    boostStacks.value = _int(map['b']).clamp(0, craftBoostCap);
+    unitOrdinal.value = _int(map['o']);
+    var dups = 0;
+    for (var i = 0; i < unitOrdinal.value; i++) {
+      if (craftDuplicateRoll(i)) dups++;
+    }
+    dupCount.value = dups;
   }
 
   static int _int(Object? v) => v is num ? v.toInt() : 0;

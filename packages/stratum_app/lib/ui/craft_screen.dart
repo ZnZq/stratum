@@ -84,6 +84,7 @@ class _CraftScreenState extends State<CraftScreen> {
               onTap: sim.canBuyCraftLine
                   ? () => _poke(() => sim.buyCraftLine())
                   : null,
+              holdRepeat: true,
               padding: const EdgeInsets.symmetric(vertical: 9),
               child: Center(
                 child: Row(
