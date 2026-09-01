@@ -14,7 +14,7 @@ class CraftLine {
   CraftLine(this._stock, int index) : _name = 'craft.$index' {
     speedFactor = Computed(
       () =>
-          (1 + craftSpeedStep * speedLevel.value) *
+          craftSpeedAt(speedLevel.value) *
           craftGameSpeed *
           (1 + craftBoostStep * boostStacks.value),
       name: '$_name.speed',
@@ -60,11 +60,8 @@ class CraftLine {
         if (k < crafts) crafts = k;
       }
       if (unitLoaded.value) crafts += 1 - unitFraction.value;
-      if (unitLoaded.value) crafts += 1 - unitFraction.value;
-      if (unitLoaded.value) crafts += 1 - unitFraction.value;
       if (limit.value >= 0) {
-        final left =
-            (limit.value - producedCount.value) / unitsPerCraft.value;
+        final left = (limit.value - producedCount.value) / unitsPerCraft.value;
         if (left < crafts) crafts = left < 0 ? 0 : left;
       }
       if (!crafts.isFinite) return -1;

@@ -63,6 +63,10 @@ enum GameScreen {
   building(NavSection.production, 'Будівництво', Ic.building),
   lab(NavSection.production, 'Лабораторія', Ic.lab),
 
+  /// The passive copier of one chosen bulk resource -- what closes the
+  /// big volumes the constructions will ask for.
+  replicator(NavSection.production, 'Реплікатор', Ic.replicator),
+
   /// Everything the player owns, on shelves. Last in the section: the pile
   /// is where the chain ENDS UP, and the tabs before it are what happens
   /// to it on the way.

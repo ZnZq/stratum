@@ -104,6 +104,51 @@ void main() {
       expect(rate.toDouble(), closeTo(perStrike * 2, perStrike * 1e-9));
     });
 
+    test('the drill area widens ONLY its own resource, never the table', () {
+      // Two identical rigs, one with a fat radius: the wide one must pay
+      // more regolith by exactly its area, and the same everything else.
+      final narrow = _at(120);
+      final wide = _at(120);
+      wide.drill(DrillId.regolith).radius.value = 45; // r 50 -> area x100
+
+      const cycles = 6000;
+      final before = {
+        for (final id in [ResourceId.cuprite, ResourceId.crystals])
+          id: (narrow.stock.amount(id), wide.stock.amount(id)),
+      };
+      final regolithBefore = (
+        narrow.stock.amount(ResourceId.regolith),
+        wide.stock.amount(ResourceId.regolith),
+      );
+      for (var i = 0; i < cycles; i++) {
+        narrow.tick();
+        wide.tick();
+      }
+      // Same seed, same streams: strike loot is identical roll for roll.
+      for (final id in before.keys) {
+        final (n0, w0) = before[id]!;
+        final gainNarrow = (narrow.stock.amount(id) - n0).toDouble();
+        final gainWide = (wide.stock.amount(id) - w0).toDouble();
+        expect(
+          gainWide,
+          closeTo(gainNarrow, gainNarrow.abs() * 1e-9 + 1e-9),
+          reason: 'the multiplier must not touch $id',
+        );
+      }
+      final (rn0, rw0) = regolithBefore;
+      final gainNarrow =
+          (narrow.stock.amount(ResourceId.regolith) - rn0).toDouble();
+      final gainWide =
+          (wide.stock.amount(ResourceId.regolith) - rw0).toDouble();
+      // Give or take the thick-layer break payouts, which are bonuses
+      // on top and carry no area of their own.
+      expect(
+        gainWide,
+        closeTo(gainNarrow * 100, gainNarrow * 100 * 0.01),
+        reason: 'the drill mines its own resource wider by its area',
+      );
+    });
+
     test('matches what the face actually pays over a long run', () {
       // The rig alone, so the measurement has no hand in it, and a window
       // short enough that the depth barely moves under the sample.

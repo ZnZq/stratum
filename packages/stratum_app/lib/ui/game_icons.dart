@@ -33,6 +33,7 @@ abstract final class Ic {
   static const String craft = '${_at}nav_craft.svg';
   static const String building = '${_at}nav_building.svg';
   static const String lab = '${_at}nav_lab.svg';
+  static const String replicator = '${_at}nav_replicator.svg';
   static const String tree = '${_at}nav_tree.svg';
   static const String datacentre = '${_at}nav_datacentre.svg';
   static const String avatar = '${_at}nav_avatar.svg';

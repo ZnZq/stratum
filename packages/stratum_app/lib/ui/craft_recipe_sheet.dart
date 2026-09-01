@@ -56,8 +56,7 @@ class _CraftRecipeSheetState extends State<CraftRecipeSheet> {
   /// The pace a NEW job starts at: the speed track alone. The line's live
   /// speedFactor carries the boost stacks, and assigning resets those --
   /// the passport must not promise a warm-up the job will not inherit.
-  double get _jobSpeed =>
-      (1 + craftSpeedStep * _line.speedLevel.value) * craftGameSpeed;
+  double get _jobSpeed => craftSpeedAt(_line.speedLevel.value) * craftGameSpeed;
 
   /// The order stepper: minus under one unit falls back to AUTO, plus from
   /// AUTO starts a fresh finite order at the step.
@@ -629,11 +628,8 @@ class _Passport extends StatelessWidget {
   /// ten, the house number style above.
   static String _rateText(double v) {
     if (v < 1) return v.toStringAsFixed(3);
-    return v < 10
-        ? v.toStringAsFixed(2)
-        : '${BigDouble.fromNum(v)}';
+    return v < 10 ? v.toStringAsFixed(2) : '${BigDouble.fromNum(v)}';
   }
-
 }
 
 /// The energy plate's flinch, borrowed: whatever sits inside swells for a

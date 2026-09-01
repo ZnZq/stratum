@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../stockpile.dart';
 
 /// One craft recipe: what a single craft at compression 1x consumes, what it
@@ -117,7 +119,12 @@ const int craftTierCapMax = 14;
 
 /// Each speed level multiplies the line's pace -- the rate, never the
 /// interval, so the reading cannot cross zero (the energy-regen lesson).
+/// Each speed level MULTIPLIES the pace by +5% (owner, 2026-09-01:
+/// compounding, not additive). PROVISIONAL by rule zero.
 const double craftSpeedStep = 0.05;
+
+double craftSpeedAt(int level) =>
+    math.pow(1 + craftSpeedStep, level).toDouble();
 
 /// The warm-up, counted in whole STACKS: every finished unit has this
 /// chance to add one, each stack is +[craftBoostStep] craft speed, and the

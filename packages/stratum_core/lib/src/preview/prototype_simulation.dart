@@ -325,8 +325,7 @@ class PrototypeSimulation {
   /// Continuous between observations; a gap longer than the cap contributes
   /// exactly the cap, and a clock wound backwards contributes nothing.
   /// Seconds lived inside this simulation, on the acknowledged clock.
-  double simSeconds(int nowMs) =>
-      (seenNow(nowMs) - runStartSeenMs) / 1000.0;
+  double simSeconds(int nowMs) => (seenNow(nowMs) - runStartSeenMs) / 1000.0;
 
   int seenNow(int nowMs) {
     if (lastWallMs == 0) return wallSeenMs;
@@ -419,8 +418,7 @@ class PrototypeSimulation {
   /// The mark a level has EARNED the threshold of, 0 (Mk I) to 4.
   static int generationOf(int level) {
     var generation = 0;
-    while (generation < markCount - 1 &&
-        level >= markCeiling(generation + 1)) {
+    while (generation < markCount - 1 && level >= markCeiling(generation + 1)) {
       generation++;
     }
     return generation;
@@ -442,7 +440,6 @@ class PrototypeSimulation {
   /// The prototype caps damage carry-over here, so one enormous hit cannot
   /// tunnel through an unbounded number of layers in a single cycle.
   static const int maxLayersPerCycle = 25;
-
 
   static const int thickEvery = 25;
 
@@ -750,9 +747,7 @@ class PrototypeSimulation {
       batch(() {
         var left = seconds;
         while (left > 1e-9) {
-          final step = left < offlineSliceSeconds
-              ? left
-              : offlineSliceSeconds;
+          final step = left < offlineSliceSeconds ? left : offlineSliceSeconds;
           final g = claimOffline(
             seconds: step,
             energyPerSecond: energyPerSecond,
@@ -775,15 +770,24 @@ class PrototypeSimulation {
               offline: true,
             );
           }
+          // The replicators obey the same throttle, and running inside
+          // the slices lets them compound what the mine and the benches
+          // deliver as it arrives.
+          for (final entry in _runReplicator(
+            step * offlineEfficiency,
+          ).entries) {
+            crafted[entry.key] =
+                (crafted[entry.key] ?? BigDouble.zero) + entry.value;
+          }
           left -= step;
         }
       });
       for (final entry in crafted.entries) {
-        merged[entry.key] =
-            (merged[entry.key] ?? BigDouble.zero) + entry.value;
+        merged[entry.key] = (merged[entry.key] ?? BigDouble.zero) + entry.value;
       }
     }
     craftLastSeenMs = wallSeenMs;
+    replicatorLastSeenMs = wallSeenMs;
     if (merged.isEmpty) return OfflineGain.none;
     return OfflineGain(
       seconds: seconds,
@@ -1090,10 +1094,12 @@ class PrototypeSimulation {
       ArmPart.drive => 200.0,
       ArmPart.supply => 150.0,
     };
+    // Owner's multipliers (2026-09-01), reverse-engineered from the
+    // reference ladders: supply is the steep track.
     final growth = switch (part) {
-      ArmPart.bit => 1.12,
-      ArmPart.drive => 1.13,
-      ArmPart.supply => 1.11,
+      ArmPart.bit => 1.353,
+      ArmPart.drive => 1.365,
+      ArmPart.supply => 3.04,
     };
     return (BigDouble.fromNum(base) *
             BigDouble.fromNum(growth).pow(level.toDouble()))
@@ -1218,10 +1224,17 @@ class PrototypeSimulation {
 
   /// What one drill cycle extracts on its OWN, beyond the strike it throws.
   ///
-  /// Zero throughout: extraction belongs to strikes alone. The term is kept
-  /// because the typed drills land exactly here -- a drill that mines its own
-  /// specified resource fills this in and nothing else has to move.
-  BigDouble expectedPerCycle(ResourceId id) => BigDouble.zero;
+  /// The regolith drill is the first to fill the slot the typed drills
+  /// were promised: it mines ITS resource wider by the face it covers,
+  /// (area - 1) of the strike's own cut, so the cycle's total regolith
+  /// is the roll times the area. Everything else still belongs to
+  /// strikes alone -- the drill's multiplier never touches the rest of
+  /// the table (owner, 2026-09-01).
+  BigDouble expectedPerCycle(ResourceId id) => id == ResourceId.regolith
+      ? _strikeRegolithMean *
+            fundScaleOf(ResourceId.regolith) *
+            (drillYieldScale(DrillId.regolith) - BigDouble.one)
+      : BigDouble.zero;
 
   /// The average yield of one resource per second at the current face.
   ///
@@ -1352,20 +1365,30 @@ class PrototypeSimulation {
   }
 
   CycleOutcome _cycle(int chain) {
-    // The cycle is damage plus THE SAME strike a click throws -- same table,
-    // same odds, same amounts. The drill has no crit of its own for now: the
-    // only crit in the game is the strike's, and it lives inside the loot
-    // roll. A drill mining its own specific resource returns with the typed
-    // drills.
-    // The blow is the same blow; the AREA it covers is what the radius
-    // track buys, so the one loot roll is scaled rather than a second
-    // source added beside it.
+    // The cycle is damage plus THE SAME strike a click throws -- same
+    // table, same odds, same amounts, and by the REAL strike's rules:
+    // the drill's multiplier never touches strike loot (owner,
+    // 2026-09-01). The only crit in the game is the strike's, and it
+    // lives inside the loot roll.
     final rolled = _rollLoot(
       prefix: '',
-      multiplier: drillYieldScale(DrillId.regolith),
+      multiplier: BigDouble.one,
       critChance: drillCritChance(DrillId.regolith),
     );
     final loot = rolled.loot;
+
+    // What the drill MINES on its own: only its specified resource,
+    // widened by the face it covers. The strike already paid one cut,
+    // so the drill adds the remaining (area - 1) of the same roll --
+    // at radius level zero this is exactly nothing, and the cycle is a
+    // bare real strike.
+    final struckRegolith = loot[ResourceId.regolith] ?? BigDouble.zero;
+    final widened =
+        struckRegolith * (drillYieldScale(DrillId.regolith) - BigDouble.one);
+    if (!widened.isZero) {
+      stock.add(ResourceId.regolith, widened);
+      loot[ResourceId.regolith] = struckRegolith + widened;
+    }
     final gained = loot[ResourceId.regolith] ?? BigDouble.zero;
     final crystalsGained = loot[ResourceId.crystals] ?? BigDouble.zero;
 
@@ -1730,6 +1753,245 @@ class PrototypeSimulation {
   void _earnCredits(BigDouble paid) {
     stock.add(ResourceId.credits, paid);
     creditsEarned.value = creditsEarned.value + paid;
+  }
+
+  // --------------------------------------------------------- replicator
+
+  /// The replicator runs in CYCLES: one cycle is the resource's own
+  /// BASE craft time, and each finished cycle pays the tier's yield.
+  /// PROVISIONAL by rule zero.
+  static const double replicatorMinSeconds = 1;
+
+  /// Each speed level shaves one percent off the CURRENT cycle time
+  /// (0.99^n -- the drill-drive reading: geometric, never crossing
+  /// zero), still floored at one second.
+  static const double replicatorSpeedDecay = 0.99;
+
+  /// One number per tier -- the shape every replicator table shares.
+  static double _tierOf(
+    ResourceId id,
+    double materials,
+    double building,
+    double tech,
+  ) {
+    for (final group in tradeGroups) {
+      if (group.ids.contains(id)) {
+        return switch (group.key) {
+          'materials' => materials,
+          'building' => building,
+          'tech' => tech,
+          _ => materials,
+        };
+      }
+    }
+    return materials;
+  }
+
+  /// What one cycle pays before the amount track, by tier.
+  static int replicatorBaseYield(ResourceId id) =>
+      _tierOf(id, 100, 50, 5).round();
+
+  /// The cycle stretches the craft time by tier (owner, 2026-09-01):
+  /// materials x2, building x4, technologies x8.
+  static double replicatorDurationFactor(ResourceId id) => _tierOf(id, 2, 4, 8);
+
+  /// What one amount level ADDS to the payout, by tier.
+  static int replicatorAmountStep(ResourceId id) =>
+      _tierOf(id, 10, 5, 1).round();
+
+  /// What the replicator may copy: only what a bench can MAKE -- the
+  /// craft outputs. Raw diggings, currencies and prestige fuel never
+  /// replicate (owner, 2026-09-01).
+  static final List<ResourceId> replicableIds = [
+    for (final row in craftTable) row.output,
+  ];
+
+  /// The one-time toll for pointing the machine at a resource, paid in
+  /// units of THAT resource and priced by its tier (owner, 2026-09-01):
+  /// materials 5000, building components 2500, technologies 750.
+  /// PROVISIONAL by rule zero.
+  static double replicatorUnlockCost(ResourceId id) {
+    for (final group in tradeGroups) {
+      if (group.ids.contains(id)) {
+        return switch (group.key) {
+          'materials' => 5000,
+          'building' => 2500,
+          'tech' => 750,
+          _ => 5000,
+        };
+      }
+    }
+    return 5000;
+  }
+
+  /// Which resources the machine has been calibrated for.
+  final Map<ResourceId, Signal<bool>> _replicatorUnlocked = {
+    for (final row in craftTable)
+      row.output: Signal(false, name: 'replicator open ${row.output.name}'),
+  };
+
+  Signal<bool> replicatorUnlockedOf(ResourceId id) => _replicatorUnlocked[id]!;
+
+  /// Quantonium's first use since its restart-currency role was cut
+  /// (owner, 2026-09-01): every replicator payment point also costs
+  /// the mineral. Unlock is flat by tier; tracks double per level.
+  /// PROVISIONAL by rule zero.
+  static double replicatorUnlockQuant(ResourceId id) =>
+      _tierOf(id, 2500, 5000, 10000);
+
+  /// Track quantonium bases ride the tier too: a share of the unlock
+  /// ask (speed 10%, amount 15%), doubling per level.
+  BigDouble replicatorSpeedQuant(ResourceId id) =>
+      BigDouble.fromNum(replicatorUnlockQuant(id) * 0.1) *
+      BigDouble.fromNum(2).pow(_replicatorSpeed[id]!.value.toDouble());
+
+  BigDouble replicatorAmountQuant(ResourceId id) =>
+      BigDouble.fromNum(replicatorUnlockQuant(id) * 0.15) *
+      BigDouble.fromNum(2).pow(_replicatorAmount[id]!.value.toDouble());
+
+  bool canUnlockReplicator(ResourceId id) =>
+      !_replicatorUnlocked[id]!.value &&
+      stock.has(id, BigDouble.fromNum(replicatorUnlockCost(id))) &&
+      stock.has(
+        ResourceId.quantonium,
+        BigDouble.fromNum(replicatorUnlockQuant(id)),
+      );
+
+  /// Pays the toll -- the resource itself plus quantonium -- and opens
+  /// its replicator.
+  bool unlockReplicator(ResourceId id) => batch(() {
+    if (!canUnlockReplicator(id)) return false;
+    stock.spend(id, BigDouble.fromNum(replicatorUnlockCost(id)));
+    stock.spend(
+      ResourceId.quantonium,
+      BigDouble.fromNum(replicatorUnlockQuant(id)),
+    );
+    _replicatorUnlocked[id]!.value = true;
+    return true;
+  });
+
+  /// The two tracks every machine carries: SPEED shortens the cycle
+  /// (rate-multiplied, floored), AMOUNT adds +1 to the payout.
+  final Map<ResourceId, Signal<int>> _replicatorSpeed = {
+    for (final row in craftTable)
+      row.output: Signal(0, name: 'replicator speed ${row.output.name}'),
+  };
+  final Map<ResourceId, Signal<int>> _replicatorAmount = {
+    for (final row in craftTable)
+      row.output: Signal(0, name: 'replicator amount ${row.output.name}'),
+  };
+
+  /// How far into its current cycle each machine stands, 0..1.
+  final Map<ResourceId, Signal<double>> _replicatorFraction = {
+    for (final row in craftTable)
+      row.output: Signal(0, name: 'replicator cycle ${row.output.name}'),
+  };
+
+  Signal<int> replicatorSpeedOf(ResourceId id) => _replicatorSpeed[id]!;
+  Signal<int> replicatorAmountOf(ResourceId id) => _replicatorAmount[id]!;
+  Signal<double> replicatorFractionOf(ResourceId id) =>
+      _replicatorFraction[id]!;
+
+  /// The machine's cycle, seconds: the resource's craft time stretched
+  /// by the tier factor, shaved 1% per speed level, never under the
+  /// floor.
+  double replicatorSeconds(ResourceId id) {
+    final base = craftRecipeOf(id)!.baseSeconds * replicatorDurationFactor(id);
+    final paced =
+        base * math.pow(replicatorSpeedDecay, _replicatorSpeed[id]!.value);
+    return paced < replicatorMinSeconds ? replicatorMinSeconds : paced;
+  }
+
+  /// What one finished cycle pays: tier yield plus the amount track's
+  /// tier steps.
+  int replicatorYieldOf(ResourceId id) =>
+      replicatorBaseYield(id) +
+      replicatorAmountStep(id) * _replicatorAmount[id]!.value;
+
+  /// Both tracks price in the resource itself, geometrically off the
+  /// tier's unlock toll. PROVISIONAL by rule zero.
+  BigDouble replicatorSpeedCost(ResourceId id) =>
+      BigDouble.fromNum(replicatorUnlockCost(id)) *
+      BigDouble.fromNum(3).pow(_replicatorSpeed[id]!.value + 1.0);
+
+  BigDouble replicatorAmountCost(ResourceId id) =>
+      BigDouble.fromNum(replicatorUnlockCost(id)) *
+      BigDouble.fromNum(4).pow(_replicatorAmount[id]!.value + 1.0);
+
+  bool canUpgradeReplicatorSpeed(ResourceId id) =>
+      _replicatorUnlocked[id]!.value &&
+      stock.has(id, replicatorSpeedCost(id)) &&
+      stock.has(ResourceId.quantonium, replicatorSpeedQuant(id));
+
+  bool canUpgradeReplicatorAmount(ResourceId id) =>
+      _replicatorUnlocked[id]!.value &&
+      stock.has(id, replicatorAmountCost(id)) &&
+      stock.has(ResourceId.quantonium, replicatorAmountQuant(id));
+
+  bool upgradeReplicatorSpeed(ResourceId id) => batch(() {
+    if (!canUpgradeReplicatorSpeed(id)) return false;
+    stock.spend(id, replicatorSpeedCost(id));
+    stock.spend(ResourceId.quantonium, replicatorSpeedQuant(id));
+    _replicatorSpeed[id]!.value = _replicatorSpeed[id]!.value + 1;
+    return true;
+  });
+
+  bool upgradeReplicatorAmount(ResourceId id) => batch(() {
+    if (!canUpgradeReplicatorAmount(id)) return false;
+    stock.spend(id, replicatorAmountCost(id));
+    stock.spend(ResourceId.quantonium, replicatorAmountQuant(id));
+    _replicatorAmount[id]!.value = _replicatorAmount[id]!.value + 1;
+    return true;
+  });
+
+  /// The vitrine's floor: whole cycles per minute times the payout.
+  BigDouble replicatorPerMinuteOf(ResourceId id) =>
+      !_replicatorUnlocked[id]!.value
+      ? BigDouble.zero
+      : BigDouble.fromNum(replicatorYieldOf(id) * 60.0 / replicatorSeconds(id));
+
+  /// The last [seenNow] stamp the replicators settled to; -1 = never.
+  int replicatorLastSeenMs = -1;
+
+  /// Advances every unlocked replicator by the wall time since the last
+  /// call -- they all run at once, each on its own pile. Returns what the
+  /// span produced, for the offline window.
+  Map<ResourceId, BigDouble> syncReplicator(int nowMs) {
+    observeWall(nowMs);
+    final seen = wallSeenMs;
+    if (replicatorLastSeenMs < 0) {
+      replicatorLastSeenMs = seen;
+      return const {};
+    }
+    final span = (seen - replicatorLastSeenMs) / 1000.0;
+    replicatorLastSeenMs = seen;
+    if (span <= 0) return const {};
+    return _runReplicator(span);
+  }
+
+  /// The conversion itself, span in seconds: every machine walks its
+  /// cycles, banking the unfinished fraction -- so one long span equals
+  /// the same span in pieces. Payouts land in whole cycles only, like
+  /// the bench's prepaid units. Shared by the online sync and the
+  /// sliced absence settlement.
+  Map<ResourceId, BigDouble> _runReplicator(double span) {
+    final gains = <ResourceId, BigDouble>{};
+    batch(() {
+      for (final id in replicableIds) {
+        if (!_replicatorUnlocked[id]!.value) continue;
+        final total =
+            _replicatorFraction[id]!.value + span / replicatorSeconds(id);
+        final whole = total.floor();
+        _replicatorFraction[id]!.value = total - whole;
+        if (whole <= 0) continue;
+        final gained = BigDouble.fromNum(
+          whole * replicatorYieldOf(id).toDouble(),
+        );
+        stock.add(id, gained);
+        gains[id] = gained;
+      }
+    });
+    return gains;
   }
 
   // -------------------------------------------------------------- craft
@@ -2274,6 +2536,22 @@ class PrototypeSimulation {
       for (final row in fundTable)
         if (_funding[row.id]!.value != 0) row.id.name: _funding[row.id]!.value,
     },
+    if (replicatorLastSeenMs >= 0 ||
+        _replicatorUnlocked.values.any((open) => open.value))
+      'replicator': {
+        if (replicatorLastSeenMs >= 0) 'last': replicatorLastSeenMs,
+        if (_replicatorUnlocked.values.any((open) => open.value))
+          'u': [
+            for (final entry in _replicatorUnlocked.entries)
+              if (entry.value.value) entry.key.name,
+          ],
+        for (final entry in _replicatorSpeed.entries)
+          if (entry.value.value != 0) 'sp.${entry.key.name}': entry.value.value,
+        for (final entry in _replicatorAmount.entries)
+          if (entry.value.value != 0) 'am.${entry.key.name}': entry.value.value,
+        for (final entry in _replicatorFraction.entries)
+          if (entry.value.value != 0) 'fr.${entry.key.name}': entry.value.value,
+      },
     'craft': {
       'last': craftLastSeenMs,
       'lines': [for (final line in craftLines) line.toJson()],
@@ -2468,6 +2746,38 @@ class PrototypeSimulation {
       nextRequestAtMs = 0;
     }
 
+    final replicator = json['replicator'];
+    replicatorLastSeenMs = -1;
+    for (final open in _replicatorUnlocked.values) {
+      open.value = false;
+    }
+    for (final level in _replicatorSpeed.values) {
+      level.value = 0;
+    }
+    for (final level in _replicatorAmount.values) {
+      level.value = 0;
+    }
+    for (final fraction in _replicatorFraction.values) {
+      fraction.value = 0;
+    }
+    if (replicator is Map) {
+      final opened = replicator['u'];
+      if (opened is List) {
+        for (final id in replicableIds) {
+          if (opened.contains(id.name)) {
+            _replicatorUnlocked[id]!.value = true;
+          }
+        }
+      }
+      for (final id in replicableIds) {
+        _replicatorSpeed[id]!.value = _readInt(replicator['sp.${id.name}'], 0);
+        _replicatorAmount[id]!.value = _readInt(replicator['am.${id.name}'], 0);
+        _replicatorFraction[id]!.value = _readDouble(
+          replicator['fr.${id.name}'],
+        ).clamp(0.0, 1.0);
+      }
+      replicatorLastSeenMs = _readInt(replicator['last'], -1);
+    }
     final craft = json['craft'];
     craftLines.clear();
     if (craft is Map) {
@@ -2505,6 +2815,9 @@ class PrototypeSimulation {
 
   static int _readInt(Object? value, int fallback) =>
       value is int ? value : fallback;
+
+  static double _readDouble(Object? value) =>
+      value is num ? value.toDouble() : 0;
 
   static BigDouble _readBig(Object? value) =>
       value is String ? BigDouble.parse(value) : BigDouble.zero;

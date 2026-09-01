@@ -121,13 +121,14 @@ void main() {
     expect(spent, greaterThanOrEqualTo(40 * math.pow(3, 4) - 1e-6));
   });
 
-  test('a speed level multiplies the pace, never shrinks past zero', () {
+  test('a speed level compounds the pace by five percent', () {
     final sim = stocked();
     final line = sim.craftLines[0];
     line.speedLevel.value = 10;
     sim.assignCraftRecipe(0, ResourceId.cuprum);
-    expect(line.speedFactor.value, closeTo(1.5, 1e-9));
-    expect(line.craftSeconds.value, closeTo(base / 1.5, 1e-9));
+    final expected = math.pow(1.05, 10).toDouble();
+    expect(line.speedFactor.value, closeTo(expected, 1e-9));
+    expect(line.craftSeconds.value, closeTo(base / expected, 1e-9));
   });
 
   test('the boost piles up by chance per finished unit and caps', () {
@@ -363,7 +364,7 @@ void main() {
   test('a craft never runs faster than the one-second floor', () {
     final sim = stocked();
     final line = sim.craftLines[0];
-    line.speedLevel.value = 2000; // x101 -- far past the floor
+    line.speedLevel.value = 100; // x131 -- far past the floor
     sim.assignCraftRecipe(0, ResourceId.cuprum);
     expect(line.craftSeconds.value, craftMinSeconds);
     sim.syncCraft(t0 + 10 * second);
@@ -429,7 +430,9 @@ void main() {
     final twoDaysCrafts = 48 * 3600 / base;
     expect(
       cuprum(sim),
-      lessThanOrEqualTo(twoDaysCrafts * (1 + craftBoostStep * craftBoostCap) * 2),
+      lessThanOrEqualTo(
+        twoDaysCrafts * (1 + craftBoostStep * craftBoostCap) * 2,
+      ),
     );
     expect(cuprum(sim), greaterThan(twoDaysCrafts * 0.9));
   });

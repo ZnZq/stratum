@@ -28,6 +28,7 @@ import 'shell/nav_bar.dart';
 import 'shell/pause_overlay.dart';
 import 'shell/resource_bar.dart';
 import 'building_screen.dart';
+import 'replicator_screen.dart';
 import 'shell/screen_placeholder.dart';
 
 /// The width every screen is laid out against.
@@ -121,6 +122,7 @@ class _GameShellState extends State<GameShell> {
         GameScreen.trade => TradeScreen(game: _game),
         GameScreen.craft => CraftScreen(game: _game),
         GameScreen.building => BuildingScreen(game: _game),
+        GameScreen.replicator => ReplicatorScreen(game: _game),
         GameScreen.simulation => SimulationScreen(
           game: _game,
           onOpen: _pickScreen,

@@ -900,6 +900,11 @@ class Game extends ChangeNotifier {
     sim.observeWall(wallNow);
     sim.syncRequests(wallNow);
     sim.syncCraft(wallNow);
+    // Quietly: replicated growth is continuous income, and a gain card
+    // over the mine every batch would be pure noise.
+    _muteGains = true;
+    sim.syncReplicator(wallNow);
+    _muteGains = false;
     _seenRequests.retainAll(sim.requests);
     _announceNewRequests();
     for (var i = 0; i < batch.ticks; i++) {
