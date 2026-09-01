@@ -27,6 +27,7 @@ import 'shell/breach_overlay.dart';
 import 'shell/nav_bar.dart';
 import 'shell/pause_overlay.dart';
 import 'shell/resource_bar.dart';
+import 'building_screen.dart';
 import 'shell/screen_placeholder.dart';
 
 /// The width every screen is laid out against.
@@ -102,6 +103,9 @@ class _GameShellState extends State<GameShell> {
     final accent = switch (screen) {
       GameScreen.tree => TreeKind.simulation.accent,
       GameScreen.firmware => TreeKind.firmware.accent,
+      // The third tree's frame: its currency is material (components),
+      // so it wears the production branch's steel.
+      GameScreen.building => Palette.steel,
       _ => Palette.tech,
     };
     return HudScreen(
@@ -116,6 +120,7 @@ class _GameShellState extends State<GameShell> {
         GameScreen.warehouse => WarehouseScreen(game: _game),
         GameScreen.trade => TradeScreen(game: _game),
         GameScreen.craft => CraftScreen(game: _game),
+        GameScreen.building => BuildingScreen(game: _game),
         GameScreen.simulation => SimulationScreen(
           game: _game,
           onOpen: _pickScreen,
