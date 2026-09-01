@@ -19,7 +19,7 @@ void _maxOut(PrototypeSimulation sim, ArmPart part) {
 
 void main() {
   group('the arm levels', () {
-    test('every part runs to five hundred and stops', () {
+    test('every part runs to a thousand and stops', () {
       final sim = _funded(1e300);
 
       for (final part in ArmPart.values) {
@@ -35,38 +35,49 @@ void main() {
       }
     });
 
-    test('generations are hundreds, and the last one holds the top', () {
+    test('marks are obtained at the listed totals', () {
+      // Obtained at 0 / 100 / 300 / 600 / 1000: Mk I plays the first
+      // hundred, and every next span is a hundred longer.
+      expect(PrototypeSimulation.markCeiling(0), 0);
+      expect(PrototypeSimulation.markCeiling(1), 100);
+      expect(PrototypeSimulation.markCeiling(2), 300);
+      expect(PrototypeSimulation.markCeiling(3), 600);
+      expect(PrototypeSimulation.markCeiling(4), 1000);
       expect(PrototypeSimulation.generationOf(0), 0);
       expect(PrototypeSimulation.generationOf(99), 0);
       expect(PrototypeSimulation.generationOf(100), 1);
-      expect(PrototypeSimulation.generationOf(499), 4);
+      expect(PrototypeSimulation.generationOf(299), 1);
+      expect(PrototypeSimulation.generationOf(300), 2);
+      expect(PrototypeSimulation.generationOf(599), 2);
+      expect(PrototypeSimulation.generationOf(600), 3);
+      expect(PrototypeSimulation.generationOf(999), 3);
       expect(
-        PrototypeSimulation.generationOf(500),
+        PrototypeSimulation.generationOf(1000),
         4,
-        reason: 'the five hundredth level is the top of Mk V, not a sixth',
+        reason: 'the summit itself is where Mk V is earned',
       );
     });
 
     test('levelling stops at the mark ceiling until the part is rebuilt', () {
       final sim = _funded(1e300);
 
+      // Mk I plays the first hundred; Mk II is obtained at 100.
       final bought = sim.upgrade(ArmPart.bit, levels: 10000);
-
-      expect(bought, PrototypeSimulation.levelsPerGeneration);
+      expect(bought, 100);
       expect(sim.bitLevel.value, 100);
       expect(
         sim.canUpgrade(ArmPart.bit),
         isFalse,
-        reason: 'however full the store, the next hundred is not for sale',
+        reason: 'however full the store, the next span is not for sale',
       );
       expect(sim.canEvolve(ArmPart.bit), isTrue);
 
       expect(sim.evolve(ArmPart.bit), 1);
-      expect(sim.ceilingOf(ArmPart.bit), 200);
+      expect(sim.ceilingOf(ArmPart.bit), 300);
       expect(
         sim.canUpgrade(ArmPart.bit),
         isTrue,
-        reason: 'rebuilding it is what opens the next hundred',
+        reason: 'rebuilding it is what opens the next span',
       );
     });
 
@@ -186,14 +197,13 @@ void main() {
 
     test('the drive deepens the bite every blow takes', () {
       final sim = _funded();
-      expect(sim.pierceShare, PrototypeSimulation.structuralShare);
+      expect(sim.pierceShare, 0);
 
       sim.upgrade(ArmPart.drive, levels: 100);
 
       expect(
         sim.pierceShare,
         closeTo(
-          PrototypeSimulation.structuralShare +
               100 * PrototypeSimulation.piercePerLevel,
           1e-12,
         ),
@@ -213,11 +223,11 @@ void main() {
 
       _maxOut(sim, ArmPart.supply);
 
-      expect(sim.energyCap, 250 + 10 * 500);
+      expect(sim.energyCap, 250 + 10 * 1000);
       expect(
         sim.energySeconds,
-        closeTo(2.0 / 1.5, 1e-12),
-        reason: 'five hundred levels are +50% rate, so the wait is 1.333 s',
+        closeTo(2.0 / 2.0, 1e-12),
+        reason: 'a thousand levels are +100% rate, so the wait is 1 s',
       );
     });
   });
@@ -242,7 +252,7 @@ void main() {
       sim.upgrade(ArmPart.bit, levels: 100);
       sim.evolve(ArmPart.bit);
       expect(sim.knownGeneration(ArmPart.bit), 1);
-      sim.upgrade(ArmPart.bit, levels: 100);
+      sim.upgrade(ArmPart.bit, levels: 200);
       sim.evolve(ArmPart.bit);
       expect(sim.knownGeneration(ArmPart.bit), 2);
     });
@@ -255,18 +265,20 @@ void main() {
 
       expect(
         sim.knownGeneration(ArmPart.bit),
-        2,
-        reason: 'standing at Mk III is proof enough of having reached it',
+        1,
+        reason: 'level 240 has earned Mk II (100) but not Mk III (300)',
       );
     });
 
-    test('a peak below the mark is lifted to it', () {
+    test('a mark above its level threshold melts to the walked one', () {
       final sim = PrototypeSimulation()
         ..readJson({
           'arm': {'bit': 300, 'bitMark': 3, 'bitPeak': 0},
         });
 
-      expect(sim.peakOf(ArmPart.bit).value, 3);
+      // Level 300 has earned Mk III (mark 2); the doctored Mk IV melts.
+      expect(sim.bitMark.value, 2);
+      expect(sim.peakOf(ArmPart.bit).value, 2);
     });
   });
 
@@ -289,7 +301,7 @@ void main() {
       expect(restored.supplyLevel.value, 7);
 
       restored.readJson({
-        'arm': {'bit': 9000, 'drive': -4, 'supply': 500},
+        'arm': {'bit': 9000, 'drive': -4, 'supply': 9000},
       });
       expect(restored.bitLevel.value, PrototypeSimulation.maxPartLevel);
       expect(restored.driveLevel.value, 0);

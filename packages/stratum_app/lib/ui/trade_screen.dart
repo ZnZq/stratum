@@ -33,7 +33,8 @@ class _TradeScreenState extends State<TradeScreen> {
   static const Map<String, String> _groupLabels = {
     'resources': 'РЕСУРСИ',
     'materials': 'МАТЕРІАЛИ',
-    'products': 'ПРОДУКЦІЯ',
+    'building': 'БУДІВНИЦТВО',
+    'tech': 'ТЕХНОЛОГІЇ',
   };
 
   /// A wall clock, not a ticker: request timers keep running through pause,

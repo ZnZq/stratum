@@ -62,8 +62,21 @@ enum ResourceId {
   /// A structural frame: ferrum and silicon. Craft tier two.
   frame,
 
-  /// A silicon chip, the priciest product. Craft tier two.
+  /// A silicon chip, the base of everything smart. Technologies tier.
   chip,
+
+  /// Pressure-rated glass: silicon and crystals. Building tier.
+  reinforcedGlass,
+
+  /// The brain of the simulation's machines: chips and wiring.
+  processor,
+
+  /// The eyes of the drills: crystals around a chip.
+  sensor,
+
+  /// The universal assembly whose role the consuming construction
+  /// decides: chip, wiring and reinforced glass. Technologies tier.
+  module,
 }
 
 /// What the player owns.

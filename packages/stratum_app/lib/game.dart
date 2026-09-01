@@ -726,6 +726,10 @@ class Game extends ChangeNotifier {
     final before = _seenStock[id] ?? BigDouble.zero;
     _seenStock[id] = now;
     if (_muteGains || _hidden || _background || !_ready) return;
+    // The mine announces what the mine dug. Crafted goods land in the
+    // same stockpile, but their story is told on the craft screen -- a
+    // bench delivery popping up over the rock read as phantom digging.
+    if (craftRecipeOf(id) != null) return;
     final delta = now - before;
     if (!(delta > BigDouble.zero)) return;
     _announceGain(id, delta);

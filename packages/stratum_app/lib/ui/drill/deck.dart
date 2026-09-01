@@ -74,8 +74,12 @@ class DeckState extends State<Deck> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Stat(
-                            label: 'сила удару',
-                            value: '${sim.strikePower}',
+                            // The FULL bite against this layer: power plus
+                            // the structural collapse, so the figure and
+                            // the wear bar finally tell one story. The
+                            // bare power stays on the manipulator's card.
+                            label: 'удар по шару',
+                            value: '${sim.strikeBite.value}',
                             colour: Palette.gold,
                           ),
                           const SizedBox(height: 7),

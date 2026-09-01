@@ -39,9 +39,7 @@ class PartSheet extends StatelessWidget {
     // player rebuilds it, and the ladder must not say otherwise.
     final now = sim.markOf(part).value;
     final known = sim.knownGeneration(part);
-    const count =
-        PrototypeSimulation.maxPartLevel ~/
-        PrototypeSimulation.levelsPerGeneration;
+    const count = PrototypeSimulation.markCount;
 
     return HudModal(
       title: style.label.toUpperCase(),
@@ -130,9 +128,8 @@ class _Generation extends StatelessWidget {
     final opened = buffsOpenedBy(part, generation);
     final lit = state == _MarkState.current;
     final read = state != _MarkState.unknown;
-    // The floor, not the first level bought on it: a mark is reached AT the
-    // hundred that closes the one before it, so Mk II starts at 100.
-    final from = generation * PrototypeSimulation.levelsPerGeneration;
+    // The level at which the mark is OBTAINED: 0/100/300/600/1000.
+    final done = PrototypeSimulation.markCeiling(generation);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 9),
@@ -166,7 +163,7 @@ class _Generation extends StatelessWidget {
                     ),
                     const SizedBox(width: 7),
                     Text(
-                      'з $from рівня',
+                      'рівень $done',
                       style: AppText.body(9, color: Palette.textFaint),
                     ),
                     const Spacer(),

@@ -101,8 +101,11 @@ class _CraftRecipeSheetState extends State<CraftRecipeSheet> {
           _section('матеріали', Palette.tech),
           _menuGrid(ResourceShelf.materials),
           const SizedBox(height: 5),
-          _section('продукція', Palette.steel),
-          _menuGrid(ResourceShelf.products),
+          _section('будівництво', Palette.steel),
+          _menuGrid(ResourceShelf.building),
+          const SizedBox(height: 5),
+          _section('технології', Palette.gold),
+          _menuGrid(ResourceShelf.tech),
           const SizedBox(height: 7),
           Expanded(
             child: _picked == null

@@ -72,11 +72,48 @@ class PrototypeSimulation {
       final perHit = strikePower;
       if (perHit.isZero) return 1;
       final share = pierceShare;
+      if (share <= 0) {
+        // No structural share yet: plain division, and the geometric
+        // formula below would divide by ln(1).
+        final plain = (remaining / perHit).toDouble().ceil();
+        return plain < 1 ? 1 : plain;
+      }
       final ratio = (remaining / perHit) * BigDouble.fromNum(share);
       final estimate = ((BigDouble.one + ratio).ln() / -math.log(1 - share))
           .ceilToDouble();
       return estimate < 1 ? 1 : estimate.toInt();
     }, name: 'hits to break');
+    // The wear bar's truth, in EFFORT space. Linear hp misled the eye
+    // twice over: the structural share melts a huge layer's first half in
+    // a burst, then the last visible sliver hides thousands of blows.
+    // Counting the journey in hits -- the same logarithm hitsToBreak
+    // uses -- makes half a bar mean half the blows, both ways.
+    layerEffort = Computed(() {
+      final perHit = strikePower;
+      if (perHit.isZero) return 0;
+      final share = pierceShare;
+      if (share <= 0) {
+        // Linear melt, linear bar: with no structural share the hp story
+        // and the effort story are the same one.
+        final max = layerHpMax.value;
+        if (max.isZero) return 1;
+        return (1 - (layerHp.value / max).toDouble()).clamp(0.0, 1.0);
+      }
+      final big = BigDouble.fromNum(share);
+      double journey(BigDouble hp) =>
+          (BigDouble.one + (hp / perHit) * big).ln();
+      final full = journey(layerHpMax.value);
+      if (full <= 0) return 1;
+      return (1 - journey(layerHp.value) / full).clamp(0.0, 1.0);
+    }, name: 'layer effort');
+    // What one manual blow ACTUALLY takes off this layer right now: the
+    // bit's power plus the structural collapse of what still stands. The
+    // deck quotes this, not the bare power -- the vitrine rule: against a
+    // deep wall the structural term IS the blow.
+    strikeBite = Computed(
+      () => strikePower + layerHp.value * BigDouble.fromNum(pierceShare),
+      name: 'strike bite',
+    );
     // What a Restart pays: this simulation's own haul, compiled. No
     // subtraction against what past restarts banked -- the run is the unit,
     // so each one is paid in full for what it dug.
@@ -273,6 +310,12 @@ class PrototypeSimulation {
   /// each clamped to [absenceCapMs].
   int wallSeenMs = 0;
 
+  /// Where THIS simulation began on the acknowledged clock, so the time
+  /// spent IN it counts capped absences the way everything else does: a
+  /// week away adds two days, never seven. A future Restart resets it
+  /// along with the run.
+  int runStartSeenMs = 0;
+
   /// The raw wall stamp of the last [observeWall]. Zero = never observed;
   /// the first observation banks nothing, so the epoch offset never leaks
   /// into the acknowledged total.
@@ -281,6 +324,10 @@ class PrototypeSimulation {
   /// What the acknowledged clock reads at [nowMs], WITHOUT banking it.
   /// Continuous between observations; a gap longer than the cap contributes
   /// exactly the cap, and a clock wound backwards contributes nothing.
+  /// Seconds lived inside this simulation, on the acknowledged clock.
+  double simSeconds(int nowMs) =>
+      (seenNow(nowMs) - runStartSeenMs) / 1000.0;
+
   int seenNow(int nowMs) {
     if (lastWallMs == 0) return wallSeenMs;
     final gap = nowMs - lastWallMs;
@@ -315,6 +362,14 @@ class PrototypeSimulation {
   late final Computed<BigDouble> regolithPerCycle;
   late final Computed<BigDouble> drillCost;
   late final Computed<int> hitsToBreak;
+
+  /// How far through breaking the current layer the run is, 0..1, counted
+  /// in blows rather than hp -- see the constructor note.
+  late final Computed<double> layerEffort;
+
+  /// The full bite of one manual blow against the CURRENT layer: power
+  /// plus the structural share of the remaining hp.
+  late final Computed<BigDouble> strikeBite;
   late final Computed<BigDouble> bankableData;
 
   static const int energyCapBase = 250;
@@ -342,15 +397,33 @@ class PrototypeSimulation {
   double get energySeconds =>
       baseEnergySeconds / (1 + regenSpeedPerLevel * supplyLevel.value);
 
-  /// Every part levels to here, in five generations of a hundred.
-  static const int maxPartLevel = 500;
-  static const int levelsPerGeneration = 100;
+  /// Five generations on a growing ladder (owner, 2026-09-01): the
+  /// listed level is where each mark is OBTAINED -- Mk I at 0, Mk II at
+  /// 100, Mk III at 300, Mk IV at 600, Mk V at 1000. So Mk I plays the
+  /// first hundred, and every next span is a hundred longer.
+  static const int maxPartLevel = 1000;
+  static const int markSpanStep = 100;
+  static const int markCount = 5;
 
-  /// Which generation a level belongs to, from 0 (Mk I) to 4 (Mk V).
+  /// The total level at which [mark] becomes available to build.
+  static int markCeiling(int mark) => markSpanStep * mark * (mark + 1) ~/ 2;
+
+  /// Where the span PLAYED while carrying [mark] begins.
+  static int markFloor(int mark) => markCeiling(mark);
+
+  /// Levels played while carrying [mark]: 100, 200, 300, 400, and none
+  /// on the summit -- Mk V is obtained at the track's very top.
+  static int markSpan(int mark) =>
+      mark >= markCount - 1 ? 0 : markCeiling(mark + 1) - markCeiling(mark);
+
+  /// The mark a level has EARNED the threshold of, 0 (Mk I) to 4.
   static int generationOf(int level) {
-    final generation = level ~/ levelsPerGeneration;
-    final last = maxPartLevel ~/ levelsPerGeneration - 1;
-    return generation > last ? last : generation;
+    var generation = 0;
+    while (generation < markCount - 1 &&
+        level >= markCeiling(generation + 1)) {
+      generation++;
+    }
+    return generation;
   }
 
   /// PROVISIONAL buff rates. Balance comes later; what is meant to last is
@@ -370,11 +443,6 @@ class PrototypeSimulation {
   /// tunnel through an unbounded number of layers in a single cycle.
   static const int maxLayersPerCycle = 25;
 
-  /// The share of a layer's REMAINING hp every blow collapses on top of its
-  /// own power: crumbling structure, not extra muscle. Off the remainder
-  /// rather than the maximum, so a wall costs log-of-overmatch blows and the
-  /// kill itself always belongs to the blow's power. PROVISIONAL.
-  static const double structuralShare = 0.0002;
 
   static const int thickEvery = 25;
 
@@ -997,7 +1065,11 @@ class PrototypeSimulation {
 
   /// How much of the layer's REMAINING hp every blow collapses, the drive's
   /// own buff on top of the floor every blow has.
-  double get pierceShare => structuralShare + piercePerLevel * driveLevel.value;
+  /// The share of a layer's REMAINING hp every blow collapses on top of
+  /// its own power. EARNED, never born (owner, 2026-09-01): only the
+  /// drive's levels count, so a fresh arm digs on muscle alone and the
+  /// log-of-overmatch melt is something the player builds.
+  double get pierceShare => piercePerLevel * driveLevel.value;
 
   BigDouble get strikePower => strikePowerAt(bitLevel.value);
 
@@ -1049,10 +1121,15 @@ class PrototypeSimulation {
   /// The best mark of [part] the player has ever built, from 0 (Mk I).
   int knownGeneration(ArmPart part) => peakOf(part).value;
 
-  static const int lastMark = maxPartLevel ~/ levelsPerGeneration - 1;
+  static const int lastMark = markCount - 1;
 
-  /// As far as [part] can be levelled before it has to be rebuilt.
-  int ceilingOf(ArmPart part) => (markOf(part).value + 1) * levelsPerGeneration;
+  /// As far as [part] can be levelled before it has to be rebuilt: the
+  /// level at which the NEXT mark is obtained. The summit levels to the
+  /// track's top and rebuilds into nothing.
+  int ceilingOf(ArmPart part) {
+    final mark = markOf(part).value;
+    return mark >= lastMark ? maxPartLevel : markCeiling(mark + 1);
+  }
 
   bool atMarkCeiling(ArmPart part) => levelOf(part).value >= ceilingOf(part);
 
@@ -1902,12 +1979,16 @@ class PrototypeSimulation {
     // Crafted goods carry a margin over what their inputs would fetch raw
     // (metals ~+35%, products ~+70%): crafting is meant to become the best
     // credit channel of the late run. PROVISIONAL.
-    (id: ResourceId.cuprum, price: 9000),
-    (id: ResourceId.ferrum, price: 15500),
-    (id: ResourceId.silicon, price: 8000),
-    (id: ResourceId.wire, price: 145000),
-    (id: ResourceId.frame, price: 265000),
-    (id: ResourceId.chip, price: 200000),
+    (id: ResourceId.cuprum, price: 45000),
+    (id: ResourceId.ferrum, price: 76000),
+    (id: ResourceId.silicon, price: 120000),
+    (id: ResourceId.wire, price: 1.7e6),
+    (id: ResourceId.frame, price: 2.7e6),
+    (id: ResourceId.reinforcedGlass, price: 2.0e6),
+    (id: ResourceId.chip, price: 4.0e6),
+    (id: ResourceId.processor, price: 5.0e7),
+    (id: ResourceId.sensor, price: 2.0e7),
+    (id: ResourceId.module, price: 4.5e7),
   ];
 
   /// The shares a position can sell at. Steps rather than a free slider:
@@ -1941,8 +2022,17 @@ class PrototypeSimulation {
       ids: [ResourceId.cuprum, ResourceId.ferrum, ResourceId.silicon],
     ),
     (
-      key: 'products',
-      ids: [ResourceId.wire, ResourceId.frame, ResourceId.chip],
+      key: 'building',
+      ids: [ResourceId.wire, ResourceId.frame, ResourceId.reinforcedGlass],
+    ),
+    (
+      key: 'tech',
+      ids: [
+        ResourceId.chip,
+        ResourceId.processor,
+        ResourceId.sensor,
+        ResourceId.module,
+      ],
     ),
   ];
 
@@ -2131,6 +2221,7 @@ class PrototypeSimulation {
   /// formula has to win.
   Map<String, Object?> toJson() => {
     'layer': layer.value,
+    if (runStartSeenMs != 0) 'simStart': runStartSeenMs,
     'layerHp': layerHp.value.toJson(),
     'drills': drills.value,
     'drillPower': drillPowerLevel.value,
@@ -2259,7 +2350,9 @@ class PrototypeSimulation {
       supplyLevel.value = _readInt(arm['supply'], 0).clamp(0, maxPartLevel);
       // A save from before the marks were kept knows only where the parts
       // stand, and standing at a level is proof enough of having been built
-      // that far -- demoting a returning player would be the worse lie.
+      // that far. A mark ABOVE what its level's threshold allows melts
+      // DOWN to the walked one (safeguard six): the ladder's numbers
+      // changed, and nobody inherits a mark they have not reached.
       for (final part in ArmPart.values) {
         final level = levelOf(part).value;
         final built = generationOf(level);
@@ -2267,7 +2360,7 @@ class PrototypeSimulation {
           arm['${part.name}Mark'],
           built,
         ).clamp(0, lastMark);
-        markOf(part).value = mark > built ? mark : built;
+        markOf(part).value = mark < built ? mark : built;
         // A peak above the last mark cannot be a mark: it is a level,
         // written by a build that kept peaks in levels. Convert rather than
         // clamp -- clamping turned every such save into "Mk V already seen".
@@ -2399,6 +2492,7 @@ class PrototypeSimulation {
       random = RandomSource.fromJson(Map<String, dynamic>.from(rolls));
     }
 
+    runStartSeenMs = _readInt(json['simStart'], 0);
     _resetLayer();
     final damaged = json['layerHp'];
     if (damaged is String) {

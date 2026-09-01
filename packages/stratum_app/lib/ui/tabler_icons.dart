@@ -86,6 +86,17 @@ abstract final class Ti {
     fontFamily: 'TablerIcons',
   );
   static const IconData close = IconData(0xeb55, fontFamily: 'TablerIcons');
+  static const IconData plugConnected = IconData(
+    0xf00a,
+    fontFamily: 'TablerIcons',
+  );
+  static const IconData window = IconData(0xef06, fontFamily: 'TablerIcons');
+  static const IconData cpu2 = IconData(0xf075, fontFamily: 'TablerIcons');
+  static const IconData radar2 = IconData(0xf016, fontFamily: 'TablerIcons');
+  static const IconData assembly = IconData(
+    0xf24d,
+    fontFamily: 'TablerIcons',
+  );
   static const IconData userHexagon = IconData(
     0xfc4e,
     fontFamily: 'TablerIcons',

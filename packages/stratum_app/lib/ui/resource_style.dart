@@ -18,8 +18,11 @@ enum ResourceShelf {
   /// Craft tier one: metals smelted out of the ores.
   materials('матеріали'),
 
-  /// Craft tier two: what the metals are worked into.
-  products('продукція');
+  /// Craft tier two: the complex's physical components.
+  building('будівництво'),
+
+  /// Craft tier three: instruments for the simulation's machinery.
+  tech('технології');
 
   const ResourceShelf(this.label);
 
@@ -61,25 +64,53 @@ const Map<ResourceId, ResourceStyle> resourceStyles = {
     shelf: ResourceShelf.materials,
   ),
   ResourceId.wire: (
-    label: 'Дріт',
-    note: 'купрум і ферум',
-    icon: Ti.circles,
+    label: 'Проводка',
+    note: 'купрум і силіцій',
+    icon: Ti.plugConnected,
     colour: Color(0xFFEFB25C),
-    shelf: ResourceShelf.products,
+    shelf: ResourceShelf.building,
   ),
   ResourceId.frame: (
     label: 'Каркас',
-    note: 'ферум і силіцій',
+    note: 'ферум і купрум',
     icon: Ti.crane,
     colour: Color(0xFF9FB9D8),
-    shelf: ResourceShelf.products,
+    shelf: ResourceShelf.building,
+  ),
+  ResourceId.reinforcedGlass: (
+    label: 'Укріплене скло',
+    note: 'силіцій і кристали',
+    icon: Ti.window,
+    colour: Color(0xFFA9D9E8),
+    shelf: ResourceShelf.building,
   ),
   ResourceId.chip: (
     label: 'Чіп',
-    note: 'силіцій, купрум і кристали',
+    note: 'купрум, силіцій і кристали',
     icon: Ti.cpu,
     colour: Color(0xFF8FE0C8),
-    shelf: ResourceShelf.products,
+    shelf: ResourceShelf.tech,
+  ),
+  ResourceId.processor: (
+    label: 'Процесор',
+    note: 'чіпи і проводка',
+    icon: Ti.cpu2,
+    colour: Color(0xFF7FD9C4),
+    shelf: ResourceShelf.tech,
+  ),
+  ResourceId.sensor: (
+    label: 'Сенсор',
+    note: 'кристали довкола чіпа',
+    icon: Ti.radar2,
+    colour: Color(0xFF9CCBF2),
+    shelf: ResourceShelf.tech,
+  ),
+  ResourceId.module: (
+    label: 'Модуль',
+    note: 'універсальна збірка — роль вирішує конструкція',
+    icon: Ti.assembly,
+    colour: Color(0xFFD9B8E8),
+    shelf: ResourceShelf.tech,
   ),
   ResourceId.regolith: (
     label: 'Реголіт',

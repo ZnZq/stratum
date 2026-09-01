@@ -193,9 +193,7 @@ class _GenerationTrack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const count =
-        PrototypeSimulation.maxPartLevel ~/
-        PrototypeSimulation.levelsPerGeneration;
+    const count = PrototypeSimulation.markCount;
     return Row(
       children: [
         for (var i = 0; i < count; i++) ...[
@@ -251,9 +249,10 @@ class _MarkProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const span = PrototypeSimulation.levelsPerGeneration;
-    final into = level - mark * span;
-    final walked = into / span;
+    final span = PrototypeSimulation.markSpan(mark);
+    final into = level - PrototypeSimulation.markFloor(mark);
+    // A span of zero is the summit: Mk V is obtained at the very top.
+    final walked = span == 0 ? 1.0 : into / span;
     // The reading counts THIS mark's hundred rather than the running
     // total: the bar measures the road to the next rebuild, so a bar a third
     // full has to read as a third, not as "137 / 200", which looks two

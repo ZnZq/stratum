@@ -52,7 +52,7 @@ void main() {
     expect(cuprum(sim), 0);
     expect(
       cupriteBefore - sim.stock.amount(ResourceId.cuprite).toDouble(),
-      closeTo(8, 1e-6),
+      closeTo(40, 1e-6),
     );
     expect(sim.craftLines[0].unitLoaded.value, isTrue);
     expect(sim.craftLines[0].craftProgress, closeTo(0.5, 0.01));
@@ -92,14 +92,14 @@ void main() {
   test('a unit that cannot be prepaid never starts', () {
     final sim = PrototypeSimulation();
     sim.stock.add(ResourceId.regolith, BigDouble.fromNum(1e9));
-    sim.stock.add(ResourceId.cuprite, BigDouble.fromNum(12)); // 1.5 units
+    sim.stock.add(ResourceId.cuprite, BigDouble.fromNum(60)); // 1.5 units
     sim.syncCraft(t0);
     sim.assignCraftRecipe(0, ResourceId.cuprum);
     sim.syncCraft(t0 + 3600 * second);
-    // One unit loads (8 cuprite) and finishes; the second needs 8 and
-    // finds 4 -- it never starts, nothing is half-taken.
+    // One unit loads (40 cuprite) and finishes; the second needs 40 and
+    // finds 20 -- it never starts, nothing is half-taken.
     expect(cuprum(sim), closeTo(1, 1e-6));
-    expect(sim.stock.amount(ResourceId.cuprite).toDouble(), closeTo(4, 1e-6));
+    expect(sim.stock.amount(ResourceId.cuprite).toDouble(), closeTo(20, 1e-6));
     expect(sim.craftLines[0].unitLoaded.value, isFalse);
     expect(sim.craftLines[0].starving.value, isTrue);
   });
@@ -118,7 +118,7 @@ void main() {
     sim.syncCraft(t0 + ((base * math.pow(1.5, 4)).ceil() + 1) * second);
     final spent = before - sim.stock.amount(ResourceId.cuprite).toDouble();
     // At least one craft's worth of inputs at x81 moved.
-    expect(spent, greaterThanOrEqualTo(8 * math.pow(3, 4) - 1e-6));
+    expect(spent, greaterThanOrEqualTo(40 * math.pow(3, 4) - 1e-6));
   });
 
   test('a speed level multiplies the pace, never shrinks past zero', () {
@@ -227,10 +227,10 @@ void main() {
     final sim = stocked();
     sim.stock.add(ResourceId.cuprum, BigDouble.fromNum(10));
     final paid = sim.sellPosition(ResourceId.cuprum);
-    expect(paid.toDouble(), closeTo(10 * 9000, 1e-6));
+    expect(paid.toDouble(), closeTo(10 * 45000, 1e-6));
 
     sim.stock.add(ResourceId.wire, BigDouble.fromNum(1));
-    sim.sellingGroupOf('products').value = false;
+    sim.sellingGroupOf('building').value = false;
     expect(sim.sellsInSweep(ResourceId.wire), isFalse);
     expect(sim.sellsInSweep(ResourceId.regolith), isTrue);
   });
@@ -318,7 +318,8 @@ void main() {
     expect(sim.craftLines[0].craftProgress, phaseBefore);
     expect(sim.setCraftTier(0, 2), isTrue);
     sim.setCraftHalted(0, false);
-    sim.syncCraft(t0 + 660 * second);
+    // Long enough to finish a unit at the raised tier (30s x 1.5^2).
+    sim.syncCraft(t0 + 1260 * second);
     expect(cuprum(sim), greaterThan(made));
   });
 
@@ -354,7 +355,7 @@ void main() {
     expect(line.craftProgress, 0);
     expect(
       sim.stock.amount(ResourceId.cuprite).toDouble(),
-      closeTo(cupriteBefore + 8, 1e-6),
+      closeTo(cupriteBefore + 40, 1e-6),
       reason: 'the frozen unit was loaded at tier 0 and comes back',
     );
   });
@@ -374,7 +375,7 @@ void main() {
 
   test('offline, a line keeps feeding the line that eats its output', () {
     final sim = stocked();
-    sim.stock.add(ResourceId.ferrum, BigDouble.fromNum(1e6));
+    sim.stock.add(ResourceId.silicon, BigDouble.fromNum(1e6));
     // The CONSUMER sits at a lower index than its supplier: unsliced,
     // it would starve through the whole absence; sliced, it eats what
     // line 1 delivers minute by minute.
@@ -382,14 +383,15 @@ void main() {
     sim.assignCraftRecipe(1, ResourceId.cuprum);
     expect(sim.stock.amount(ResourceId.cuprum).isZero, isTrue);
     final gain = sim.settleAbsence(
-      nowMs: t0 + 2700 * second,
-      seconds: 2700,
+      nowMs: t0 + 14400 * second,
+      seconds: 14400,
       energyPerSecond: 0,
       cycleSeconds: 4,
     );
-    // 45 minutes at the 25% offline pace is ~11 minutes of line time:
-    // a handful of wire, but strictly more than the zero the unsliced
-    // settlement would have paid.
+    // Four hours at the 25% offline pace is an hour of line time: the
+    // smelter turns out ~120 cuprum and the wire line eats them twelve
+    // at a time -- strictly more than the zero an unsliced settlement
+    // would have paid.
     expect(sim.stock.amount(ResourceId.wire).toDouble(), greaterThan(2));
     expect(gain.gained[ResourceId.wire], isNotNull);
   });
@@ -398,12 +400,13 @@ void main() {
     final sim = stocked();
     sim.assignCraftRecipe(0, ResourceId.cuprum);
     sim.settleAbsence(
-      nowMs: t0 + 3600 * second,
-      seconds: 3600,
+      nowMs: t0 + 4 * 3600 * second,
+      seconds: 4 * 3600,
       energyPerSecond: 0,
       cycleSeconds: 4,
     );
     final line = sim.craftLines[0];
+    // Four hours at 25% pace and 30s units: ~120 whole units.
     expect(line.unitOrdinal.value, greaterThan(50));
     expect(line.boostStacks.value, 0);
     // No duplicate ever paid: the delivered total is exactly the unit

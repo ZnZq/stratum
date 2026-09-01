@@ -29,41 +29,70 @@ class CraftRecipe {
 /// The recipe book. Smelting eats regolith as flux on purpose: crafting is
 /// the sink for the one resource that never stops inflating. PROVISIONAL.
 const List<CraftRecipe> craftTable = [
+  // МАТЕРІАЛИ -- smelting. Costs are DELIBERATELY steep: mining grows
+  // exponentially, and a cheap input would turn to noise within an hour.
   CraftRecipe(
     output: ResourceId.cuprum,
-    inputs: {ResourceId.cuprite: 8, ResourceId.regolith: 200},
-    // Short on purpose for now: the owner wants the fast-craft animation
-    // observable at the one-second floor. PROVISIONAL like the rest.
-    baseSeconds: 4,
+    inputs: {ResourceId.cuprite: 40, ResourceId.regolith: 2500},
+    baseSeconds: 30,
   ),
   CraftRecipe(
     output: ResourceId.ferrum,
-    inputs: {ResourceId.ferrite: 8, ResourceId.regolith: 300},
+    inputs: {ResourceId.ferrite: 40, ResourceId.regolith: 4000},
     baseSeconds: 45,
   ),
   CraftRecipe(
     output: ResourceId.silicon,
-    inputs: {ResourceId.silicite: 6, ResourceId.regolith: 400},
+    inputs: {ResourceId.silicite: 30, ResourceId.regolith: 6000},
     baseSeconds: 60,
   ),
+  // БУДІВНИЦТВО -- the complex's physical components; constructions on
+  // the future Building tab are their consumer.
   CraftRecipe(
     output: ResourceId.wire,
-    inputs: {ResourceId.cuprum: 6, ResourceId.ferrum: 2},
+    inputs: {ResourceId.cuprum: 12, ResourceId.silicon: 4},
     baseSeconds: 120,
   ),
   CraftRecipe(
     output: ResourceId.frame,
-    inputs: {ResourceId.ferrum: 8, ResourceId.silicon: 4},
+    inputs: {ResourceId.ferrum: 16, ResourceId.cuprum: 8},
     baseSeconds: 180,
   ),
   CraftRecipe(
+    output: ResourceId.reinforcedGlass,
+    inputs: {ResourceId.silicon: 10, ResourceId.crystals: 30},
+    baseSeconds: 120,
+  ),
+  // ТЕХНОЛОГІЇ -- instruments for the simulation's machinery (not the
+  // AI: that grows through firmware). The module is the universal
+  // assembly whose role the consuming construction decides.
+  CraftRecipe(
     output: ResourceId.chip,
     inputs: {
+      ResourceId.cuprum: 25,
       ResourceId.silicon: 10,
-      ResourceId.cuprum: 4,
-      ResourceId.crystals: 5,
+      ResourceId.crystals: 20,
     },
     baseSeconds: 300,
+  ),
+  CraftRecipe(
+    output: ResourceId.processor,
+    inputs: {ResourceId.chip: 5, ResourceId.wire: 6},
+    baseSeconds: 300,
+  ),
+  CraftRecipe(
+    output: ResourceId.sensor,
+    inputs: {ResourceId.crystals: 40, ResourceId.chip: 3},
+    baseSeconds: 180,
+  ),
+  CraftRecipe(
+    output: ResourceId.module,
+    inputs: {
+      ResourceId.chip: 4,
+      ResourceId.wire: 4,
+      ResourceId.reinforcedGlass: 2,
+    },
+    baseSeconds: 240,
   ),
 ];
 

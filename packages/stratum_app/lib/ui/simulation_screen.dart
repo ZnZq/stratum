@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
@@ -18,6 +20,65 @@ import 'tokens.dart';
 ///
 /// One surface, like the rest of the game: the racks run edge to edge, the
 /// readouts sit over their floor, and nothing below is boxed.
+/// The simulation's internal age, precise to the second: a day count
+/// when there is one, then a running h:mm:ss clock.
+String _simClock(double seconds) {
+  final whole = seconds.floor();
+  final d = whole ~/ 86400;
+  final h = (whole % 86400) ~/ 3600;
+  final m = (whole % 3600) ~/ 60;
+  final sec = whole % 60;
+  String two(int v) => v.toString().padLeft(2, '0');
+  final clock = '$h:${two(m)}:${two(sec)}';
+  return d > 0 ? '$dд $clock' : clock;
+}
+
+/// The internal-time plate with its own second hand: the screen rebuilds
+/// on drill batches, and a to-the-second clock cannot wait for them.
+class _SimClockStat extends StatefulWidget {
+  const _SimClockStat({required this.sim});
+
+  final PrototypeSimulation sim;
+
+  @override
+  State<_SimClockStat> createState() => _SimClockStatState();
+}
+
+class _SimClockStatState extends State<_SimClockStat> {
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return HudStat(
+      // The simulation's INTERNAL time: the acknowledged clock, where a
+      // week away counts as the 48h absence cap -- never the calendar.
+      label: 'час симуляції',
+      align: CrossAxisAlignment.end,
+      corners: const HudCorners(bottomRight: true),
+      value: _simClock(
+        widget.sim.simSeconds(DateTime.now().millisecondsSinceEpoch),
+      ),
+      size: SimulationScreen._figure,
+      accent: Palette.steel,
+      colour: Palette.steel,
+    );
+  }
+}
+
 class SimulationScreen extends StatelessWidget {
   const SimulationScreen({required this.game, required this.onOpen, super.key});
 
@@ -127,14 +188,21 @@ class SimulationScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          HudStat(
-            label: 'глибина',
-            align: CrossAxisAlignment.center,
-            corners: const HudCorners(bottomLeft: true, bottomRight: true),
-            value: '${sim.layer.value} м',
-            size: _figure,
-            accent: Palette.steel,
-            colour: Palette.steel,
+          Row(
+            children: [
+              Expanded(
+                child: HudStat(
+                  label: 'глибина',
+                  corners: const HudCorners(bottomLeft: true),
+                  value: '${sim.layer.value} м',
+                  size: _figure,
+                  accent: Palette.steel,
+                  colour: Palette.steel,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: _SimClockStat(sim: sim)),
+            ],
           ),
 
           const Spacer(),

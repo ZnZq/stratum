@@ -51,9 +51,9 @@ class Rock extends StatelessWidget {
       tiles++;
     }
 
-    final hpFraction = (sim.layerHp.value / sim.layerHpMax.value)
-        .toDouble()
-        .clamp(0.0, 1.0);
+    // Effort space, not hp: half a bar means half the blows are behind
+    // you, matching the hits-to-break readout instead of contradicting it.
+    final hpFraction = 1 - sim.layerEffort.value;
 
     return Stack(
       children: [

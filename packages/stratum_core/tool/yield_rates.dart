@@ -55,7 +55,7 @@ void main() {
     // much of a layer one blow takes down, times what a layer pays.
     final blow =
         (sim.power.value + sim.strikePower).toDouble() * critFactor +
-        sim.layerHpMax.value.toDouble() * PrototypeSimulation.structuralShare;
+        sim.layerHpMax.value.toDouble() * sim.pierceShare;
     var layersPerStrike = blow / sim.layerHpMax.value.toDouble();
     if (layersPerStrike > PrototypeSimulation.maxLayersPerCycle) {
       layersPerStrike = PrototypeSimulation.maxLayersPerCycle.toDouble();

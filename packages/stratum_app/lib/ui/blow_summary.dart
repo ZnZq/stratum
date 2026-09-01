@@ -25,10 +25,31 @@ class BlowSummary extends StatelessWidget {
           child: HudStat(
             label: 'сила удару',
             corners: const HudCorners(topLeft: true, bottomLeft: true),
-            value: '${sim.strikePower}',
-            size: 13,
             accent: Palette.gold,
-            colour: Palette.gold,
+            // One Text.rich, one line: the share sits BESIDE the figure
+            // (owner). Three decimals, so the sum visibly equals the
+            // drive's own bonus plus the 0.02% floor every blow carries
+            // -- two decimals rounded it into a number the upgrade
+            // track never mentions.
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '${sim.strikePower}',
+                    style: AppText.display(
+                      13,
+                      weight: FontWeight.w700,
+                      color: Palette.gold,
+                    ),
+                  ),
+                  TextSpan(
+                    text:
+                        '  +${(sim.pierceShare * 100).toStringAsFixed(3)}% шару',
+                    style: AppText.display(8, color: Palette.textFaint),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 8),
