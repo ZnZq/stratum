@@ -25,7 +25,11 @@ class Game extends ChangeNotifier {
       onBatch: _onDrillBatch,
     );
     energyLoop = TickEngine(
-      scheduler: TickScheduler(rate: TickRate(_energyInterval(0))),
+      scheduler: TickScheduler(
+        rate: TickRate(
+          _energyIntervalOf(PrototypeSimulation.baseEnergySeconds),
+        ),
+      ),
       onBatch: _onEnergyBatch,
     );
 
@@ -469,13 +473,10 @@ class Game extends ChangeNotifier {
   /// The supply level sets this, so it is derived rather than fixed: a
   /// faster pack is a shorter wait between points, and the engine is re-armed
   /// whenever the level moves.
-  static Duration _energyInterval(int supplyLevel) => Duration(
-    microseconds:
-        (PrototypeSimulation.baseEnergySeconds /
-                (1 + PrototypeSimulation.regenSpeedPerLevel * supplyLevel) *
-                1e6)
-            .round(),
-  );
+  /// The regen cadence, from the core's own figure -- which already
+  /// carries the supply track and the auto-hands penalty.
+  static Duration _energyIntervalOf(double seconds) =>
+      Duration(microseconds: (seconds * 1e6).round());
 
   final PrototypeSimulation sim = PrototypeSimulation();
 
@@ -739,6 +740,9 @@ class Game extends ChangeNotifier {
   final Set<String> _seenAffordableTracks = {};
 
   Iterable<String> _affordableTracks() sync* {
+    // The rig itself is the drills screen's first purchase: it becoming
+    // affordable is that screen's news.
+    if (sim.canBuyRig) yield 'rig';
     for (final row in PrototypeSimulation.drillTable) {
       for (final part in DrillPart.values) {
         if (sim.canUpgradeDrill(row.id, part)) {
@@ -752,6 +756,21 @@ class Game extends ChangeNotifier {
     (track) => !_seenAffordableTracks.contains(track),
   );
 
+  /// An automation that became affordable since the ladder was last
+  /// looked at -- news, not capability, like every other dot.
+  bool get hasNewAutomation => AutomationId.values.any(
+    (id) =>
+        sim.canUnlockAutomation(id) && !_seenAffordableAutomations.contains(id),
+  );
+
+  final Set<AutomationId> _seenAffordableAutomations = {};
+
+  void markAutomationSeen() {
+    _seenAffordableAutomations
+      ..clear()
+      ..addAll(AutomationId.values.where(sim.canUnlockAutomation));
+  }
+
   /// The drills screen is open: snapshot what is affordable. A track that
   /// later dips below affordable and climbs back IS news again, which is
   /// why this replaces the set rather than adding to it.
@@ -764,6 +783,13 @@ class Game extends ChangeNotifier {
   /// A UI act changed sim state no stockpile signal reports (a tranche
   /// poured, a setting flipped): repaint whoever listens.
   void pokeListeners() => notifyListeners();
+
+  /// An automation setting moved the regen cadence: re-arm the loop and
+  /// repaint.
+  void refreshEnergyLoop() {
+    _syncEnergyLoop();
+    notifyListeners();
+  }
 
   /// The board is on screen: everything on it stops being news.
   void markRequestsSeen() {
@@ -783,10 +809,18 @@ class Game extends ChangeNotifier {
     _muteGains = true;
     sim.syncReplicator(wallNow);
     _muteGains = false;
+    // The automations run here, once a second, and the hands they owe
+    // are thrown through the same path a finger uses.
+    final autoStrikes = sim.syncAutomations(wallNow);
+    for (var i = 0; i < autoStrikes; i++) {
+      strike();
+    }
     _seenRequests.retainAll(sim.requests);
     _announceNewRequests();
     for (var i = 0; i < batch.ticks; i++) {
       final outcome = sim.tick();
+      // No rig yet: the engine ticks through empty, and nothing shakes.
+      if (identical(outcome, CycleOutcome.none)) continue;
       // The drill's tick is a strike of its own: mine, then hit the face.
       hitShakes.value = hitShakes.value + 1;
       _reportCycle(outcome);
@@ -807,7 +841,7 @@ class Game extends ChangeNotifier {
   void _syncEnergyLoop() {
     // The pack's cadence is a level away from changing, so the engine is
     // re-armed here rather than at every call site that might have moved it.
-    final wanted = _energyInterval(sim.supplyLevel.value);
+    final wanted = _energyIntervalOf(sim.energySeconds);
     if (energyLoop.rate.interval != wanted) {
       energyLoop.rate = TickRate(wanted);
     }

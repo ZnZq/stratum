@@ -338,6 +338,19 @@ class _CraftLineCardState extends State<CraftLineCard>
               letterSpacing: 1.6,
             ),
           ),
+          if (widget.game.sim.automations.has(AutomationId.autoCraft) &&
+              widget.game.sim.autoCrafter.manages(widget.index)) ...[
+            const SizedBox(width: 6),
+            Text(
+              'АВТО',
+              style: AppText.body(
+                7,
+                weight: FontWeight.w800,
+                letterSpacing: 1,
+                color: Palette.gold,
+              ),
+            ),
+          ],
           const SizedBox(width: 8),
           if (recipe == null)
             Text('простоює', style: AppText.body(9, color: Palette.textFaint))

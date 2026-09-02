@@ -68,6 +68,21 @@ class TrackRow extends StatelessWidget {
             cost: '${game.sim.drillUpgradeCost(id, part)}',
             enabled: game.sim.canUpgradeDrill(id, part) && steps > 0,
             onBuy: () => game.upgradeDrill(id, part, levels: steps),
+            auto: sim.automations.has(AutomationId.autoBuy)
+                ? (
+                    on: sim.autoBuyer.isChosen(
+                      PrototypeSimulation.autoBuyDrillKey(id, part),
+                    ),
+                    toggle: () {
+                      final key = PrototypeSimulation.autoBuyDrillKey(id, part);
+                      sim.autoBuyer.setChosen(
+                        key,
+                        !sim.autoBuyer.isChosen(key),
+                      );
+                      game.pokeListeners();
+                    },
+                  )
+                : null,
           ),
         ],
       ),

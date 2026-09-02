@@ -6,7 +6,7 @@ import 'support/sim_fixtures.dart';
 void main() {
   group('raw data', () {
     test('is dug out of the rock like anything else', () {
-      final sim = PrototypeSimulation(seed: 7);
+      final sim = PrototypeSimulation.rigged(seed: 7);
       pinLayer(sim);
 
       const strikes = 4000;
@@ -45,7 +45,7 @@ void main() {
     });
 
     test('the cycle books it into the cycle total as well as the store', () {
-      final sim = PrototypeSimulation(seed: 3);
+      final sim = PrototypeSimulation.rigged(seed: 3);
       pinLayer(sim);
 
       for (var i = 0; i < 2000; i++) {
@@ -63,7 +63,7 @@ void main() {
     });
 
     test('a thick break pays its substrate outright', () {
-      final sim = PrototypeSimulation(seed: 11);
+      final sim = PrototypeSimulation.rigged(seed: 11);
       while (!PrototypeSimulation.isThick(sim.layer.value)) {
         sim.layer.value = sim.layer.value + 1;
       }
@@ -85,7 +85,7 @@ void main() {
     });
 
     test('an absence earns it at the lane expectation', () {
-      final sim = PrototypeSimulation(seed: 5);
+      final sim = PrototypeSimulation.rigged(seed: 5);
       final gain = sim.claimOffline(
         seconds: 3600,
         energyPerSecond: 0.5,
@@ -101,7 +101,7 @@ void main() {
     });
 
     test('a restart wipes what was dug but not what the cycle produced', () {
-      final sim = PrototypeSimulation(seed: 9);
+      final sim = PrototypeSimulation.rigged(seed: 9);
       pinLayer(sim);
       for (var i = 0; i < 1500; i++) {
         sim.strike();

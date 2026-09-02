@@ -25,6 +25,28 @@ class DrillBank {
 
   final Stockpile _stock;
 
+  /// Whether the player has bought the rig at all. A fresh run has not:
+  /// the first stretch is dug by hand, and the rig is the first thing
+  /// the sale of that regolith buys (owner, 2026-09-02). A purchase, not
+  /// an automation -- it sits on the drills screen.
+  final Signal<bool> rigOwned = Signal(false, name: 'rig owned');
+
+  /// What the rig costs, in credits. PROVISIONAL by rule zero.
+  static final BigDouble rigCost = BigDouble.fromNum(50);
+
+  bool get canBuyRig =>
+      !rigOwned.value && _stock.has(ResourceId.credits, rigCost);
+
+  bool buyRig() {
+    if (!canBuyRig) return false;
+    _stock.spend(ResourceId.credits, rigCost);
+    rigOwned.value = true;
+    return true;
+  }
+
+  /// The rig for free: a save from before the purchase existed, a bench.
+  void grantRig() => rigOwned.value = true;
+
   /// The bore every drill starts with, in metres.
   static const double drillRadiusBase = 5;
 
@@ -75,7 +97,7 @@ class DrillBank {
 
   DrillState drill(DrillId id) => states[id]!;
 
-  bool owned(DrillId id) => id == DrillId.regolith;
+  bool owned(DrillId id) => id == DrillId.regolith && rigOwned.value;
 
   /// The bore, in metres.
   double radius(DrillId id) =>
@@ -192,8 +214,10 @@ class DrillBank {
   final Map<(DrillId, DrillPart), ({BigDouble purse, int level, int count})>
   _affordable = {};
 
-  /// Only the levels that moved, per drill that moved.
+  /// Only the levels that moved, per drill that moved -- and the rig
+  /// itself, once bought.
   Map<String, Object?> toJson() => {
+    if (rigOwned.value) 'rig': true,
     for (final row in drillTable)
       if (DrillPart.values.any((p) => drill(row.id).levelOf(p).value != 0))
         row.id.name: {
@@ -204,6 +228,7 @@ class DrillBank {
   };
 
   void readJson(Object? json) {
+    rigOwned.value = json is Map && json['rig'] == true;
     for (final row in drillTable) {
       final held = json is Map ? json[row.id.name] : null;
       final state = drill(row.id);

@@ -67,6 +67,7 @@ class PartCard extends StatelessWidget {
             cost: '${game.sim.upgradeCost(part)}',
             enabled: game.sim.canUpgrade(part) && steps > 0,
             onBuy: () => game.upgradeArm(part, levels: steps),
+            auto: _autoBuy(sim, PrototypeSimulation.autoBuyArmKey(part)),
           ),
           const SizedBox(height: 6),
           // The road to the next mark, on its own line where it has room --
@@ -105,6 +106,18 @@ class PartCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The auto-buy switch for a track, once that automation is owned.
+({bool on, VoidCallback toggle})? _autoBuy(
+  PrototypeSimulation sim,
+  String key,
+) {
+  if (!sim.automations.has(AutomationId.autoBuy)) return null;
+  return (
+    on: sim.autoBuyer.isChosen(key),
+    toggle: () => sim.autoBuyer.setChosen(key, !sim.autoBuyer.isChosen(key)),
+  );
 }
 
 class _MarkTag extends StatelessWidget {

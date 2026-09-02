@@ -3,7 +3,7 @@ import 'package:test/test.dart';
 
 void main() {
   PrototypeSimulation stocked() {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     sim.stock.add(ResourceId.regolith, BigDouble.fromNum(100000));
     return sim;
   }
@@ -21,7 +21,7 @@ void main() {
   });
 
   test('the ladder is geometric and the log inversion agrees with it', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     for (var round = 1; round < 12; round++) {
       sim.creditsEarned.value =
           sim.roundFloor(round) + BigDouble.fromNum(0.001);
@@ -33,7 +33,7 @@ void main() {
   });
 
   test('investing is gated by free tranches and by the cap', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     expect(sim.investTranche(ResourceId.credits), isFalse);
     raise(sim, 4); // 12 tranches, cap 10 at rank 0
     for (var i = 0; i < 10; i++) {
@@ -91,7 +91,7 @@ void main() {
   });
 
   test('a deep level drains its full price from the free pool', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     raise(sim, 60);
     // Climb the ladder the way a player must: round-robin under the caps
     // until rank 2 lifts them to 30 -- only then can a lane cross level
@@ -113,7 +113,7 @@ void main() {
   });
 
   test('a rank lifts every cap by ten', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     raise(sim, 10); // 30 tranches
     expect(sim.fundCap, 10);
     for (var i = 0; i < 10; i++) {
@@ -129,7 +129,7 @@ void main() {
   });
 
   test('each lane compounds its own step and the global rides them all', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     raise(sim, 1);
     sim.investTranche(ResourceId.cuprite);
     final global = sim.fundGlobalScale.toDouble();
@@ -168,7 +168,7 @@ void main() {
   });
 
   test('a funded ore raises its own forecast; data rides only the global', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     final ore = sim.expectedPerStrike(ResourceId.regolith);
     final data = sim.expectedPerStrike(ResourceId.rawData);
     raise(sim, 1);
@@ -184,7 +184,7 @@ void main() {
   });
 
   test('granted levels climb ranks without draining the free pool', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     raise(sim, 5); // 15 free tranches, untouched throughout
     final freeBefore = sim.tranchesFree;
     // A tree node gifts ten levels twice: 20 spent-equivalents, rank 1.
@@ -201,14 +201,14 @@ void main() {
     expect(sim.grantFundLevels(ResourceId.credits, 100), 10);
     expect(sim.fundingOf(ResourceId.credits).value, 20);
     // The whole ledger survives a save.
-    final back = PrototypeSimulation()..readJson(sim.toJson());
+    final back = PrototypeSimulation.rigged()..readJson(sim.toJson());
     expect(back.tranchesGranted.value, sim.tranchesGranted.value);
     expect(back.tranchesFree, sim.tranchesFree);
     expect(back.financeRank, sim.financeRank);
   });
 
   test('an impossible saved distribution melts to the gifted floor', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     raise(sim, 4); // 12 tranches
     sim.grantFundLevels(ResourceId.regolith, 5);
     for (var i = 0; i < 8; i++) {
@@ -222,7 +222,7 @@ void main() {
     finance['earned'] = BigDouble.zero.toJson();
     run['finance'] = finance;
 
-    final back = PrototypeSimulation()..readJson(run);
+    final back = PrototypeSimulation.rigged()..readJson(run);
     expect(back.fundingWasReset, isTrue);
     // Bought levels melted, gifted floor kept, gift re-credited.
     expect(back.fundingOf(ResourceId.credits).value, 0);
@@ -234,13 +234,13 @@ void main() {
   });
 
   test('a healthy save does not trip the melt', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     raise(sim, 10);
     sim.grantFundLevels(ResourceId.credits, 3);
     for (var i = 0; i < 10; i++) {
       sim.investTranche(ResourceId.regolith);
     }
-    final back = PrototypeSimulation()..readJson(sim.toJson());
+    final back = PrototypeSimulation.rigged()..readJson(sim.toJson());
     expect(back.fundingWasReset, isFalse);
     expect(back.fundingOf(ResourceId.regolith).value, 10);
     expect(back.fundingOf(ResourceId.credits).value, 3);
@@ -250,7 +250,7 @@ void main() {
     final sim = stocked();
     sim.sellPosition(ResourceId.regolith);
     sim.investTranche(ResourceId.ferrite);
-    final back = PrototypeSimulation()..readJson(sim.toJson());
+    final back = PrototypeSimulation.rigged()..readJson(sim.toJson());
     expect(
       back.creditsEarned.value.toDouble(),
       closeTo(sim.creditsEarned.value.toDouble(), 1e-6),
@@ -266,7 +266,7 @@ void main() {
     // must scale by exactly the same multiplier, because they all enter
     // through the one door.
     BigDouble dig(int levels) {
-      final sim = PrototypeSimulation(seed: 77);
+      final sim = PrototypeSimulation.rigged(seed: 77);
       sim.grantFundLevels(ResourceId.regolith, levels);
       var thick = 1;
       while (!PrototypeSimulation.isThick(thick)) {
@@ -283,7 +283,8 @@ void main() {
     final plain = dig(0);
     final funded = dig(5);
     final scale =
-        (PrototypeSimulation(seed: 77)..grantFundLevels(ResourceId.regolith, 5))
+        (PrototypeSimulation.rigged(seed: 77)
+              ..grantFundLevels(ResourceId.regolith, 5))
             .fundScaleOf(ResourceId.regolith);
     expect(scale > BigDouble.one, isTrue);
     expect(

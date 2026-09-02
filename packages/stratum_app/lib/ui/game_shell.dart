@@ -28,6 +28,7 @@ import 'shell/nav_bar.dart';
 import 'shell/pause_overlay.dart';
 import 'shell/resource_bar.dart';
 import 'building_screen.dart';
+import 'automation_screen.dart';
 import 'replicator_screen.dart';
 import 'shell/screen_placeholder.dart';
 
@@ -123,6 +124,7 @@ class _GameShellState extends State<GameShell> {
         GameScreen.craft => CraftScreen(game: _game),
         GameScreen.building => BuildingScreen(game: _game),
         GameScreen.replicator => ReplicatorScreen(game: _game),
+        GameScreen.automation => AutomationScreen(game: _game),
         GameScreen.simulation => SimulationScreen(
           game: _game,
           onOpen: _pickScreen,
@@ -150,6 +152,7 @@ class _GameShellState extends State<GameShell> {
       _lastIn[screen.section] = screen;
     });
     if (screen == GameScreen.upgrades) _game.markDrillUpgradesSeen();
+    if (screen == GameScreen.automation) _game.markAutomationSeen();
     _syncAudience();
     _rememberScreen();
   }
@@ -207,6 +210,7 @@ class _GameShellState extends State<GameShell> {
       if (found case final screen?) _lastIn[screen.section] = screen;
     });
     if (found == GameScreen.upgrades) _game.markDrillUpgradesSeen();
+    if (found == GameScreen.automation) _game.markAutomationSeen();
     _syncAudience();
   }
 

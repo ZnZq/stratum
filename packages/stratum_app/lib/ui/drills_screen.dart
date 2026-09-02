@@ -50,7 +50,8 @@ class _DrillsScreenState extends State<DrillsScreen> {
               label: 'ваші бури',
               rule: true,
               trailing: Text(
-                '1 / ${PrototypeSimulation.drillTable.length}',
+                '${PrototypeSimulation.drillTable.where((row) => sim.drillOwned(row.id)).length}'
+                ' / ${PrototypeSimulation.drillTable.length}',
                 style: AppText.display(9, color: Palette.textFaint),
               ),
             ),
@@ -64,6 +65,10 @@ class _DrillsScreenState extends State<DrillsScreen> {
               onOpen: sim.drillOwned(row.id)
                   ? () => setState(() => _open = row.id)
                   : null,
+              // The regolith rig is the first purchase of the run, right
+              // here; the rest wait on the simulation tree.
+              purchasable:
+                  row.id == DrillId.regolith && !sim.drillOwned(row.id),
             ),
           ],
           const HudRule(),
@@ -88,12 +93,17 @@ class _DrillRow extends StatelessWidget {
     required this.row,
     required this.owned,
     required this.onOpen,
+    this.purchasable = false,
   });
 
   final Game game;
   final DrillRow row;
   final bool owned;
   final VoidCallback? onOpen;
+
+  /// A drill the player can buy right here, rather than one the tree
+  /// opens later.
+  final bool purchasable;
 
   @override
   Widget build(BuildContext context) {
@@ -103,7 +113,7 @@ class _DrillRow extends StatelessWidget {
     return HudTap(
       onTap: onOpen,
       child: Opacity(
-        opacity: owned ? 1 : 0.45,
+        opacity: owned || purchasable ? 1 : 0.45,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 11, 14, 12),
           child: Row(
@@ -143,7 +153,7 @@ class _DrillRow extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (!owned)
+                        if (!owned && !purchasable)
                           Text(
                             'дерево симуляції',
                             style: AppText.body(9, color: Palette.textFaint),
@@ -175,6 +185,8 @@ class _DrillRow extends StatelessWidget {
                           ),
                         ],
                       )
+                    else if (purchasable)
+                      _RigBuy(game: game)
                     else
                       Text(
                         'видобуває свій ресурс власним циклом',
@@ -223,6 +235,59 @@ class _Fact extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The rig's price on its own row: the first purchase of a run, paid in
+/// the credits the first hand-dug regolith sold for.
+class _RigBuy extends StatelessWidget {
+  const _RigBuy({required this.game});
+
+  final Game game;
+
+  @override
+  Widget build(BuildContext context) {
+    final sim = game.sim;
+    final affordable = sim.canBuyRig;
+    return Row(
+      children: [
+        HudButton(
+          onTap: affordable
+              ? () {
+                  if (sim.buyRig()) game.pokeListeners();
+                }
+              : null,
+          holdRepeat: true,
+          padding: const EdgeInsets.fromLTRB(10, 4, 10, 5),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'КУПИТИ · ${sim.rigCost}',
+                style: AppText.display(
+                  8.5,
+                  weight: FontWeight.w700,
+                  color: affordable ? Palette.gold : Palette.textFaint,
+                ),
+              ),
+              const SizedBox(width: 4),
+              ResourceIcon(
+                ResourceId.credits,
+                size: 9,
+                colour: affordable ? null : Palette.textFaint,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            'цикл кидає той самий удар без пальця',
+            style: AppText.body(9, color: Palette.textFaint),
+          ),
+        ),
+      ],
     );
   }
 }

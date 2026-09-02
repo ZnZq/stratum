@@ -10,7 +10,7 @@ void main() {
   const t0 = 60 * second;
 
   PrototypeSimulation stocked() {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     sim.stock.add(ResourceId.regolith, BigDouble.fromNum(1e9));
     sim.stock.add(ResourceId.cuprite, BigDouble.fromNum(1e7));
     sim.stock.add(ResourceId.credits, BigDouble.fromNum(1e9));
@@ -90,7 +90,7 @@ void main() {
   });
 
   test('a unit that cannot be prepaid never starts', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     sim.stock.add(ResourceId.regolith, BigDouble.fromNum(1e9));
     sim.stock.add(ResourceId.cuprite, BigDouble.fromNum(60)); // 1.5 units
     sim.syncCraft(t0);
@@ -246,7 +246,7 @@ void main() {
     sim.sellingGroupOf('materials').value = false;
     sim.syncCraft(t0 + 120 * second);
 
-    final back = PrototypeSimulation()..readJson(sim.toJson());
+    final back = PrototypeSimulation.rigged()..readJson(sim.toJson());
     expect(back.craftLines, hasLength(3));
     expect(back.craftLines[0].recipe.value, ResourceId.cuprum);
     expect(back.craftLines[0].tier.value, 3);
@@ -278,7 +278,7 @@ void main() {
     final sim = stocked();
     final json = sim.toJson();
     json.remove('craft');
-    final back = PrototypeSimulation()..readJson(json);
+    final back = PrototypeSimulation.rigged()..readJson(json);
     expect(back.craftLines, hasLength(craftStartLines));
     expect(back.craftLines[0].recipe.value, isNull);
     expect(back.craftLastSeenMs, -1);
@@ -293,7 +293,7 @@ void main() {
     lines[0] = {'r': 'unobtainium', 't': 9, 'c': 2};
     craft['lines'] = lines;
     json['craft'] = craft;
-    final back = PrototypeSimulation()..readJson(json);
+    final back = PrototypeSimulation.rigged()..readJson(json);
     expect(back.craftLines[0].recipe.value, isNull);
     expect(
       back.craftLines[0].tier.value,

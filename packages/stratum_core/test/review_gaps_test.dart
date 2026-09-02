@@ -32,7 +32,7 @@ void main() {
   });
 
   test('a request leaves the board exactly when it expires', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     sim.stock.add(ResourceId.regolith, BigDouble.fromNum(1000));
     sim.syncRequests(1000);
     expect(sim.requests, isNotEmpty);
@@ -44,7 +44,7 @@ void main() {
   });
 
   test('a long absence posts at most a boardful of requests', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     sim.stock.add(ResourceId.regolith, BigDouble.fromNum(1000));
     sim.syncRequests(1000);
     sim.syncRequests(1000 + 40 * PrototypeSimulation.requestIntervalMs);
@@ -52,20 +52,20 @@ void main() {
   });
 
   test('a replicator fraction outside 0..1 in a save is clamped', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     final json = sim.toJson();
     json['replicator'] = {
       'u': ['cuprum'],
       'fr.cuprum': 7.5,
       'sp.cuprum': -3,
     };
-    final back = PrototypeSimulation()..readJson(json);
+    final back = PrototypeSimulation.rigged()..readJson(json);
     expect(back.replicatorFractionOf(ResourceId.cuprum).value, 1.0);
     expect(back.replicatorUnlockedOf(ResourceId.cuprum).value, isTrue);
   });
 
   test('the simulation clock counts capped absences, not calendar time', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     sim.observeWall(10000);
     sim.runStartSeenMs = sim.wallSeenMs;
     // A week away is acknowledged as two days.

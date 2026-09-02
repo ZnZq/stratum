@@ -18,3 +18,4 @@ export 'hud/rule.dart';
 export 'hud/screen.dart';
 export 'hud/stat.dart';
 export 'hud/tap.dart';
+export 'hud/toggle.dart';

@@ -15,7 +15,7 @@ void main() {
 
   /// A bench-made pile big enough to pay the toll, quantonium included.
   PrototypeSimulation stocked() {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     sim.stock.add(ResourceId.cuprum, BigDouble.fromNum(10000));
     sim.stock.add(ResourceId.quantonium, BigDouble.fromNum(100000));
     sim.syncReplicator(t0);
@@ -68,7 +68,7 @@ void main() {
   });
 
   test('no quantonium -- no unlock, and no track levels either', () {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     sim.stock.add(ResourceId.cuprum, BigDouble.fromNum(1e6));
     sim.syncReplicator(t0);
     expect(sim.canUnlockReplicator(ResourceId.cuprum), isFalse);
@@ -231,7 +231,7 @@ void main() {
     sim.upgradeReplicatorAmount(ResourceId.cuprum);
     sim.syncReplicator(t0 + (0.4 * base * second).round());
 
-    final back = PrototypeSimulation()..readJson(sim.toJson());
+    final back = PrototypeSimulation.rigged()..readJson(sim.toJson());
     expect(back.replicatorUnlockedOf(ResourceId.cuprum).value, isTrue);
     expect(back.replicatorSpeedOf(ResourceId.cuprum).value, 1);
     expect(back.replicatorAmountOf(ResourceId.cuprum).value, 1);

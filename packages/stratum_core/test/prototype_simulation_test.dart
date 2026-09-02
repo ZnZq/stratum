@@ -12,7 +12,7 @@ void main() {
     test('carries depth, holdings and the damage on the current layer', () {
       final sim = played(40)..drills.value = 2;
 
-      final restored = PrototypeSimulation()..readJson(sim.toJson());
+      final restored = PrototypeSimulation.rigged()..readJson(sim.toJson());
 
       expect(restored.layer.value, sim.layer.value);
       expect(restored.drills.value, sim.drills.value);
@@ -30,7 +30,7 @@ void main() {
 
     test('the rolls carry on instead of replaying from the seed', () {
       final sim = played(20);
-      final restored = PrototypeSimulation()..readJson(sim.toJson());
+      final restored = PrototypeSimulation.rigged()..readJson(sim.toJson());
 
       final expected = [
         for (var i = 0; i < 12; i++) sim.tick().crystalsGained.isZero,
@@ -53,7 +53,7 @@ void main() {
       final tampered = Map<String, Object?>.from(sim.toJson());
       tampered['layerHp'] = BigDouble.fromNum(1e9).toJson();
 
-      final restored = PrototypeSimulation()..readJson(tampered);
+      final restored = PrototypeSimulation.rigged()..readJson(tampered);
 
       expect(
         '${restored.layerHpMax.value}',
@@ -69,7 +69,7 @@ void main() {
     });
 
     test('an empty save reads as a fresh run', () {
-      final sim = PrototypeSimulation()..readJson(const {});
+      final sim = PrototypeSimulation.rigged()..readJson(const {});
 
       expect(sim.layer.value, 0);
       expect(sim.drills.value, 1);
@@ -78,7 +78,7 @@ void main() {
     });
 
     test('a strike spends energy and lands the strike power', () {
-      final sim = PrototypeSimulation();
+      final sim = PrototypeSimulation.rigged();
       final hpBefore = sim.layerHp.value;
 
       final outcome = sim.strike();
@@ -97,7 +97,7 @@ void main() {
     });
 
     test('a strike loots regolith inside the stated band', () {
-      final sim = PrototypeSimulation();
+      final sim = PrototypeSimulation.rigged();
       final before = sim.regolith.value;
       final min = sim.strikeRegolithMin;
       final max = sim.strikeRegolithMax;
@@ -122,7 +122,7 @@ void main() {
     });
 
     test('a strike with no energy does nothing', () {
-      final sim = PrototypeSimulation();
+      final sim = PrototypeSimulation.rigged();
       while (sim.energy.value > 0) {
         sim.strike();
       }
@@ -133,7 +133,7 @@ void main() {
     });
 
     test('strike power floors at the base with no rig to lean on', () {
-      final sim = PrototypeSimulation();
+      final sim = PrototypeSimulation.rigged();
       // One starting drill: 35% of its output is under the floor.
       expect(
         '${sim.strikePower}',
@@ -142,7 +142,7 @@ void main() {
     });
 
     test('breaking a layer by hand pays the break bonus', () {
-      final sim = PrototypeSimulation();
+      final sim = PrototypeSimulation.rigged();
       final before = sim.regolith.value;
       var broken = 0;
       while (broken == 0 && sim.energy.value > 0) {
@@ -306,7 +306,7 @@ void main() {
       final wire = '{"version": 1, "sections": {"run": ${_json(v1Run)}}}';
 
       final back = codec.decode(wire).sections['run']! as Map<String, Object?>;
-      final restored = PrototypeSimulation()..readJson(back);
+      final restored = PrototypeSimulation.rigged()..readJson(back);
 
       expect('${restored.regolith.value}', '${aged.regolith.value}');
     });
@@ -321,7 +321,7 @@ void main() {
         SaveDocument(version: 1, sections: {'run': sim.toJson()}),
       );
       final back = codec.decode(wire).sections['run']! as Map<String, Object?>;
-      final restored = PrototypeSimulation()..readJson(back);
+      final restored = PrototypeSimulation.rigged()..readJson(back);
 
       expect(restored.layer.value, sim.layer.value);
       expect('${restored.regolith.value}', '${sim.regolith.value}');

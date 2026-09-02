@@ -46,4 +46,19 @@ String simClock(double seconds) {
   return d > 0 ? '$dд $clock' : clock;
 }
 
+/// An automation interval as a picker prints it: `10 с`, `1 хв`, `5 хв`.
+String intervalText(double seconds) {
+  if (seconds < 60) {
+    final whole = seconds == seconds.roundToDouble()
+        ? '${seconds.round()}'
+        : seconds.toStringAsFixed(1);
+    return '$whole с';
+  }
+  final minutes = seconds / 60;
+  final whole = minutes == minutes.roundToDouble()
+      ? '${minutes.round()}'
+      : minutes.toStringAsFixed(1);
+  return '$whole хв';
+}
+
 String _two(int v) => v.toString().padLeft(2, '0');

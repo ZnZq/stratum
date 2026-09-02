@@ -12,7 +12,7 @@ void main() {
 }
 
 PrototypeSimulation goldenTrail() {
-  final sim = PrototypeSimulation(seed: 424242);
+  final sim = PrototypeSimulation.rigged(seed: 424242);
   const second = 1000;
   const t0 = 90 * second;
   sim.observeWall(t0);

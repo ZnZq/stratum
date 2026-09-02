@@ -27,6 +27,7 @@ abstract final class Ic {
   static const String mine = '${_at}nav_mine.svg';
   static const String arm = '${_at}nav_arm.svg';
   static const String drills = '${_at}nav_drills.svg';
+  static const String automation = '${_at}nav_automation.svg';
   static const String planets = '${_at}nav_planets.svg';
   static const String warehouse = '${_at}nav_warehouse.svg';
   static const String trade = '${_at}nav_trade.svg';

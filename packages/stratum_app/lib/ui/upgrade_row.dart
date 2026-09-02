@@ -22,6 +22,7 @@ class UpgradeRow extends StatelessWidget {
     required this.cost,
     required this.enabled,
     required this.onBuy,
+    this.auto,
     super.key,
   });
 
@@ -43,6 +44,10 @@ class UpgradeRow extends StatelessWidget {
   final String cost;
   final bool enabled;
   final VoidCallback onBuy;
+
+  /// The auto-buy switch for this track, once that automation is owned:
+  /// whether the buyer works it, and the tap that flips it.
+  final ({bool on, VoidCallback toggle})? auto;
 
   @override
   Widget build(BuildContext context) {
@@ -71,6 +76,10 @@ class UpgradeRow extends StatelessWidget {
                   SizedBox(width: besideGap),
                   beside,
                   const Spacer(),
+                  if (auto case final auto?) ...[
+                    _AutoChip(on: auto.on, onTap: auto.toggle),
+                    const SizedBox(width: 7),
+                  ],
                   Text(
                     '$level',
                     style: AppText.display(
@@ -98,6 +107,37 @@ class UpgradeRow extends StatelessWidget {
               : BuyButton(cost: cost, enabled: enabled, onTap: onBuy),
         ),
       ],
+    );
+  }
+}
+
+/// The word AUTO as a small chip: lit while the buyer works the track.
+class _AutoChip extends StatelessWidget {
+  const _AutoChip({required this.on, required this.onTap});
+
+  final bool on;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return HudTap(
+      onTap: onTap,
+      cut: 4,
+      child: HudPlate(
+        cut: 4,
+        fill: on ? Palette.goldWell : Palette.shell,
+        edge: on ? Palette.amber : Palette.lineBar,
+        padding: const EdgeInsets.fromLTRB(5, 2, 5, 2),
+        child: Text(
+          'АВТО',
+          style: AppText.body(
+            6.5,
+            weight: FontWeight.w800,
+            letterSpacing: 1,
+            color: on ? Palette.gold : Palette.textFaint,
+          ),
+        ),
+      ),
     );
   }
 }

@@ -6,7 +6,7 @@ void main() {
 
   /// A run whose cycle started at acknowledged zero, clock armed at t=1.
   PrototypeSimulation started() {
-    final sim = PrototypeSimulation()..observeWall(1);
+    final sim = PrototypeSimulation.rigged()..observeWall(1);
     sim.cycleStartMs.value = 0;
     return sim;
   }
@@ -70,7 +70,7 @@ void main() {
     final sim = started();
     play(sim, 1 + 3 * day);
     final json = sim.toJson();
-    final back = PrototypeSimulation()..readJson(json);
+    final back = PrototypeSimulation.rigged()..readJson(json);
     expect(back.wallSeenMs, sim.wallSeenMs);
     expect(back.cycleStartMs.value, 0);
     // The absence between the save and the load is one gap: a week later

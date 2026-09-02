@@ -4,12 +4,60 @@ import 'save_codec.dart';
 /// Bumped whenever the shape of a save changes, with a migration to match.
 /// A gap in the chain is an error rather than a silent skip -- see
 /// [SaveCodec].
-const int stratumSaveVersion = 8;
+const int stratumSaveVersion = 10;
 
 /// The chain from every save ever written to the shape this build reads.
 /// Lives in the core so each step can be pinned by a test on its own,
 /// instead of in the app where nothing can run it.
 final List<SaveMigration> stratumSaveMigrations = [
+  // v9 -> v10: the rig stopped being a rung of the automation ladder and
+  // became a purchase of its own on the drills screen; its flag moves
+  // from the ladder's list to the bores section.
+  SaveMigration(
+    fromVersion: 9,
+    apply: (sections) {
+      final run = sections['run'];
+      if (run is! Map) return sections;
+      final out = Map<String, Object?>.from(run);
+      final automation = out['automation'];
+      if (automation is! Map) return sections;
+      final opened = automation['u'];
+      if (opened is! List || !opened.contains('drill')) return sections;
+      final bores = out['bores'];
+      out['bores'] = {
+        ...(bores is Map
+            ? Map<String, Object?>.from(bores)
+            : <String, Object?>{}),
+        'rig': true,
+      };
+      out['automation'] = {
+        ...Map<String, Object?>.from(automation),
+        'u': [
+          for (final name in opened)
+            if (name != 'drill') name,
+        ],
+      };
+      return {...sections, 'run': out};
+    },
+  ),
+  // v8 -> v9: automation became something the player unlocks, and a
+  // fresh run starts without the rig. Every save before this had one,
+  // so it is granted outright rather than taken away.
+  SaveMigration(
+    fromVersion: 8,
+    apply: (sections) {
+      final run = sections['run'];
+      if (run is! Map) return sections;
+      final out = Map<String, Object?>.from(run);
+      final automation = out['automation'];
+      final opened = automation is Map && automation['u'] is List
+          ? List<Object?>.from(automation['u'] as List)
+          : <Object?>[];
+      if (!opened.contains('drill')) opened.add('drill');
+      out['automation'] = {'u': opened};
+      return {...sections, 'run': out};
+    },
+  ),
   // v7 -> v8: raw data stopped being a computed measurement and became a
   // resource dug out of the rock. The old accumulators are denominated in
   // normalised sightings -- billions of them -- and carrying either one

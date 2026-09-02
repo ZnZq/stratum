@@ -52,6 +52,10 @@ enum GameScreen {
 
   /// Every drill the player owns, and where they are upgraded.
   upgrades(NavSection.extraction, 'Бури', Ic.drills),
+
+  /// The AI automating itself: hands, the drill, hands that swing on
+  /// their own. The ladder's readout, and later its purchases.
+  automation(NavSection.extraction, 'Автоматизація', Ic.automation),
   planets(NavSection.extraction, 'Планети', Ic.planets),
 
   /// Selling what the shaft brings up. First in the section because it is
@@ -146,6 +150,7 @@ bool screenNeedsAttention(GameScreen screen, Game game) => switch (screen) {
   GameScreen.simulation =>
     game.sim.pendingCollapses(DateTime.now().millisecondsSinceEpoch) > 0,
   GameScreen.upgrades => game.hasNewDrillUpgrades,
+  GameScreen.automation => game.hasNewAutomation,
   GameScreen.strikes => ArmPart.values.any(
     (part) => game.sim.canUpgrade(part) || game.sim.canEvolve(part),
   ),

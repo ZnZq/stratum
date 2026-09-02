@@ -252,7 +252,7 @@ void main() {
     });
 
     test('a save from before the peaks trusts where the part stands', () {
-      final sim = PrototypeSimulation()
+      final sim = PrototypeSimulation.rigged()
         ..readJson({
           'arm': {'bit': 240, 'drive': 0, 'supply': 0},
         });
@@ -265,7 +265,7 @@ void main() {
     });
 
     test('a mark above its level threshold melts to the walked one', () {
-      final sim = PrototypeSimulation()
+      final sim = PrototypeSimulation.rigged()
         ..readJson({
           'arm': {'bit': 300, 'bitMark': 3, 'bitPeak': 0},
         });
@@ -286,7 +286,7 @@ void main() {
       sim.upgrade(ArmPart.bit, levels: 88);
       sim.evolve(ArmPart.bit);
 
-      final restored = PrototypeSimulation()..readJson(sim.toJson());
+      final restored = PrototypeSimulation.rigged()..readJson(sim.toJson());
 
       expect(restored.bitMark.value, 1);
       expect(restored.peakOf(ArmPart.bit).value, 1);

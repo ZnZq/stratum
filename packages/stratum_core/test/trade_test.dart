@@ -5,7 +5,7 @@ void main() {
   const minute = 60 * 1000;
 
   PrototypeSimulation stocked() {
-    final sim = PrototypeSimulation();
+    final sim = PrototypeSimulation.rigged();
     sim.stock.add(ResourceId.regolith, BigDouble.fromNum(1000));
     sim.stock.add(ResourceId.cuprite, BigDouble.fromNum(100));
     return sim;
@@ -113,7 +113,7 @@ void main() {
     );
 
     test('a request never asks for what the run has not seen', () {
-      final sim = PrototypeSimulation();
+      final sim = PrototypeSimulation.rigged();
       // A fresh run holds nothing sellable: no request can be written.
       sim.syncRequests(minute);
       expect(sim.requests, isEmpty);
@@ -135,7 +135,7 @@ void main() {
     sim.syncRequests(minute);
     final json = sim.toJson();
 
-    final back = PrototypeSimulation()..readJson(json);
+    final back = PrototypeSimulation.rigged()..readJson(json);
     expect(back.sellingOf(ResourceId.regolith).value, isFalse);
     expect(back.sellShareOf(ResourceId.cuprite).value, 50);
     expect(back.sellingOf(ResourceId.cuprite).value, isTrue);

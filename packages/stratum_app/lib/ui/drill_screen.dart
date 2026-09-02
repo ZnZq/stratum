@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
 import 'drill/deck.dart';
@@ -29,7 +30,9 @@ class DrillScreen extends StatelessWidget {
           const Positioned.fill(child: ShaftBackdrop()),
           Positioned.fill(child: Rock(game: game)),
           StrikeZone(game: game),
-          Positioned.fill(child: DrillString(game: game)),
+          // The rig hangs over the face only once it is bought.
+          if (game.sim.drillOwned(DrillId.regolith))
+            Positioned.fill(child: DrillString(game: game)),
           Positioned.fill(child: FloatLayer(game: game)),
           Flash(
             trigger: game.breakFlashes,

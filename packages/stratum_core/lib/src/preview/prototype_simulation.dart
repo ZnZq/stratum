@@ -8,6 +8,12 @@ import 'arm_part.dart';
 import 'craft_line.dart';
 import 'acknowledged_clock.dart';
 import 'arm_tracks.dart';
+import 'auto_buyer.dart';
+import 'auto_crafter.dart';
+import 'auto_fulfil.dart';
+import 'auto_seller.dart';
+import 'auto_strike.dart';
+import 'automations.dart';
 import 'collapse_ledger.dart';
 import 'craft_shop.dart';
 import 'drill_bank.dart';
@@ -160,6 +166,11 @@ class PrototypeSimulation {
     _resetLayer();
   }
 
+  /// A run with the drill already granted, for benches that study the
+  /// cycle rather than the ladder. The game itself never starts this way.
+  factory PrototypeSimulation.rigged({int seed = 20260825}) =>
+      PrototypeSimulation(seed: seed)..drillBank.grantRig();
+
   /// Not final: restoring a save swaps in the streams as they stood, so the
   /// rolls carry on from where the player left them rather than replaying the
   /// same sequence from the seed every launch. The setter drops the cached
@@ -201,6 +212,73 @@ class PrototypeSimulation {
     requestRoll: () => random.stream('trade.request'),
   );
   late final CraftShop shop = CraftShop(stock);
+
+  /// What the player has automated; see [Automations]. A fresh run has
+  /// nothing -- the rig is the first purchase.
+  late final Automations automations = Automations(stock);
+
+  Signal<bool> automationUnlockedOf(AutomationId id) =>
+      automations.unlockedOf(id);
+  bool canUnlockAutomation(AutomationId id) => automations.canUnlock(id);
+  bool unlockAutomation(AutomationId id) => batch(() => automations.unlock(id));
+
+  /// The automations themselves, each its own object with its own
+  /// settings and save section. They run from [syncAutomations] once a
+  /// batch, ONLINE ONLY (owner, 2026-09-02): an absence runs none and
+  /// their intervals restart on return.
+  late final AutoStrike autoStrike = AutoStrike();
+  late final AutoSeller autoSeller = AutoSeller(stock, desk);
+  late final AutoFulfil autoFulfil = AutoFulfil(stock, desk);
+  late final AutoCrafter autoCrafter = AutoCrafter(stock, shop, desk);
+  late final AutoBuyer autoBuyer = AutoBuyer([
+    for (final part in ArmPart.values)
+      AutoBuyTarget(
+        key: autoBuyArmKey(part),
+        canBuy: () => canUpgrade(part),
+        buy: () => upgrade(part) > 0,
+      ),
+    for (final row in drillTable)
+      for (final part in DrillPart.values)
+        AutoBuyTarget(
+          key: autoBuyDrillKey(row.id, part),
+          canBuy: () => canUpgradeDrill(row.id, part),
+          buy: () => upgradeDrill(row.id, part) > 0,
+        ),
+  ]);
+
+  static String autoBuyArmKey(ArmPart part) => 'arm.${part.name}';
+  static String autoBuyDrillKey(DrillId id, DrillPart part) =>
+      'drill.${id.name}.${part.name}';
+
+  /// The last acknowledged stamp the automations ran to; -1 = never.
+  int automationLastSeenMs = -1;
+
+  /// Runs every unlocked automation over the wall time since the last
+  /// call. Returns how many auto-strikes fell due: the app throws them
+  /// through its own strike path, so they shake and flash like a
+  /// finger's.
+  int syncAutomations(int nowMs) {
+    observeWall(nowMs);
+    final seen = wallSeenMs;
+    if (automationLastSeenMs < 0) {
+      automationLastSeenMs = seen;
+      return 0;
+    }
+    final span = (seen - automationLastSeenMs) / 1000.0;
+    automationLastSeenMs = seen;
+    if (span <= 0) return 0;
+    var strikes = 0;
+    batch(() {
+      if (automations.has(AutomationId.autoSell)) autoSeller.run(span);
+      if (automations.has(AutomationId.autoRequests)) autoFulfil.run();
+      if (automations.has(AutomationId.autoBuy)) autoBuyer.run(span);
+      if (automations.has(AutomationId.autoCraft)) autoCrafter.run();
+      if (automations.has(AutomationId.autoHands)) {
+        strikes = autoStrike.due(span);
+      }
+    });
+    return strikes;
+  }
 
   Signal<BigDouble> get regolith => stock.signal(ResourceId.regolith);
   Signal<BigDouble> get crystals => stock.signal(ResourceId.crystals);
@@ -314,7 +392,13 @@ class PrototypeSimulation {
   /// ceiling stays what it is -- the length of a burst.
   int get energyPerRegen => 1;
 
-  double get energySeconds => arm.energySeconds.value;
+  /// The wait between two points of energy, stretched by the auto-hands
+  /// penalty while they run.
+  double get energySeconds =>
+      arm.energySeconds.value *
+      (automations.has(AutomationId.autoHands)
+          ? autoStrike.regenSlowdown.value
+          : 1.0);
 
   /// What one unupgraded drill delivers per cycle.
   static const double basePerDrillPower = 10;
@@ -515,6 +599,10 @@ class PrototypeSimulation {
     }
     craftLastSeenMs = wallSeenMs;
     replicatorLastSeenMs = wallSeenMs;
+    automationLastSeenMs = wallSeenMs;
+    autoStrike.restamp();
+    autoSeller.restamp();
+    autoBuyer.restamp();
     if (merged.isEmpty) return OfflineGain.none;
     return OfflineGain(
       seconds: seconds,
@@ -618,6 +706,10 @@ class PrototypeSimulation {
   /// forward to it so every screen and test keeps one address.
   late final DrillBank drillBank = DrillBank(stock);
 
+  BigDouble get rigCost => DrillBank.rigCost;
+  bool get canBuyRig => drillBank.canBuyRig;
+  bool buyRig() => batch(() => drillBank.buyRig());
+
   static const double drillRadiusBase = DrillBank.drillRadiusBase;
   static const double drillRadiusPerLevel = DrillBank.drillRadiusPerLevel;
   static const double drillSpeedStep = DrillBank.drillSpeedStep;
@@ -682,8 +774,10 @@ class PrototypeSimulation {
   /// keep up with its own drills would make the manual lane noise by the
   /// second stratum.
   BigDouble strikePowerAt(int level) {
-    final scaled = power.value * BigDouble.fromNum(strikeShareOfRig);
     final own = armPowerAt(level);
+    // No rig to lean on before the drill is bought: the arm swings alone.
+    if (!drillOwned(DrillId.regolith)) return own;
+    final scaled = power.value * BigDouble.fromNum(strikeShareOfRig);
     return scaled > own ? scaled : own;
   }
 
@@ -770,7 +864,7 @@ class PrototypeSimulation {
   }) {
     final perStrike = expectedPerStrike(id);
     final byHand = perStrike * BigDouble.fromNum(energyPerSecond / strikeCost);
-    if (cycleSeconds <= 0) return byHand;
+    if (cycleSeconds <= 0 || !drillOwned(DrillId.regolith)) return byHand;
     final byRig =
         (expectedPerCycle(id) + perStrike) / BigDouble.fromNum(cycleSeconds);
     return byHand + byRig;
@@ -871,6 +965,9 @@ class PrototypeSimulation {
   }
 
   CycleOutcome _cycle(int chain) {
+    // No rig, no cycle: until the drill is bought the face is dug by
+    // hand alone, and the engine's ticks pass through empty.
+    if (!drillOwned(DrillId.regolith)) return CycleOutcome.none;
     // The cycle is damage plus THE SAME strike a click throws -- same
     // table, same odds, same amounts, and by the REAL strike's rules:
     // the drill's multiplier never touches strike loot (owner,
@@ -1235,6 +1332,14 @@ class PrototypeSimulation {
     'data': ledger.toJson(),
     'energy': energy.value,
     'bores': drillBank.toJson(),
+    'automation': {
+      ...automations.toJson(),
+      if (autoStrike.toJson().isNotEmpty) 'strike': autoStrike.toJson(),
+      if (autoSeller.toJson().isNotEmpty) 'sell': autoSeller.toJson(),
+      if (autoFulfil.toJson().isNotEmpty) 'req': autoFulfil.toJson(),
+      if (autoBuyer.toJson().isNotEmpty) 'buy': autoBuyer.toJson(),
+      if (autoCrafter.toJson().isNotEmpty) 'craft': autoCrafter.toJson(),
+    },
     'arm': arm.toJson(),
     'tree': {
       if (powerLevel.value != 0) 'power': powerLevel.value,
@@ -1276,6 +1381,14 @@ class PrototypeSimulation {
     collapses.value = _readInt(json['collapses'], 0);
     servers.value = _readInt(json['servers'], 1).clamp(1, maxPendingCollapses);
     ledger.readJson(json['data']);
+    final automation = json['automation'];
+    automations.readJson(automation);
+    autoStrike.readJson(automation is Map ? automation['strike'] : null);
+    autoSeller.readJson(automation is Map ? automation['sell'] : null);
+    autoFulfil.readJson(automation is Map ? automation['req'] : null);
+    autoBuyer.readJson(automation is Map ? automation['buy'] : null);
+    autoCrafter.readJson(automation is Map ? automation['craft'] : null);
+    automationLastSeenMs = -1;
     drillBank.readJson(json['bores']);
     arm.readJson(json['arm']);
     energy.value = _readInt(json['energy'], energyCap).clamp(0, energyCap);

@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 void main() {
   group('structural damage', () {
     test('a blow collapses a share of the structure still standing', () {
-      final sim = PrototypeSimulation(seed: 3);
+      final sim = PrototypeSimulation.rigged(seed: 3);
       // The share is earned: give the arm the drive levels that buy it.
       sim.driveLevel.value = 20;
       final wall = BigDouble.fromNum(1e18);
@@ -27,7 +27,7 @@ void main() {
     });
 
     test('the drill cycle throws a full strike, damage included', () {
-      final sim = PrototypeSimulation(seed: 5);
+      final sim = PrototypeSimulation.rigged(seed: 5);
       sim.driveLevel.value = 20;
       final wall = BigDouble.fromNum(1e18);
       sim.layerHp.value = wall;
@@ -49,7 +49,7 @@ void main() {
     });
 
     test('hits to break follows the geometric shrink', () {
-      final sim = PrototypeSimulation();
+      final sim = PrototypeSimulation.rigged();
       sim.driveLevel.value = 20;
       final overmatch = 1e6;
       final wall = sim.strikePower * BigDouble.fromNum(overmatch);

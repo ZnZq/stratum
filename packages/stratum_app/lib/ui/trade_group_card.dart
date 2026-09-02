@@ -6,6 +6,10 @@ import 'resource_style.dart';
 import 'tokens.dart';
 import 'resource_icon.dart';
 
+import 'dart:math' as math;
+
+import 'clock_text.dart';
+
 /// The manual sale, filling whatever the share picker leaves.
 ///
 /// The figure changes every tick, and a button sized by its own label would
@@ -41,66 +45,6 @@ class _SellButton extends StatelessWidget {
 
 /// Whether the sweep takes this position. Off is a routing choice, not a
 /// state of the position -- the row around it keeps full colour.
-class _Toggle extends StatelessWidget {
-  const _Toggle({required this.on, required this.onTap, this.label});
-
-  final bool on;
-  final VoidCallback onTap;
-
-  /// What the switch routes, said beside it: a bare toggle in a card full
-  /// of controls does not say which of them it governs.
-  final String? label;
-
-  @override
-  Widget build(BuildContext context) {
-    // The knob is chamfered like its track and inset from the corners: a
-    // square knob flush against the cut read as sticking out of the shape.
-    final track = HudPlate(
-      cut: 5,
-      fill: on ? Palette.goldWell : Palette.shell,
-      edge: on ? Palette.amber : Palette.lineBar,
-      padding: const EdgeInsets.all(3),
-      child: SizedBox(
-        width: 28,
-        height: 12,
-        child: AnimatedAlign(
-          duration: const Duration(milliseconds: 110),
-          alignment: on ? Alignment.centerRight : Alignment.centerLeft,
-          child: HudPlate(
-            cut: 3.5,
-            fill: on ? Palette.gold : Palette.line,
-            child: const SizedBox(width: 11, height: 11),
-          ),
-        ),
-      ),
-    );
-    return HudTap(
-      onTap: onTap,
-      // The film would flood the caption beside the track too; the cursor
-      // already answers hover, and the knob answers the tap.
-      wash: false,
-      child: label == null
-          ? track
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label!.toUpperCase(),
-                  style: AppText.body(
-                    8,
-                    weight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                    color: on ? Palette.gold : Palette.textFaint,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                track,
-              ],
-            ),
-    );
-  }
-}
-
 class _SharePicker extends StatelessWidget {
   const _SharePicker({
     required this.sim,
@@ -184,7 +128,7 @@ class GroupCard extends StatelessWidget {
               const Spacer(),
               // The shelf's own switch: it does NOT rewrite what each
               // position chose, so flipping it back restores the set-up.
-              _Toggle(
+              HudToggle(
                 label: 'вся група',
                 on: group.value,
                 onTap: () => onChange(() => group.value = !group.value),
@@ -195,7 +139,7 @@ class GroupCard extends StatelessWidget {
           Row(
             children: [
               const Spacer(),
-              _Toggle(
+              HudToggle(
                 label: 'в продаж',
                 on: selling,
                 onTap: () =>
@@ -253,6 +197,12 @@ class GroupCard extends StatelessWidget {
               ),
             ],
           ),
+          if (sim.automations.has(AutomationId.autoSell)) ...[
+            const SizedBox(height: 8),
+            const HudRule(),
+            const SizedBox(height: 8),
+            _AutoSellRow(sim: sim, id: picked, onChange: onChange),
+          ],
           const SizedBox(height: 10),
           Row(
             children: [
@@ -285,6 +235,130 @@ class GroupCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The position's auto-sale: its switch, its interval, and the floor it
+/// never sells below. The SHARE is the picker above -- one notch for
+/// the finger and the automation alike.
+class _AutoSellRow extends StatelessWidget {
+  const _AutoSellRow({
+    required this.sim,
+    required this.id,
+    required this.onChange,
+  });
+
+  final PrototypeSimulation sim;
+  final ResourceId id;
+  final ValueChanged<VoidCallback> onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final rule = sim.autoSeller.ruleOf(id);
+    final on = rule.enabled.value;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            HudToggle(
+              label: 'авто',
+              on: on,
+              onTap: () => onChange(() => rule.enabled.value = !on),
+            ),
+            const Spacer(),
+            HudChoice<double>(
+              options: [
+                for (final seconds in automationIntervals)
+                  (seconds, intervalText(seconds)),
+              ],
+              value: rule.intervalSeconds.value,
+              onPick: (seconds) =>
+                  onChange(() => rule.intervalSeconds.value = seconds),
+              cut: 5,
+              padding: const EdgeInsets.fromLTRB(6, 4, 6, 5),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Text(
+              'НЕ НИЖЧЕ',
+              style: AppText.body(
+                8,
+                weight: FontWeight.w700,
+                letterSpacing: 1.2,
+                color: on ? Palette.gold : Palette.textFaint,
+              ),
+            ),
+            const Spacer(),
+            _KeepStepper(
+              value: rule.keep.value,
+              onChange: (value) => onChange(() => rule.keep.value = value),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// A floor set by magnitude: a step is one unit of the value's own
+/// decade, and the outer buttons jump a decade at a time -- a pile of
+/// ten thousand and a pile of five are set with the same four keys.
+class _KeepStepper extends StatelessWidget {
+  const _KeepStepper({required this.value, required this.onChange});
+
+  final BigDouble value;
+  final ValueChanged<BigDouble> onChange;
+
+  BigDouble get _step {
+    if (value.isZero) return BigDouble.one;
+    final decade = (value.ln() / math.ln10).floorToDouble();
+    return BigDouble.fromNum(10).pow(decade);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ten = BigDouble.fromNum(10);
+    Widget key(String label, BigDouble Function() next) => HudButton(
+      onTap: () => onChange(next()),
+      holdRepeat: true,
+      padding: const EdgeInsets.fromLTRB(7, 3, 7, 4),
+      child: Text(
+        label,
+        style: AppText.display(8, weight: FontWeight.w700, color: Palette.gold),
+      ),
+    );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        key('÷10', () => value < ten ? BigDouble.zero : value / ten),
+        const SizedBox(width: 3),
+        key('−', () {
+          final next = value - _step;
+          return next < BigDouble.zero ? BigDouble.zero : next;
+        }),
+        const SizedBox(width: 6),
+        SizedBox(
+          width: 54,
+          child: Text(
+            '$value',
+            textAlign: TextAlign.center,
+            style: AppText.display(
+              10,
+              weight: FontWeight.w700,
+              color: Palette.text,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        key('+', () => value + _step),
+        const SizedBox(width: 3),
+        key('×10', () => value.isZero ? ten : value * ten),
+      ],
     );
   }
 }
