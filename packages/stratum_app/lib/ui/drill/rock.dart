@@ -86,11 +86,13 @@ class Rock extends StatelessWidget {
                               hpFraction: hpFraction,
                             ),
                           )
+                        // Only the face being dug shows damage; the rest
+                        // must not reconfigure on every hit.
                         : LayerTile(
                             layer: i,
                             isCurrent: false,
                             isPast: i < current,
-                            hpFraction: hpFraction,
+                            hpFraction: 1,
                           ),
                   ),
               ],

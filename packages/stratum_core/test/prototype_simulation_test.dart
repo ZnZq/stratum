@@ -3,20 +3,14 @@ import 'dart:convert';
 import 'package:stratum_core/stratum_core.dart';
 import 'package:test/test.dart';
 
-String _json(Object? value) => jsonEncode(value);
+import 'support/sim_fixtures.dart';
 
-PrototypeSimulation _played(int cycles) {
-  final sim = PrototypeSimulation();
-  for (var i = 0; i < cycles; i++) {
-    sim.tick();
-  }
-  return sim;
-}
+String _json(Object? value) => jsonEncode(value);
 
 void main() {
   group('saving a run', () {
     test('carries depth, holdings and the damage on the current layer', () {
-      final sim = _played(40)..buyDrill();
+      final sim = played(40)..drills.value = 2;
 
       final restored = PrototypeSimulation()..readJson(sim.toJson());
 
@@ -35,7 +29,7 @@ void main() {
     });
 
     test('the rolls carry on instead of replaying from the seed', () {
-      final sim = _played(20);
+      final sim = played(20);
       final restored = PrototypeSimulation()..readJson(sim.toJson());
 
       final expected = [
@@ -55,7 +49,7 @@ void main() {
     });
 
     test('layer hp maximum is recomputed rather than read back', () {
-      final sim = _played(30);
+      final sim = played(30);
       final tampered = Map<String, Object?>.from(sim.toJson());
       tampered['layerHp'] = BigDouble.fromNum(1e9).toJson();
 
@@ -110,15 +104,13 @@ void main() {
 
       final outcome = sim.strike();
 
-      final critMax =
-          max * BigDouble.fromNum(PrototypeSimulation.strikeCritPower);
       expect(
         outcome.regolithGained.gteWithTolerance(min) &&
-            critMax.gteWithTolerance(outcome.regolithGained),
+            max.gteWithTolerance(outcome.regolithGained),
         isTrue,
         reason:
             'the haul is a roll, but only ever inside the band the loot '
-            'table promises, stretched at most by one crit',
+            'table promises -- a crit scales the blow, never the haul',
       );
       expect(
         sim.regolith.value >= before + min,
@@ -170,7 +162,7 @@ void main() {
 
   group('an absence', () {
     test('pays a share of the live rate and leaves depth alone', () {
-      final sim = _played(30);
+      final sim = played(30);
       final layerBefore = sim.layer.value;
       final oreBefore = sim.regolith.value;
       final rate = sim.yieldPerSecond(
@@ -206,7 +198,7 @@ void main() {
     });
 
     test('is exactly the offline share of the same span played', () {
-      final sim = _played(30);
+      final sim = played(30);
       const seconds = 900.0;
 
       final gain = sim.claimOffline(
@@ -232,7 +224,7 @@ void main() {
     });
 
     test('a still hand while away is paid as the rig alone', () {
-      final sim = _played(30);
+      final sim = played(30);
 
       final idle = sim.claimOffline(
         seconds: 400,
@@ -252,8 +244,8 @@ void main() {
     });
 
     test('does not touch the roll streams', () {
-      final mirror = _played(20);
-      final away = _played(20)
+      final mirror = played(20);
+      final away = played(20)
         ..claimOffline(seconds: 20000, energyPerSecond: 6, cycleSeconds: 4);
 
       final expected = [for (var i = 0; i < 8; i++) mirror.tick().critical];
@@ -269,7 +261,7 @@ void main() {
     });
 
     test('no time away pays nothing', () {
-      final sim = _played(10);
+      final sim = played(10);
       final before = '${sim.regolith.value}';
 
       expect(
@@ -306,7 +298,7 @@ void main() {
         ],
       );
 
-      final aged = _played(15);
+      final aged = played(15);
       final v1Run = Map<String, Object?>.from(aged.toJson());
       final v1Stock = Map<String, Object?>.from(v1Run['stock']! as Map);
       v1Stock['ore'] = v1Stock.remove('regolith');
@@ -323,7 +315,7 @@ void main() {
   group('the save document', () {
     test('a run survives the codec, not just the map', () {
       final codec = SaveCodec(currentVersion: 1);
-      final sim = _played(25);
+      final sim = played(25);
 
       final wire = codec.encode(
         SaveDocument(version: 1, sections: {'run': sim.toJson()}),

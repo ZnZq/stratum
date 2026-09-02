@@ -47,7 +47,10 @@ class _CraftScreenState extends State<CraftScreen> {
 
   void _sync() {
     widget.game.sim.syncCraft(DateTime.now().millisecondsSinceEpoch);
-    widget.game.pokeListeners();
+    // The second-by-second settle is this screen's own news: rebuild it,
+    // not the whole shell. Stock that moved reaches every other reader
+    // through the stockpile watch.
+    if (mounted) setState(() {});
   }
 
   void _poke(VoidCallback act) {

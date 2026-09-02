@@ -8,6 +8,7 @@ import 'trade_group_card.dart';
 import 'trade_request_card.dart';
 import 'hud.dart';
 import 'tokens.dart';
+import 'clock_text.dart';
 
 /// The two rooms of the trade post.
 enum TradeMode { sell, requests }
@@ -208,7 +209,7 @@ class _TradeScreenState extends State<TradeScreen> {
                 label: 'новий через',
                 align: CrossAxisAlignment.end,
                 corners: const HudCorners(topRight: true),
-                value: _clockText(until),
+                value: mmssClock(until),
                 size: 17,
                 accent: Palette.steel,
                 colour: Palette.steel,
@@ -242,13 +243,5 @@ class _TradeScreenState extends State<TradeScreen> {
         ),
       ],
     );
-  }
-
-  static String _clockText(int ms) {
-    if (ms <= 0) return '0:00';
-    final seconds = (ms / 1000).ceil();
-    final minutes = seconds ~/ 60;
-    final rest = seconds % 60;
-    return '$minutes:${rest.toString().padLeft(2, '0')}';
   }
 }

@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import '../game.dart';
@@ -12,6 +11,9 @@ import 'drill/crack_painter.dart';
 import 'drill/stone_painter.dart';
 import 'drill/shaft.dart';
 import 'tokens.dart';
+import 'frame_clock.dart';
+import 'drill/face_backdrop.dart';
+import 'easing.dart';
 
 /// The manipulator arm at work, with its three upgradeable parts called out.
 ///
@@ -49,17 +51,13 @@ typedef ArmBeat = ({
 });
 
 class _ArmDiagramState extends State<ArmDiagram>
-    with SingleTickerProviderStateMixin {
-  late final Ticker _ticker;
-
+    with SingleTickerProviderStateMixin, FrameClock {
   final ValueNotifier<ArmBeat> _beat = ValueNotifier((plunge: 0.0));
 
   /// Handed straight to the rig's own bit painter, which reads them as the
   /// flutes' phase and as how hard the head is working.
   final ValueNotifier<double> _flutes = ValueNotifier(0);
   final ValueNotifier<double> _heat = ValueNotifier(0);
-
-  Duration _lastFrame = Duration.zero;
 
   /// Seconds into the stroke, wrapping at [_period].
   double _clock = 0;
@@ -74,14 +72,7 @@ class _ArmDiagramState extends State<ArmDiagram>
   static const double _period = 3.2;
 
   @override
-  void initState() {
-    super.initState();
-    _ticker = createTicker(_onFrame)..start();
-  }
-
-  void _onFrame(Duration elapsed) {
-    final delta = clampFrameDelta(elapsed - _lastFrame).inMicroseconds / 1e6;
-    _lastFrame = elapsed;
+  void onFrame(double delta, Duration raw) {
     _clock = (_clock + delta) % _period;
 
     final working = _clock >= _liftEnd && _clock < _workEnd;
@@ -104,25 +95,22 @@ class _ArmDiagramState extends State<ArmDiagram>
   /// Zero is the arm at rest, holding the bit clear of the face; the stroke
   /// lifts a little further first and then drives past the rock line.
   double _plungeAt(double t) {
-    if (t < _liftEnd) return _ease(t / _liftEnd) * -6;
+    if (t < _liftEnd) return smoothStep(t / _liftEnd) * -6;
     if (t < _driveEnd) {
-      return -6 + _ease((t - _liftEnd) / (_driveEnd - _liftEnd)) * 20;
+      return -6 + smoothStep((t - _liftEnd) / (_driveEnd - _liftEnd)) * 20;
     }
     if (t < _workEnd) {
       // A blow is not one push: the head hammers where it stands.
       return 14 + math.sin((t - _driveEnd) * 46) * 1.1;
     }
     if (t < _withdrawEnd) {
-      return 14 - _ease((t - _workEnd) / (_withdrawEnd - _workEnd)) * 14;
+      return 14 - smoothStep((t - _workEnd) / (_withdrawEnd - _workEnd)) * 14;
     }
     return 0;
   }
 
-  static double _ease(double t) => t * t * (3 - 2 * t);
-
   @override
   void dispose() {
-    _ticker.dispose();
     _beat.dispose();
     _flutes.dispose();
     _heat.dispose();
@@ -241,37 +229,14 @@ class _ArmPainter extends CustomPainter {
   /// The face is the mine's own layer: the stratum's gradient, then the
   /// texture and the ore [StonePainter] salts it with.
   void _paintFace(Canvas canvas, double bottom) {
-    // Run the face a little past the bottom of the band: a fraction of a
-    // pixel of rounding must never read as a gap under the rock.
-    final band = Rect.fromLTWH(
-      0,
-      _faceTop,
-      _designWidth,
-      bottom - _faceTop + 6,
-    );
-    canvas.drawRect(
-      band,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: Strata.fillFor(layer),
-        ).createShader(band),
-    );
-
-    canvas.save();
-    canvas.translate(0, _faceTop);
-    canvas.clipRect(Rect.fromLTWH(0, 0, _designWidth, band.height));
-    _stones.paint(canvas, Size(_designWidth, band.height));
-    _cracks.paint(canvas, Size(_designWidth, band.height));
-    canvas.restore();
-
-    canvas.drawLine(
-      const Offset(0, _faceTop),
-      const Offset(_designWidth, _faceTop),
-      Paint()
-        ..color = const Color(0x33A8C4E0)
-        ..strokeWidth = 1,
+    paintFaceBand(
+      canvas,
+      top: _faceTop,
+      bottom: bottom,
+      width: _designWidth,
+      layer: layer,
+      stones: _stones,
+      cracks: _cracks,
     );
   }
 

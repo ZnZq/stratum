@@ -22,9 +22,8 @@ class CraftRecipe {
   final double baseSeconds;
 
   /// Output units per craft at level 0; level t multiplies by
-  /// [craftYieldStep]^t, and the duplicate chance rides on top as an
-  /// expectation (the conversion is continuous, so a discrete roll would
-  /// break offline parity).
+  /// [craftYieldStep]^t. The duplicate is a real roll per unit on top
+  /// of this, never folded into the figure.
   final double baseYield;
 }
 
@@ -125,6 +124,22 @@ const double craftSpeedStep = 0.05;
 
 double craftSpeedAt(int level) =>
     math.pow(1 + craftSpeedStep, level).toDouble();
+
+/// The tier maths in ONE place: the line, the picker and every readout
+/// quote these, never a `pow` of their own (rule ten -- a button cites
+/// the mechanic's formula from one home).
+double craftUnitsAt(CraftRecipe recipe, int tier) =>
+    recipe.baseYield * math.pow(craftYieldStep, tier);
+
+double craftCostScaleAt(int tier) => math.pow(craftCostStep, tier).toDouble();
+
+double craftTimeScaleAt(int tier) => math.pow(craftTimeStep, tier).toDouble();
+
+/// Seconds per craft at [tier] and [speed], never under the floor.
+double craftSecondsAt(CraftRecipe recipe, int tier, double speed) {
+  final raw = recipe.baseSeconds * craftTimeScaleAt(tier) / speed;
+  return raw < craftMinSeconds ? craftMinSeconds : raw;
+}
 
 /// The warm-up, counted in whole STACKS: every finished unit has this
 /// chance to add one, each stack is +[craftBoostStep] craft speed, and the

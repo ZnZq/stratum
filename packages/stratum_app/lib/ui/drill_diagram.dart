@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
@@ -13,7 +12,9 @@ import 'drill/crack_painter.dart';
 import 'drill/stone_painter.dart';
 import 'drill/shaft.dart';
 import 'resource_style.dart';
-import 'tokens.dart';
+import 'frame_clock.dart';
+import 'drill/face_backdrop.dart';
+import 'easing.dart';
 
 /// One drill at work, with the face it covers drawn under it.
 ///
@@ -49,9 +50,7 @@ class DrillDiagram extends StatefulWidget {
 typedef DrillBeat = ({double plunge, double sweep});
 
 class _DrillDiagramState extends State<DrillDiagram>
-    with SingleTickerProviderStateMixin {
-  late final Ticker _ticker;
-
+    with SingleTickerProviderStateMixin, FrameClock {
   final ValueNotifier<DrillBeat> _beat = ValueNotifier((
     plunge: 0.0,
     sweep: 0.0,
@@ -59,7 +58,6 @@ class _DrillDiagramState extends State<DrillDiagram>
   final ValueNotifier<double> _flutes = ValueNotifier(0);
   final ValueNotifier<double> _heat = ValueNotifier(0);
 
-  Duration _lastFrame = Duration.zero;
   double _clock = 0;
   double _spin = 0;
 
@@ -72,14 +70,7 @@ class _DrillDiagramState extends State<DrillDiagram>
   static const double _period = 3.6;
 
   @override
-  void initState() {
-    super.initState();
-    _ticker = createTicker(_onFrame)..start();
-  }
-
-  void _onFrame(Duration elapsed) {
-    final delta = clampFrameDelta(elapsed - _lastFrame).inMicroseconds / 1e6;
-    _lastFrame = elapsed;
+  void onFrame(double delta, Duration raw) {
     _clock = (_clock + delta) % _period;
 
     final working = _clock < _workEnd;
@@ -95,7 +86,7 @@ class _DrillDiagramState extends State<DrillDiagram>
   }
 
   double _plungeAt(double t) {
-    if (t < _driveEnd) return _ease(t / _driveEnd) * 14;
+    if (t < _driveEnd) return smoothStep(t / _driveEnd) * 14;
     if (t < _workEnd) {
       // It does not hold still while it cuts: the string creeps down as the
       // face gives, which is what a bore looks like from the side.
@@ -103,16 +94,13 @@ class _DrillDiagramState extends State<DrillDiagram>
       return 14 + into * 4 + math.sin(t * 34) * 0.7;
     }
     if (t < _withdrawEnd) {
-      return 18 * (1 - _ease((t - _workEnd) / (_withdrawEnd - _workEnd)));
+      return 18 * (1 - smoothStep((t - _workEnd) / (_withdrawEnd - _workEnd)));
     }
     return 0;
   }
 
-  static double _ease(double t) => t * t * (3 - 2 * t);
-
   @override
   void dispose() {
-    _ticker.dispose();
     _beat.dispose();
     _flutes.dispose();
     _heat.dispose();
@@ -205,35 +193,14 @@ class _DrillPainter extends CustomPainter {
   }
 
   void _paintFace(Canvas canvas, double bottom) {
-    final band = Rect.fromLTWH(
-      0,
-      _faceTop,
-      _designWidth,
-      bottom - _faceTop + 6,
-    );
-    canvas.drawRect(
-      band,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: Strata.fillFor(layer),
-        ).createShader(band),
-    );
-
-    canvas.save();
-    canvas.translate(0, _faceTop);
-    canvas.clipRect(Rect.fromLTWH(0, 0, _designWidth, band.height));
-    _stones.paint(canvas, Size(_designWidth, band.height));
-    _cracks.paint(canvas, Size(_designWidth, band.height));
-    canvas.restore();
-
-    canvas.drawLine(
-      const Offset(0, _faceTop),
-      const Offset(_designWidth, _faceTop),
-      Paint()
-        ..color = const Color(0x33A8C4E0)
-        ..strokeWidth = 1,
+    paintFaceBand(
+      canvas,
+      top: _faceTop,
+      bottom: bottom,
+      width: _designWidth,
+      layer: layer,
+      stones: _stones,
+      cracks: _cracks,
     );
   }
 

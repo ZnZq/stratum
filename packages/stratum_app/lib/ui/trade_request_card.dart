@@ -6,6 +6,7 @@ import 'hud.dart';
 import 'resource_style.dart';
 import 'tokens.dart';
 import 'resource_icon.dart';
+import 'clock_text.dart';
 
 /// One posted request: its shopping list with stock bars, its payout, and
 /// the time it has left.
@@ -66,7 +67,7 @@ class RequestCard extends StatelessWidget {
                     child: Transform.translate(
                       offset: const Offset(0, 0.8),
                       child: Text(
-                        _left(left),
+                        mmssClock(left),
                         style: AppText.display(
                           8.5,
                           weight: FontWeight.w700,
@@ -145,12 +146,6 @@ class RequestCard extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  static String _left(int ms) {
-    if (ms <= 0) return '0:00';
-    final seconds = (ms / 1000).ceil();
-    return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
   }
 }
 

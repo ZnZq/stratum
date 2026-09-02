@@ -10,6 +10,7 @@ import 'hud.dart';
 import 'navigation.dart';
 import 'server_rack.dart';
 import 'tokens.dart';
+import 'clock_text.dart';
 
 /// The Data Centre: the machine the digging is FOR.
 ///
@@ -20,19 +21,6 @@ import 'tokens.dart';
 ///
 /// One surface, like the rest of the game: the racks run edge to edge, the
 /// readouts sit over their floor, and nothing below is boxed.
-/// The simulation's internal age, precise to the second: a day count
-/// when there is one, then a running h:mm:ss clock.
-String _simClock(double seconds) {
-  final whole = seconds.floor();
-  final d = whole ~/ 86400;
-  final h = (whole % 86400) ~/ 3600;
-  final m = (whole % 3600) ~/ 60;
-  final sec = whole % 60;
-  String two(int v) => v.toString().padLeft(2, '0');
-  final clock = '$h:${two(m)}:${two(sec)}';
-  return d > 0 ? '$dд $clock' : clock;
-}
-
 /// The internal-time plate with its own second hand: the screen rebuilds
 /// on drill batches, and a to-the-second clock cannot wait for them.
 class _SimClockStat extends StatefulWidget {
@@ -69,7 +57,7 @@ class _SimClockStatState extends State<_SimClockStat> {
       label: 'час симуляції',
       align: CrossAxisAlignment.end,
       corners: const HudCorners(bottomRight: true),
-      value: _simClock(
+      value: simClock(
         widget.sim.simSeconds(DateTime.now().millisecondsSinceEpoch),
       ),
       size: SimulationScreen._figure,

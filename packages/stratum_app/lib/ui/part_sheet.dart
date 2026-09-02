@@ -6,6 +6,7 @@ import 'hud.dart';
 import 'arm_style.dart';
 import 'mark_glyph.dart';
 import 'tokens.dart';
+import 'buff_line.dart';
 
 /// One part of the arm, generation by generation.
 ///
@@ -198,35 +199,10 @@ class _Generation extends StatelessWidget {
                   )
                 else
                   for (final buff in opened)
-                    HudRow(
-                      margin: const EdgeInsets.only(bottom: 2),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Text(
-                            buff.label,
-                            style: AppText.body(10, color: Palette.textDim),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            buff.step,
-                            style: AppText.display(
-                              9.5,
-                              color: Palette.textFaint,
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            buff.total(sim),
-                            style: AppText.display(
-                              10.5,
-                              weight: FontWeight.w700,
-                              color: Palette.gold,
-                            ),
-                          ),
-                        ],
-                      ),
+                    BuffLine(
+                      buff: buff,
+                      stepColour: Palette.textFaint,
+                      total: buff.total(sim),
                     ),
               ],
             ),

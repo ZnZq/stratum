@@ -55,8 +55,8 @@ class LootTable extends StatelessWidget {
                 ResourcePlate(
                   id: ResourceId.regolith,
                   amount:
-                      '${sim.strikeRegolithMin * sim.fundScaleOf(ResourceId.regolith)}'
-                      ' – ${sim.strikeRegolithMax * sim.fundScaleOf(ResourceId.regolith)}',
+                      '${sim.strikeRegolithBand.min}'
+                      ' – ${sim.strikeRegolithBand.max}',
                   width: constraints.maxWidth,
                   shadows: true,
                 ),

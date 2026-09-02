@@ -27,10 +27,9 @@ class BlowSummary extends StatelessWidget {
             corners: const HudCorners(topLeft: true, bottomLeft: true),
             accent: Palette.gold,
             // One Text.rich, one line: the share sits BESIDE the figure
-            // (owner). Three decimals, so the sum visibly equals the
-            // drive's own bonus plus the 0.02% floor every blow carries
-            // -- two decimals rounded it into a number the upgrade
-            // track never mentions.
+            // (owner). Three decimals, so the plate matches the drive's
+            // track digit for digit -- two decimals rounded it into a
+            // number the track never mentions.
             child: Text.rich(
               TextSpan(
                 children: [
@@ -58,7 +57,8 @@ class BlowSummary extends StatelessWidget {
             label: 'реголіт за удар',
             align: CrossAxisAlignment.end,
             corners: const HudCorners(topRight: true, bottomRight: true),
-            value: '${sim.strikeRegolithMin} – ${sim.strikeRegolithMax}',
+            value:
+                '${sim.strikeRegolithBand.min} – ${sim.strikeRegolithBand.max}',
             size: 13,
             accent: Palette.ore,
             colour: Palette.ore,

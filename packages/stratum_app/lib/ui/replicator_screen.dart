@@ -9,6 +9,7 @@ import 'hud.dart';
 import 'resource_icon.dart';
 import 'resource_style.dart';
 import 'tokens.dart';
+import 'phase_servo.dart';
 
 /// The replicators: one machine per crafted resource, each running its
 /// own print CYCLES once calibrated. Rows are READOUTS, not buttons --
@@ -102,8 +103,7 @@ class _ReplicatorRow extends StatelessWidget {
                       TextSpan(
                         children: [
                           TextSpan(
-                            text:
-                                '+${_rate(BigDouble.fromNum(sim.replicatorYieldOf(id) / sim.replicatorSeconds(id)))}',
+                            text: '+${_rate(sim.replicatorPerSecondOf(id))}',
                             style: AppText.display(
                               11,
                               weight: FontWeight.w700,
@@ -206,14 +206,13 @@ class _ReplicatorRow extends StatelessWidget {
     );
   }
 
-  /// The cycle time one speed level from now -- the button's promise.
-  double _nextSeconds(PrototypeSimulation sim) {
-    final paced =
-        sim.replicatorSeconds(id) * PrototypeSimulation.replicatorSpeedDecay;
-    return paced < PrototypeSimulation.replicatorMinSeconds
-        ? PrototypeSimulation.replicatorMinSeconds
-        : paced;
-  }
+  /// The cycle time one speed level from now -- the button's promise,
+  /// from the machine's own formula.
+  double _nextSeconds(PrototypeSimulation sim) =>
+      PrototypeSimulation.replicatorSecondsAt(
+        id,
+        sim.replicatorSpeedOf(id).value + 1,
+      );
 
   /// One icon-and-figure price, the shared word of every button here.
   Widget _price(String figure, ResourceId coin, bool lit, double size) {
@@ -243,6 +242,7 @@ class _ReplicatorRow extends StatelessWidget {
               if (sim.unlockReplicator(id)) game.pokeListeners();
             }
           : null,
+      holdRepeat: true,
       padding: const EdgeInsets.fromLTRB(12, 5, 12, 6),
       child: Center(
         child: Column(
@@ -347,17 +347,14 @@ class _PrinterSceneState extends State<_PrinterScene>
   final ValueNotifier<double> _clock = ValueNotifier(0);
 
   Duration _lastElapsed = Duration.zero;
-  double _phase = 0;
-  double _pendingError = 0;
-  double _lastCore = -1;
+  final PhaseServo _servo = PhaseServo(settleSeconds: 0.5);
   double _flash = 0;
 
   @override
   void initState() {
     super.initState();
     // Mount snaps straight to the core's truth -- no chase on entry.
-    _phase = widget.game.sim.replicatorFractionOf(widget.id).value;
-    _lastCore = _phase;
+    _servo.snap(widget.game.sim.replicatorFractionOf(widget.id).value);
     _ticker = createTicker(_tick);
     if (widget.active) _ticker.start();
   }
@@ -367,8 +364,7 @@ class _PrinterSceneState extends State<_PrinterScene>
     super.didUpdateWidget(oldWidget);
     if (widget.active == oldWidget.active) return;
     if (widget.active) {
-      _phase = widget.game.sim.replicatorFractionOf(widget.id).value;
-      _lastCore = _phase;
+      _servo.snap(widget.game.sim.replicatorFractionOf(widget.id).value);
       _lastElapsed = Duration.zero;
       _ticker.start();
     } else {
@@ -384,37 +380,25 @@ class _PrinterSceneState extends State<_PrinterScene>
   }
 
   void _tick(Duration elapsed) {
-    final raw = (elapsed - _lastElapsed).inMicroseconds / 1e6;
+    final gap = elapsed - _lastElapsed;
     _lastElapsed = elapsed;
+    final raw = gap.inMicroseconds / 1e6;
+    final dt = clampFrameDelta(gap).inMicroseconds / 1e6;
     final sim = widget.game.sim;
-    final seconds = sim.replicatorSeconds(widget.id);
-    final core = sim.replicatorFractionOf(widget.id).value;
-
-    if (raw > 0.25) {
-      // A frame gap (hidden tab, heavy build): snap, never replay.
-      _phase = core;
-      _pendingError = 0;
+    final wrapped = _servo.advance(
+      dt: dt,
+      raw: raw,
+      unitSeconds: sim.replicatorSeconds(widget.id),
+      core: sim.replicatorFractionOf(widget.id).value,
+    );
+    // A frame hole snaps the phase and drops the beat with it: nothing
+    // that nobody watched gets celebrated late.
+    if (raw > _servo.gapSeconds) {
       _flash = 0;
     } else {
-      _phase += raw / seconds;
-      if (core != _lastCore) {
-        // The core settled: bank the wrap-shortest error, bleed later.
-        var error = core - (_phase - _phase.floorToDouble());
-        if (error > 0.5) error -= 1;
-        if (error < -0.5) error += 1;
-        _pendingError = error;
-      }
-      final bleed = math.min(1.0, raw / 0.5);
-      _phase += _pendingError * bleed;
-      _pendingError *= 1 - bleed;
-      if (_phase >= 1) {
-        _phase -= _phase.floorToDouble();
-        _flash = 1;
-      }
-      if (_phase < 0) _phase += 1;
-      _flash = math.max(0, _flash - raw * 2.5);
+      if (wrapped) _flash = 1;
+      _flash = math.max(0, _flash - dt * 2.5);
     }
-    _lastCore = core;
     _clock.value = elapsed.inMicroseconds / 1e6;
   }
 
@@ -426,7 +410,7 @@ class _PrinterSceneState extends State<_PrinterScene>
       child: ValueListenableBuilder<double>(
         valueListenable: _clock,
         builder: (context, time, _) {
-          final p = _phase.clamp(0.0, 1.0);
+          final p = _servo.phase.clamp(0.0, 1.0);
           // The copy sits centred; the head sweeps the WHOLE chamber,
           // floor to ceiling, so the icon prints along the middle leg.
           const bottom = (_side - _icon) / 2;

@@ -40,32 +40,54 @@ class ArmBuff {
 ///
 /// A table rather than a switch: a buff added later -- or a generation given
 /// one of its own -- is a row here, and no other file has to hear about it.
-const Map<ArmPart, List<ArmBuff>> armBuffs = {
+///
+/// The steps are printed FROM the core's constants, never typed beside
+/// them: a tuned number would otherwise leave the card promising one step
+/// and the total paying another.
+final Map<ArmPart, List<ArmBuff>> armBuffs = {
   ArmPart.bit: [
-    ArmBuff(label: 'базова потужність', step: '+10 / рів.', total: _bitPower),
+    ArmBuff(
+      label: 'базова потужність',
+      step: '+${_flat(PrototypeSimulation.basePowerPerLevel)} / рів.',
+      total: _bitPower,
+    ),
     ArmBuff(
       label: 'мін. реголіт',
-      step: '×1.03 / рів.',
+      step: '×${PrototypeSimulation.minRegolithGrowth} / рів.',
       total: _bitMinRegolith,
     ),
   ],
   ArmPart.drive: [
-    ArmBuff(label: 'пробивання', step: '+0.001% / рів.', total: _drivePierce),
+    ArmBuff(
+      label: 'пробивання',
+      step: '+${_percent(PrototypeSimulation.piercePerLevel, 3)} / рів.',
+      total: _drivePierce,
+    ),
     ArmBuff(
       label: 'макс. реголіт',
-      step: '×1.05 / рів.',
+      step: '×${PrototypeSimulation.maxRegolithGrowth} / рів.',
       total: _driveMaxRegolith,
     ),
   ],
   ArmPart.supply: [
-    ArmBuff(label: 'ємність енергії', step: '+10 / рів.', total: _supplyCap),
+    ArmBuff(
+      label: 'ємність енергії',
+      step: '+${PrototypeSimulation.energyPerCapLevel} / рів.',
+      total: _supplyCap,
+    ),
     ArmBuff(
       label: 'швидкість відновлення',
-      step: '+0.1% / рів.',
+      step: '+${_percent(PrototypeSimulation.regenSpeedPerLevel, 1)} / рів.',
       total: _supplyRate,
     ),
   ],
 };
+
+String _flat(num value) =>
+    value == value.roundToDouble() ? '${value.round()}' : '$value';
+
+String _percent(double share, int digits) =>
+    '${(share * 100).toStringAsFixed(digits)}%';
 
 /// The buffs a part shows at [generation] -- which is all it has grown.
 List<ArmBuff> buffsOf(ArmPart part, int generation) => [

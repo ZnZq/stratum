@@ -2,9 +2,8 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
-import 'buy_button.dart';
-import 'hud.dart';
 import 'tokens.dart';
+import 'upgrade_row.dart';
 
 /// One track of one drill: what it does, where it stands, what it costs.
 class TrackRow extends StatelessWidget {
@@ -40,79 +39,35 @@ class TrackRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Palette.shell,
-                  borderRadius: BorderRadius.circular(9),
-                  border: Border.all(color: Palette.lineBar),
-                ),
-                child: CustomPaint(
-                  size: const Size(17, 17),
-                  painter: _TrackGlyph(part),
-                ),
+          UpgradeRow(
+            leading: Container(
+              width: 30,
+              height: 30,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Palette.shell,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: Palette.lineBar),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          name.toUpperCase(),
-                          style: AppText.body(
-                            8.5,
-                            weight: FontWeight.w700,
-                            color: Palette.tech,
-                            letterSpacing: 1.6,
-                          ),
-                        ),
-                        const SizedBox(width: 7),
-                        Text(
-                          note,
-                          style: AppText.body(9, color: Palette.textFaint),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '$level',
-                          style: AppText.display(
-                            9.5,
-                            weight: FontWeight.w600,
-                            color: capped ? Palette.gold : Palette.textFaint,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    _Effect(sim: sim, id: id, part: part),
-                  ],
-                ),
+              child: CustomPaint(
+                size: const Size(17, 17),
+                painter: _TrackGlyph(part),
               ),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: 104,
-                child: capped
-                    ? const HudButton(
-                        onTap: null,
-                        label: 'межа',
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                      )
-                    : BuyButton(
-                        cost: '${game.sim.drillUpgradeCost(id, part)}',
-                        enabled:
-                            game.sim.canUpgradeDrill(id, part) && steps > 0,
-                        onTap: () => game.upgradeDrill(id, part, levels: steps),
-                      ),
-              ),
-            ],
+            ),
+            title: name,
+            beside: Text(
+              note,
+              style: AppText.body(9, color: Palette.textFaint),
+            ),
+            besideGap: 7,
+            level: level,
+            levelLit: capped,
+            detail: _Effect(sim: sim, id: id, part: part),
+            detailGap: 4,
+            capped: capped,
+            cost: '${game.sim.drillUpgradeCost(id, part)}',
+            enabled: game.sim.canUpgradeDrill(id, part) && steps > 0,
+            onBuy: () => game.upgradeDrill(id, part, levels: steps),
           ),
         ],
       ),

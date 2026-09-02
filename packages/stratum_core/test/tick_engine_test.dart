@@ -2,23 +2,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:stratum_core/stratum_core.dart';
 import 'package:test/test.dart';
 
-/// A hand-driven clock: what `Stopwatch` does, except time only moves when the
-/// test says so.
-class TestClock implements MonotonicClock {
-  Duration _elapsed = Duration.zero;
-
-  @override
-  Duration get elapsed => _elapsed;
-
-  void advance(Duration by) => _elapsed += by;
-}
-
-/// Moves the fake timer and the fake clock together: the engine learns about
-/// time from the clock but fires from the timer, so a test must advance both.
-void elapseBoth(FakeAsync async, TestClock clock, Duration by) {
-  clock.advance(by);
-  async.elapse(by);
-}
+import 'support/test_clock.dart';
 
 void main() {
   group('a pause', () {

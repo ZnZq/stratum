@@ -4,13 +4,13 @@ import 'package:stratum_core/stratum_core.dart';
 import '../game.dart';
 import 'arm_diagram.dart';
 import 'evolve_overlay.dart';
-import 'batch_picker.dart';
 import 'dissolve.dart';
 import 'blow_summary.dart';
 import 'part_card.dart';
 import 'hud.dart';
 import 'part_sheet.dart';
 import 'tokens.dart';
+import 'track_header.dart';
 
 /// The manipulator arm: what a blow is worth, and the three parts that grow it.
 ///
@@ -111,26 +111,10 @@ class _StrikesScreenState extends State<StrikesScreen> {
           child: BlowSummary(game: game),
         ),
         const SizedBox(height: 11),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Row(
-            children: [
-              Text(
-                'ПРОКАЧКА РУКИ',
-                style: AppText.body(
-                  8.5,
-                  weight: FontWeight.w700,
-                  color: Palette.tech,
-                  letterSpacing: 1.8,
-                ),
-              ),
-              const Spacer(),
-              BatchPicker(
-                batch: _batch,
-                onPick: (value) => setState(() => _batch = value),
-              ),
-            ],
-          ),
+        TrackHeader(
+          label: 'ПРОКАЧКА РУКИ',
+          batch: _batch,
+          onPick: (value) => setState(() => _batch = value),
         ),
         const SizedBox(height: 8),
         const HudRule(),

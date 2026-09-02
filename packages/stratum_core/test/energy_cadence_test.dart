@@ -2,28 +2,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:stratum_core/stratum_core.dart';
 import 'package:test/test.dart';
 
-class TestClock implements MonotonicClock {
-  Duration _elapsed = Duration.zero;
-
-  @override
-  Duration get elapsed => _elapsed;
-
-  void advance(Duration by) => _elapsed += by;
-}
-
-/// Time as the app really experiences it: the clock and the timers move
-/// together, in slices small enough that no timer ever fires against a clock
-/// that has already run ahead of it.
-void elapse(FakeAsync async, TestClock clock, Duration by) {
-  const slice = Duration(milliseconds: 5);
-  var left = by;
-  while (left > Duration.zero) {
-    final step = left < slice ? left : slice;
-    clock.advance(step);
-    async.elapse(step);
-    left -= step;
-  }
-}
+import 'support/test_clock.dart';
 
 void main() {
   group('a gauge that stops at its cap and is woken again', () {

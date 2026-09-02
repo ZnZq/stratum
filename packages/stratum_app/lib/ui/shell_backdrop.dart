@@ -1,10 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import 'tokens.dart';
+import 'frame_clock.dart';
 
 /// The shell the screens are laid on.
 ///
@@ -20,26 +20,16 @@ class ShellBackdrop extends StatefulWidget {
 }
 
 class _ShellBackdropState extends State<ShellBackdrop>
-    with SingleTickerProviderStateMixin {
-  late final Ticker _ticker;
+    with SingleTickerProviderStateMixin, FrameClock {
   final ValueNotifier<double> _time = ValueNotifier(0);
-  Duration _lastFrame = Duration.zero;
 
   @override
-  void initState() {
-    super.initState();
-    _ticker = createTicker(_onFrame)..start();
-  }
-
-  void _onFrame(Duration elapsed) {
-    final delta = clampFrameDelta(elapsed - _lastFrame);
-    _lastFrame = elapsed;
-    _time.value += delta.inMicroseconds / 1e6;
+  void onFrame(double dt, Duration raw) {
+    _time.value += dt;
   }
 
   @override
   void dispose() {
-    _ticker.dispose();
     _time.dispose();
     super.dispose();
   }

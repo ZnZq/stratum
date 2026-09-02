@@ -1,10 +1,10 @@
 import 'package:flutter/widgets.dart';
 
-import '../tokens.dart';
 import 'metrics.dart';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/scheduler.dart';
+
+import '../frame_clock.dart';
 
 class DrillPipe extends StatefulWidget {
   const DrillPipe({this.phase = 0, super.key});
@@ -17,27 +17,16 @@ class DrillPipe extends StatefulWidget {
 }
 
 class DrillPipeState extends State<DrillPipe>
-    with SingleTickerProviderStateMixin {
-  late final Ticker _ticker;
+    with SingleTickerProviderStateMixin, FrameClock {
   late final ValueNotifier<double> _flutes = ValueNotifier(widget.phase);
-  Duration _lastFrame = Duration.zero;
 
   @override
-  void initState() {
-    super.initState();
-    _ticker = createTicker(_onFrame)..start();
-  }
-
-  void _onFrame(Duration elapsed) {
-    final delta = clampFrameDelta(elapsed - _lastFrame);
-    _lastFrame = elapsed;
-    _flutes.value =
-        (_flutes.value + delta.inMicroseconds / 1e6 / rigFlutePeriod) % 1.0;
+  void onFrame(double dt, Duration raw) {
+    _flutes.value = (_flutes.value + dt / rigFlutePeriod) % 1.0;
   }
 
   @override
   void dispose() {
-    _ticker.dispose();
     _flutes.dispose();
     super.dispose();
   }

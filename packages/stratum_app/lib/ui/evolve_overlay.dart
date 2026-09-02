@@ -8,6 +8,7 @@ import 'game_icons.dart';
 import 'hud.dart';
 import 'part_face.dart';
 import 'tokens.dart';
+import 'buff_line.dart';
 
 /// The moment a part is rebuilt into its next mark.
 ///
@@ -234,23 +235,10 @@ class _Gained extends StatelessWidget {
                     )
                   else
                     for (final buff in gained)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Text(
-                              buff.label,
-                              style: AppText.body(10, color: Palette.textDim),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              buff.step,
-                              style: AppText.display(9.5, color: Palette.gold),
-                            ),
-                          ],
-                        ),
+                      BuffLine(
+                        buff: buff,
+                        stepColour: Palette.gold,
+                        ruled: false,
                       ),
                 ],
               ),

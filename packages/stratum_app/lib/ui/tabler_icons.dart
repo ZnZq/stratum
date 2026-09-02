@@ -77,10 +77,7 @@ abstract final class Ti {
     0xea5f,
     fontFamily: 'TablerIcons',
   );
-  static const IconData chevronUp = IconData(
-    0xea62,
-    fontFamily: 'TablerIcons',
-  );
+  static const IconData chevronUp = IconData(0xea62, fontFamily: 'TablerIcons');
   static const IconData buildingWarehouse = IconData(
     0xebe3,
     fontFamily: 'TablerIcons',
@@ -93,10 +90,7 @@ abstract final class Ti {
   static const IconData window = IconData(0xef06, fontFamily: 'TablerIcons');
   static const IconData cpu2 = IconData(0xf075, fontFamily: 'TablerIcons');
   static const IconData radar2 = IconData(0xf016, fontFamily: 'TablerIcons');
-  static const IconData assembly = IconData(
-    0xf24d,
-    fontFamily: 'TablerIcons',
-  );
+  static const IconData assembly = IconData(0xf24d, fontFamily: 'TablerIcons');
   static const IconData userHexagon = IconData(
     0xfc4e,
     fontFamily: 'TablerIcons',

@@ -70,7 +70,7 @@ class EnergyPlate extends StatelessWidget {
           EnergyMeter(engine: game.energyLoop, full: sim.energyFull),
           const SizedBox(height: 4),
           Text(
-            '+${sim.energyPerRegen} / ${game.energyInterval}',
+            '+${sim.energyPerRegen} / ${sim.energySeconds.toStringAsFixed(3)} с',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.right,

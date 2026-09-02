@@ -1,19 +1,7 @@
 import 'package:stratum_core/stratum_core.dart';
 import 'package:test/test.dart';
 
-PrototypeSimulation _funded([double credits = 1e9]) {
-  final sim = PrototypeSimulation(seed: 5150);
-  sim.stock.add(ResourceId.credits, BigDouble.fromNum(credits));
-  return sim;
-}
-
-/// A pocket deep enough for any ladder in the game: past double's
-/// range, so it is built from mantissa and exponent directly.
-PrototypeSimulation _bottomless() {
-  final sim = PrototypeSimulation(seed: 5150);
-  sim.stock.add(ResourceId.credits, BigDouble(1, 600));
-  return sim;
-}
+import 'support/sim_fixtures.dart';
 
 /// Levels a part as far as it will go, rebuilding it whenever it hits a
 /// ceiling -- which is the only way to the top now.
@@ -28,7 +16,7 @@ void _maxOut(PrototypeSimulation sim, ArmPart part) {
 void main() {
   group('the arm levels', () {
     test('every part runs to a thousand and stops', () {
-      final sim = _bottomless();
+      final sim = bottomless();
 
       for (final part in ArmPart.values) {
         _maxOut(sim, part);
@@ -67,7 +55,7 @@ void main() {
     });
 
     test('levelling stops at the mark ceiling until the part is rebuilt', () {
-      final sim = _bottomless();
+      final sim = bottomless();
 
       // Mk I plays the first hundred; Mk II is obtained at 100.
       final bought = sim.upgrade(ArmPart.bit, levels: 10000);
@@ -90,7 +78,7 @@ void main() {
     });
 
     test('a part not at its ceiling cannot be rebuilt', () {
-      final sim = _funded(1e300)..upgrade(ArmPart.drive, levels: 99);
+      final sim = funded(1e300)..upgrade(ArmPart.drive, levels: 99);
 
       expect(sim.canEvolve(ArmPart.drive), isFalse);
       expect(
@@ -102,7 +90,7 @@ void main() {
     });
 
     test('the last mark has nothing left to rebuild into', () {
-      final sim = _bottomless();
+      final sim = bottomless();
       _maxOut(sim, ArmPart.supply);
 
       expect(sim.canEvolve(ArmPart.supply), isFalse);
@@ -111,7 +99,7 @@ void main() {
 
     test('a batch buy stops at what the store can pay for', () {
       // Enough for three levels of the bit and no more: 120 + 163 + 220.
-      final sim = _funded(505);
+      final sim = funded(505);
 
       final bought = sim.upgrade(ArmPart.bit, levels: 10);
 
@@ -125,7 +113,7 @@ void main() {
     });
 
     test('the affordable count is what a max buy actually lands', () {
-      final sim = _funded(50000);
+      final sim = funded(50000);
       final predicted = sim.affordableLevels(ArmPart.drive);
 
       final bought = sim.upgrade(ArmPart.drive, levels: predicted);
@@ -141,7 +129,7 @@ void main() {
 
   group('what a part buys', () {
     test('the bit raises the floor of the haul, the drive the ceiling', () {
-      final sim = _funded();
+      final sim = funded();
       final minBefore = sim.strikeRegolithMin;
       final maxBefore = sim.strikeRegolithMax;
 
@@ -182,7 +170,7 @@ void main() {
     });
 
     test('every haul lands inside the band the parts promise', () {
-      final sim = _funded();
+      final sim = funded();
       sim.upgrade(ArmPart.bit, levels: 6);
       sim.upgrade(ArmPart.drive, levels: 6);
       // A face too hard to break, so no payout mixes into the roll.
@@ -205,7 +193,7 @@ void main() {
 
     test('the drive deepens the bite every blow takes', () {
       // A hundred drive levels at x1.365 growth run past 1e15 credits.
-      final sim = _funded(1e20);
+      final sim = funded(1e20);
       expect(sim.pierceShare, 0);
 
       sim.upgrade(ArmPart.drive, levels: 100);
@@ -217,7 +205,7 @@ void main() {
     });
 
     test('the supply lengthens the burst and shortens the wait', () {
-      final sim = _bottomless();
+      final sim = bottomless();
 
       expect(sim.energyCap, 250);
       expect(sim.energySeconds, closeTo(2.0, 1e-12));
@@ -240,7 +228,7 @@ void main() {
 
   group('what a part remembers', () {
     test('the peak follows the marks built and never comes back down', () {
-      final sim = _bottomless();
+      final sim = bottomless();
 
       sim.upgrade(ArmPart.bit, levels: 100);
       sim.evolve(ArmPart.bit);
@@ -290,7 +278,7 @@ void main() {
 
   group('saving the arm', () {
     test('carries the three parts and clamps a doctored level', () {
-      final sim = _bottomless();
+      final sim = bottomless();
       sim.upgrade(ArmPart.bit, levels: 12);
       sim.upgrade(ArmPart.drive, levels: 3);
       sim.upgrade(ArmPart.supply, levels: 7);
@@ -315,7 +303,7 @@ void main() {
     });
 
     test('a save with no arm section reads as a bare arm', () {
-      final sim = _funded(1e300)..upgrade(ArmPart.bit, levels: 5);
+      final sim = funded(1e300)..upgrade(ArmPart.bit, levels: 5);
 
       sim.readJson(const <String, Object?>{});
 

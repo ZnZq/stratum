@@ -3,13 +3,13 @@ import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
 import 'drill_diagram.dart';
-import 'batch_picker.dart';
 import 'dissolve.dart';
 import 'track_row.dart';
 import 'hud.dart';
 import 'resource_style.dart';
 import 'stat.dart';
 import 'tokens.dart';
+import 'track_header.dart';
 
 /// One drill: the machine at work, what it is worth, and its three tracks.
 ///
@@ -142,26 +142,10 @@ class _DrillDetailState extends State<DrillDetail> {
           ),
         ),
         const SizedBox(height: 11),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Row(
-            children: [
-              Text(
-                'ПРОКАЧКА БУРА',
-                style: AppText.body(
-                  8.5,
-                  weight: FontWeight.w700,
-                  color: Palette.tech,
-                  letterSpacing: 1.8,
-                ),
-              ),
-              const Spacer(),
-              BatchPicker(
-                batch: _batch,
-                onPick: (value) => setState(() => _batch = value),
-              ),
-            ],
-          ),
+        TrackHeader(
+          label: 'ПРОКАЧКА БУРА',
+          batch: _batch,
+          onPick: (value) => setState(() => _batch = value),
         ),
         const SizedBox(height: 8),
         const HudRule(),

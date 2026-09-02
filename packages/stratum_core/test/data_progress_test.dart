@@ -1,18 +1,13 @@
 import 'package:stratum_core/stratum_core.dart';
 import 'package:test/test.dart';
 
-/// Pins the face so no blow can break through: accrual tests then see the
-/// loot lanes alone, with no break bonuses mixed in.
-void _pinLayer(PrototypeSimulation sim) {
-  sim.layerHp.value = BigDouble.fromNum(1e18);
-  sim.layerHpMax.value = BigDouble.fromNum(1e18);
-}
+import 'support/sim_fixtures.dart';
 
 void main() {
   group('raw data', () {
     test('is dug out of the rock like anything else', () {
       final sim = PrototypeSimulation(seed: 7);
-      _pinLayer(sim);
+      pinLayer(sim);
 
       const strikes = 4000;
       for (var i = 0; i < strikes; i++) {
@@ -20,7 +15,7 @@ void main() {
         // the magazine is.
         sim.energy.value = sim.energyCap;
         sim.strike();
-        _pinLayer(sim);
+        pinLayer(sim);
       }
 
       final drop = PrototypeSimulation.rawDataDropAt(sim.layer.value);
@@ -51,11 +46,11 @@ void main() {
 
     test('the cycle books it into the cycle total as well as the store', () {
       final sim = PrototypeSimulation(seed: 3);
-      _pinLayer(sim);
+      pinLayer(sim);
 
       for (var i = 0; i < 2000; i++) {
         sim.tick();
-        _pinLayer(sim);
+        pinLayer(sim);
       }
 
       expect(sim.rawData.value.toDouble(), greaterThan(0));
@@ -107,10 +102,10 @@ void main() {
 
     test('a restart wipes what was dug but not what the cycle produced', () {
       final sim = PrototypeSimulation(seed: 9);
-      _pinLayer(sim);
+      pinLayer(sim);
       for (var i = 0; i < 1500; i++) {
         sim.strike();
-        _pinLayer(sim);
+        pinLayer(sim);
       }
       final produced = sim.cycleData.value.toDouble();
       expect(produced, greaterThan(0));

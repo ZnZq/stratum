@@ -140,7 +140,11 @@ class Stockpile {
   void readJson(Map<String, Object?> json) => batch(() {
     for (final id in ResourceId.values) {
       final raw = json[id.name];
-      _held[id]!.value = raw is String ? BigDouble.parse(raw) : BigDouble.zero;
+      // Lenient by design: one unreadable figure empties one shelf, never
+      // the whole save.
+      _held[id]!.value = raw is String
+          ? (BigDouble.tryParse(raw) ?? BigDouble.zero)
+          : BigDouble.zero;
     }
   });
 }

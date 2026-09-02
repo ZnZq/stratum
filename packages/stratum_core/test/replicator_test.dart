@@ -210,13 +210,16 @@ void main() {
     expect(gain.gained[ResourceId.cuprum], isNotNull);
   });
 
-  test('the rate vitrine quotes whole cycles per minute', () {
+  test('the rate vitrine quotes the payout per second', () {
     final sim = stocked();
-    expect(sim.replicatorPerMinuteOf(ResourceId.cuprum).isZero, isTrue);
-    sim.unlockReplicator(ResourceId.cuprum);
     expect(
-      sim.replicatorPerMinuteOf(ResourceId.cuprum).toDouble(),
-      closeTo(100 * 60 / base, 1e-9),
+      sim.replicatorPerSecondOf(ResourceId.cuprum).toDouble(),
+      closeTo(100 / base, 1e-9),
+    );
+    sim.replicatorSpeedOf(ResourceId.cuprum).value = 1;
+    expect(
+      sim.replicatorPerSecondOf(ResourceId.cuprum).toDouble(),
+      closeTo(100 / (base * 0.99), 1e-9),
     );
   });
 

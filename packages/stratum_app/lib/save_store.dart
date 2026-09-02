@@ -75,14 +75,21 @@ class SaveStore {
     await file.rename('${file.path}.unreadable');
   }
 
-  /// Reads the headline of each slot, skipping any that cannot be read.
+  /// Why a slot stayed out of the last [list]: the fault is kept, not
+  /// swallowed, so the menu can say why a slot is empty.
+  final Map<SaveSlot, String> listFaults = {};
+
+  /// Reads the headline of each slot, skipping any that cannot be read
+  /// and recording why in [listFaults].
   Future<List<SaveSummary>> list() async {
     final summaries = <SaveSummary>[];
+    listFaults.clear();
     for (final slot in SaveSlot.values) {
       final ({String contents, bool fromBackup})? held;
       try {
         held = await read(slot);
-      } on Object {
+      } on Object catch (error) {
+        listFaults[slot] = '$error';
         continue;
       }
       if (held == null) continue;
@@ -108,7 +115,8 @@ class SaveStore {
       if (stock is Map) {
         for (final id in ResourceId.values) {
           final amount = stock[id.name];
-          if (amount is String) held[id] = BigDouble.parse(amount);
+          final parsed = amount is String ? BigDouble.tryParse(amount) : null;
+          if (parsed != null) held[id] = parsed;
         }
       }
 

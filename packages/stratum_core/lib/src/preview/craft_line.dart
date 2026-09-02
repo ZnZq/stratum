@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import '../big_double.dart';
 import '../reactive_graph.dart';
 import '../stockpile.dart';
@@ -22,16 +20,12 @@ class CraftLine {
     craftSeconds = Computed(() {
       final row = craftRecipeOf(recipe.value);
       if (row == null) return 0;
-      final raw =
-          row.baseSeconds *
-          math.pow(craftTimeStep, tier.value) /
-          speedFactor.value;
-      return raw < craftMinSeconds ? craftMinSeconds : raw;
+      return craftSecondsAt(row, tier.value, speedFactor.value);
     }, name: '$_name.seconds');
     unitsPerCraft = Computed(() {
       final row = craftRecipeOf(recipe.value);
       if (row == null) return 0;
-      return row.baseYield * math.pow(craftYieldStep, tier.value);
+      return craftUnitsAt(row, tier.value);
     }, name: '$_name.units');
     starving = Computed(() {
       final row = craftRecipeOf(recipe.value);
@@ -39,7 +33,7 @@ class CraftLine {
       // A loaded unit is already paid for: the line finishes it whatever
       // the stock says. Starving is failing to START the next one.
       if (unitLoaded.value) return false;
-      final scale = math.pow(craftCostStep, tier.value).toDouble();
+      final scale = craftCostScaleAt(tier.value);
       for (final entry in row.inputs.entries) {
         final need = BigDouble.fromNum(entry.value * scale);
         if (!_stock.amount(entry.key).gteWithTolerance(need)) return true;
@@ -53,7 +47,7 @@ class CraftLine {
     runwaySeconds = Computed(() {
       final row = craftRecipeOf(recipe.value);
       if (row == null) return -1;
-      final scale = math.pow(craftCostStep, tier.value).toDouble();
+      final scale = craftCostScaleAt(tier.value);
       var crafts = double.infinity;
       for (final entry in row.inputs.entries) {
         final k = _stock.amount(entry.key).toDouble() / (entry.value * scale);
@@ -67,17 +61,18 @@ class CraftLine {
       if (!crafts.isFinite) return -1;
       return crafts * craftSeconds.value;
     }, name: '$_name.runway');
-    // The floor rate, like the mine's "X / s": the ramp AND the duplicate
-    // chance are bonuses on top and deliberately not quoted -- the vitrine
-    // shows the floor, and chance-borne extras land as pleasant surprises
-    // (the same rule that keeps crit and echo out of the mine's figure).
+    // The floor rate, like the mine's "X / s": the duplicate chance and
+    // the boost stacks still to come are bonuses on top and deliberately
+    // not quoted -- the vitrine shows the floor, and chance-borne extras
+    // land as pleasant surprises (the same rule that keeps crit and echo
+    // out of the mine's figure). Stacks already earned are inside
+    // [speedFactor], so they ARE in this figure.
     ratePerSecond = Computed(() {
       final row = craftRecipeOf(recipe.value);
       if (row == null || done || halted.value || starving.value) {
         return BigDouble.zero;
       }
-      final baseUnits = row.baseYield * math.pow(craftYieldStep, tier.value);
-      return BigDouble.fromNum(baseUnits / craftSeconds.value);
+      return BigDouble.fromNum(unitsPerCraft.value / craftSeconds.value);
     }, name: '$_name.rate');
   }
 

@@ -6,7 +6,15 @@ import '../reactive_graph.dart';
 import '../stockpile.dart';
 import 'arm_part.dart';
 import 'craft_line.dart';
-import 'craft_recipe.dart';
+import 'acknowledged_clock.dart';
+import 'arm_tracks.dart';
+import 'collapse_ledger.dart';
+import 'craft_shop.dart';
+import 'drill_bank.dart';
+import 'financing_books.dart';
+import 'trade_desk.dart';
+import 'replicator_machine.dart' as rep;
+import 'trade_groups.dart';
 import 'cycle_outcome.dart';
 import 'drill_id.dart';
 import 'drill_part.dart';
@@ -28,25 +36,14 @@ import 'trade_request.dart';
 /// recomputing anything that has not changed.
 class PrototypeSimulation {
   PrototypeSimulation({int seed = 20260825})
-    : random = RandomSource(seed: seed) {
+    : _random = RandomSource(seed: seed) {
     layerDensity = Computed(
       () => densityAt(layer.value),
       name: 'layer density',
     );
-    perDrillPower = Computed(
-      () => perDrillPowerWith(drillPowerLevel.value),
-      name: 'power per drill',
-    );
     power = Computed(
       () => powerWith(drills: drills.value, upgrades: drillPowerLevel.value),
       name: 'drill power',
-    );
-    powerUpgradeCost = Computed(
-      () =>
-          (BigDouble.fromNum(50) *
-                  BigDouble.fromNum(1.75).pow(drillPowerLevel.value.toDouble()))
-              .ceil(),
-      name: 'power upgrade cost',
     );
     regolithPerCycle = Computed(
       () =>
@@ -54,14 +51,6 @@ class PrototypeSimulation {
           BigDouble.fromNum(1.03).pow(layer.value.toDouble()) *
           BigDouble.fromNum(1.2).pow(enrichmentLevel.value.toDouble()),
       name: 'ore per cycle',
-    );
-    drillCost = Computed(
-      () =>
-          (BigDouble.fromNum(15) *
-                  BigDouble.fromNum(1.13).pow(drills.value.toDouble()) *
-                  BigDouble.fromNum(1 - 0.04 * discountLevel.value))
-              .ceil(),
-      name: 'drill cost',
     );
     hitsToBreak = Computed(() {
       // Counted at the strike's power, not the rig's: the readout answers
@@ -119,72 +108,80 @@ class PrototypeSimulation {
     // so each one is paid in full for what it dug.
     bankableData = Computed(() => walletEarned, name: 'bankable data');
 
-    for (var i = 0; i < craftStartLines; i++) {
-      craftLines.add(CraftLine(stock, i));
-    }
-
-    // The financing chain. Every link is a Computed so that whatever moves
-    // -- a level poured, a sale landing in creditsEarned, a gifted tranche
-    // -- invalidates exactly its dependents and nothing recomputes twice:
-    // fundScaleOf() sits on the strike's hot path five lanes at a time.
-    _financeRound = Computed(() {
-      final earned = creditsEarned.value;
-      if (earned <= BigDouble.zero) return 0;
-      final g = BigDouble.fromNum(roundCostGrowth);
-      final ratio =
-          earned * (g - BigDouble.one) / roundCostBase + BigDouble.one;
-      final rounds = (ratio.ln() / math.log(roundCostGrowth)).floorToDouble();
-      return rounds < 0 ? 0 : rounds.toInt();
-    }, name: 'finance round');
-    _tranchesSpent = Computed(() {
-      var spent = 0;
-      for (final row in fundTable) {
-        spent += tranchesInto(_funding[row.id]!.value);
-      }
-      return spent;
-    }, name: 'tranches spent');
-    _financeRank = Computed(() {
-      var rank = 0;
-      while (_tranchesSpent.value >= rankThreshold(rank + 1)) {
-        rank++;
-      }
-      return rank;
-    }, name: 'finance rank');
-    _fundCap = Computed(
-      () => fundCapBase + fundCapPerRank * _financeRank.value,
-      name: 'fund cap',
+    // Everything the strike reads on its hot path is a Computed, not a
+    // getter: a blow reads the band, the power and the share several
+    // times, and the graph must hand back the cached value rather than
+    // rebuild three powers per read.
+    _strikeRegolithMean = Computed(
+      () => regolithPerCycle.value * BigDouble.fromNum(strikeShareOfRig),
+      name: 'strike regolith mean',
     );
-    _tranchesFree = Computed(() {
-      final free =
-          _financeRound.value * tranchesPerRound +
-          tranchesGranted.value -
-          _tranchesSpent.value;
-      return free < 0 ? 0 : free;
-    }, name: 'tranches free');
-    _fundGlobalScale = Computed(
+    _strikeRegolithMin = Computed(
       () =>
-          BigDouble.fromNum(fundSpentStep)
-              .pow(_tranchesSpent.value.toDouble()) *
-          BigDouble.fromNum(fundRankStep).pow(_financeRank.value.toDouble()),
-      name: 'fund global scale',
+          _strikeRegolithMean.value *
+          BigDouble.fromNum(1 - regolithSpread) *
+          BigDouble.fromNum(minRegolithGrowth).pow(bitLevel.value.toDouble()),
+      name: 'strike regolith min',
     );
-    for (final row in fundTable) {
-      _fundScales[row.id] = Computed(
-        () =>
-            BigDouble.fromNum(row.step)
-                .pow(_funding[row.id]!.value.toDouble()) *
-            _fundGlobalScale.value,
-        name: 'fund scale ${row.id.name}',
+    _strikeRegolithMax = Computed(
+      () =>
+          _strikeRegolithMean.value *
+          BigDouble.fromNum(1 + regolithSpread) *
+          BigDouble.fromNum(maxRegolithGrowth).pow(driveLevel.value.toDouble()),
+      name: 'strike regolith max',
+    );
+    // The band every vitrine quotes: already scaled by the financing
+    // multiplier, so no screen assembles the product on its own.
+    _strikeRegolithBand = Computed(() {
+      final scale = fundScaleOf(ResourceId.regolith);
+      return (
+        min: _strikeRegolithMin.value * scale,
+        max: _strikeRegolithMax.value * scale,
+      );
+    }, name: 'strike regolith band');
+    _strikePower = Computed(
+      () => strikePowerAt(bitLevel.value),
+      name: 'strike power',
+    );
+    for (final id in ResourceId.values) {
+      _expectedPerStrike[id] = Computed(
+        () => _expectedPerStrikeOf(id),
+        name: 'expected per strike ${id.name}',
       );
     }
+    _expectedRegolithPerCycle = Computed(
+      () =>
+          _strikeRegolithMean.value *
+          fundScaleOf(ResourceId.regolith) *
+          (drillYieldScale(DrillId.regolith) - BigDouble.one),
+      name: 'expected regolith per cycle',
+    );
 
     _resetLayer();
   }
 
   /// Not final: restoring a save swaps in the streams as they stood, so the
   /// rolls carry on from where the player left them rather than replaying the
-  /// same sequence from the seed every launch.
-  RandomSource random;
+  /// same sequence from the seed every launch. The setter drops the cached
+  /// stream handles, which belong to the source they were taken from.
+  RandomSource get random => _random;
+  set random(RandomSource value) {
+    _random = value;
+    _lootStreams.clear();
+  }
+
+  RandomSource _random;
+
+  /// The loot roll's stream handles, one set per lane. Resolving six names
+  /// on every blow cost six strings and six map lookups a strike; the
+  /// handles are stable for the life of a source, so they are taken once.
+  /// The NAMES are the parity contract and never change.
+  final Map<String, _LootStreams> _lootStreams = {};
+
+  _LootStreams _streamsFor(String prefix) => _lootStreams.putIfAbsent(
+    prefix,
+    () => _LootStreams(_random, prefix, oreTable),
+  );
 
   final Signal<int> layer = Signal(0, name: 'layer');
 
@@ -192,14 +189,24 @@ class PrototypeSimulation {
   /// it, so a readout can watch one resource without hearing about the rest.
   final Stockpile stock = Stockpile();
 
+  /// Financing and the trade hall, each its own object with its own
+  /// signals, graph and save section. The members further down that still
+  /// carry the old names forward to them, so every screen and test keeps
+  /// one address.
+  late final FinancingBooks books = FinancingBooks(stock);
+  late final TradeDesk desk = TradeDesk(
+    stock,
+    scaleOf: fundScaleOf,
+    earn: (paid) => books.earn(paid),
+    requestRoll: () => random.stream('trade.request'),
+  );
+  late final CraftShop shop = CraftShop(stock);
+
   Signal<BigDouble> get regolith => stock.signal(ResourceId.regolith);
   Signal<BigDouble> get crystals => stock.signal(ResourceId.crystals);
   Signal<BigDouble> get quantonium => stock.signal(ResourceId.quantonium);
   Signal<BigDouble> get credits => stock.signal(ResourceId.credits);
   Signal<BigDouble> get samples => stock.signal(ResourceId.samples);
-  Signal<BigDouble> get capsules => stock.signal(ResourceId.capsules);
-  Signal<BigDouble> get cores => stock.signal(ResourceId.cores);
-  Signal<BigDouble> get backgroundCompute => stock.signal(ResourceId.compute);
 
   /// A rig always has at least one drill: total power is a product, and a
   /// count of zero would mean the game could never start.
@@ -211,32 +218,19 @@ class PrototypeSimulation {
   final Signal<int> restarts = Signal(0, name: 'restarts');
   final Signal<int> energy = Signal(energyCapBase, name: 'energy');
 
-  /// The three parts of the manipulator arm, each its own upgrade track.
-  ///
-  /// One track per PART rather than one per stat: a part carries several
-  /// buffs at once, and later generations of it add more. The player upgrades
-  /// a piece of hardware, not a number.
-  final Signal<int> bitLevel = Signal(0, name: 'bit level');
-  final Signal<int> driveLevel = Signal(0, name: 'drive level');
-  final Signal<int> supplyLevel = Signal(0, name: 'supply level');
+  /// The manipulator arm's three parts, their tracks, marks and prices;
+  /// see [ArmTracks]. The names below forward to it.
+  late final ArmTracks arm = ArmTracks(stock);
 
-  /// The generation each part is BUILT to, 0 (Mk I) through 4 (Mk V).
-  ///
-  /// Deliberately its own number rather than something read off the level: a
-  /// part does not grow into the next mark by being levelled, it is rebuilt
-  /// into it, and until the player does that the next mark's buffs are not
-  /// running and the level cannot pass this mark's ceiling.
-  final Signal<int> bitMark = Signal(0, name: 'bit mark');
-  final Signal<int> driveMark = Signal(0, name: 'drive mark');
-  final Signal<int> supplyMark = Signal(0, name: 'supply mark');
-
-  /// The highest mark each part has EVER been built to, which is a different
-  /// thing from where it stands: a restart takes the hardware back, and what
-  /// the player learned about it while owning it does not go with it. The
-  /// part sheet reads these, so a mark once built stays readable forever.
-  final Signal<int> bitPeak = Signal(0, name: 'bit peak');
-  final Signal<int> drivePeak = Signal(0, name: 'drive peak');
-  final Signal<int> supplyPeak = Signal(0, name: 'supply peak');
+  Signal<int> get bitLevel => arm.bitLevel;
+  Signal<int> get driveLevel => arm.driveLevel;
+  Signal<int> get supplyLevel => arm.supplyLevel;
+  Signal<int> get bitMark => arm.bitMark;
+  Signal<int> get driveMark => arm.driveMark;
+  Signal<int> get supplyMark => arm.supplyMark;
+  Signal<int> get bitPeak => arm.bitPeak;
+  Signal<int> get drivePeak => arm.drivePeak;
+  Signal<int> get supplyPeak => arm.supplyPeak;
 
   /// Tree levels. Purchasing is not wired up yet; they exist so the formulas
   /// read the way the prototype's do.
@@ -245,107 +239,34 @@ class PrototypeSimulation {
   final Signal<int> discountLevel = Signal(0, name: 'discount level');
   final Signal<int> quantoniumLevel = Signal(0, name: 'quantonium level');
 
-  /// Raw data of the current simulation. Feeds the collapse gate; a restart
-  /// resets it.
-  /// What this simulation has dug up and not yet compiled.
-  ///
-  /// A view on the registry rather than a field of its own: it is a mined
-  /// resource like the ores, so the warehouse, the strip, the loot table and
-  /// the offline window all carry it without being told about it, and a
-  /// Restart wipes it with everything else mined.
-  Signal<BigDouble> get rawData => stock.signal(ResourceId.rawData);
+  /// Data, cubes and the collapse wall; see [CollapseLedger]. The names
+  /// below forward to it.
+  late final CollapseLedger ledger = CollapseLedger(stock, clock);
 
-  /// Raw data of the whole cycle, across restarts. Feeds the wallet
-  /// function; only a collapse resets it.
-  final Signal<BigDouble> cycleData = Signal(
-    BigDouble.zero,
-    name: 'cycle data',
-  );
+  Signal<BigDouble> get rawData => ledger.rawData;
+  Signal<BigDouble> get cycleData => ledger.cycleData;
+  Signal<BigDouble> get dataWallet => ledger.dataWallet;
+  Signal<int> get compilerLevel => ledger.compilerLevel;
+  Signal<int> get collapses => ledger.collapses;
+  Signal<int> get servers => ledger.servers;
+  int get unlockedServers => ledger.unlockedServers;
+  Signal<int> get cycleStartMs => ledger.cycleStartMs;
 
-  /// What the wallet function has already paid out this cycle. Banking is a
-  /// difference, so restarting sooner or later never changes a cycle's total.
-  final Signal<BigDouble> dataBanked = Signal(
-    BigDouble.zero,
-    name: 'data banked',
-  );
+  /// The acknowledged clock every wall-time mechanic runs on; see
+  /// [AcknowledgedClock]. The names below are the ones every caller and
+  /// test already uses.
+  final AcknowledgedClock clock = AcknowledgedClock();
 
-  /// Banked data not yet spent on the simulation tree.
-  final Signal<BigDouble> dataWallet = Signal(
-    BigDouble.zero,
-    name: 'data wallet',
-  );
-
-  /// Purchased levels of the wallet exponent. Buying is not wired up yet.
-  /// How well the centre compiles. Each level lifts the rate; the JSON key
-  /// is still 'exponent' from when compilation was a power, and renaming it
-  /// would cost a migration for a number nobody has spent yet.
-  final Signal<int> compilerLevel = Signal(0, name: 'compiler level');
-
-  /// Collapses performed, ever.
-  final Signal<int> collapses = Signal(0, name: 'collapses');
-
-  /// How many racks the centre can actually use, 1 to [maxPendingCollapses].
-  ///
-  /// Starts at one. Holding five collapses at once is capacity the player
-  /// buys, not something the wall comes with: the whole decision the wall
-  /// exists for -- take one now or wait for more -- has to be earned before
-  /// it can be made.
-  final Signal<int> servers = Signal(1, name: 'servers');
-
-  int get unlockedServers =>
-      servers.value.clamp(1, maxPendingCollapses).toInt();
-
-  /// Wall-clock epoch ms the cycle began, for the drift formula. Zero means
-  /// not stamped yet: the app stamps it, keeping DateTime out of the core.
-  /// When this cycle began, on the ACKNOWLEDGED clock ([seenNow] units,
-  /// not epoch ms). -1 until the app stamps it.
-  final Signal<int> cycleStartMs = Signal(-1, name: 'cycle start');
-
-  /// The longest absence the game acknowledges in one gap: away for a week,
-  /// paid and drifted as if away for two days. One constant for EVERY
-  /// wall-clock mechanic, so none of them can quietly disagree.
-  static const int absenceCapMs = 48 * 60 * 60 * 1000;
-
-  /// Wall time the game has acknowledged, in ms. Advances by real gaps,
-  /// each clamped to [absenceCapMs].
-  int wallSeenMs = 0;
-
-  /// Where THIS simulation began on the acknowledged clock, so the time
-  /// spent IN it counts capped absences the way everything else does: a
-  /// week away adds two days, never seven. A future Restart resets it
-  /// along with the run.
-  int runStartSeenMs = 0;
-
-  /// The raw wall stamp of the last [observeWall]. Zero = never observed;
-  /// the first observation banks nothing, so the epoch offset never leaks
-  /// into the acknowledged total.
-  int lastWallMs = 0;
-
-  /// What the acknowledged clock reads at [nowMs], WITHOUT banking it.
-  /// Continuous between observations; a gap longer than the cap contributes
-  /// exactly the cap, and a clock wound backwards contributes nothing.
-  /// Seconds lived inside this simulation, on the acknowledged clock.
-  double simSeconds(int nowMs) => (seenNow(nowMs) - runStartSeenMs) / 1000.0;
-
-  int seenNow(int nowMs) {
-    if (lastWallMs == 0) return wallSeenMs;
-    final gap = nowMs - lastWallMs;
-    if (gap <= 0) return wallSeenMs;
-    return wallSeenMs + (gap > absenceCapMs ? absenceCapMs : gap);
-  }
-
-  /// Banks the clock up to [nowMs]. The app calls this every batch and on
-  /// every return from absence; between calls [seenNow] extrapolates.
-  ///
-  /// MONOTONIC: a rewound wall clock banks nothing and, crucially, does not
-  /// move [lastWallMs] backwards -- that stamp is the breach detector's
-  /// evidence, and letting a rewound clock overwrite it would pardon the
-  /// very tampering it proves.
-  void observeWall(int nowMs) {
-    if (nowMs <= lastWallMs) return;
-    wallSeenMs = seenNow(nowMs);
-    lastWallMs = nowMs;
-  }
+  static const int absenceCapMs = AcknowledgedClock.absenceCapMs;
+  int get wallSeenMs => clock.seenMs;
+  set wallSeenMs(int value) => clock.seenMs = value;
+  int get runStartSeenMs => clock.runStartMs;
+  set runStartSeenMs(int value) => clock.runStartMs = value;
+  int get lastWallMs => clock.lastWallMs;
+  set lastWallMs(int value) => clock.lastWallMs = value;
+  double simSeconds(int nowMs) => clock.simSeconds(nowMs);
+  int seenNow(int nowMs) => clock.seenNow(nowMs);
+  void observeWall(int nowMs) => clock.observe(nowMs);
 
   /// Damage already taken by the current layer, kept between cycles.
   final Signal<BigDouble> layerHp = Signal(BigDouble.zero, name: 'layer hp');
@@ -356,10 +277,7 @@ class PrototypeSimulation {
 
   late final Computed<BigDouble> layerDensity;
   late final Computed<BigDouble> power;
-  late final Computed<BigDouble> perDrillPower;
-  late final Computed<BigDouble> powerUpgradeCost;
   late final Computed<BigDouble> regolithPerCycle;
-  late final Computed<BigDouble> drillCost;
   late final Computed<int> hitsToBreak;
 
   /// How far through breaking the current layer the run is, 0..1, counted
@@ -371,65 +289,32 @@ class PrototypeSimulation {
   late final Computed<BigDouble> strikeBite;
   late final Computed<BigDouble> bankableData;
 
-  static const int energyCapBase = 250;
+  static const int energyCapBase = ArmTracks.energyCapBase;
+  static const int energyPerCapLevel = ArmTracks.energyPerCapLevel;
+  static const double baseEnergySeconds = ArmTracks.baseEnergySeconds;
+  static const double regenSpeedPerLevel = ArmTracks.regenSpeedPerLevel;
+  static const int maxPartLevel = ArmTracks.maxPartLevel;
+  static const int markSpanStep = ArmTracks.markSpanStep;
+  static const int markCount = ArmTracks.markCount;
+  static const int lastMark = ArmTracks.lastMark;
+  static int markCeiling(int mark) => ArmTracks.markCeiling(mark);
+  static int markFloor(int mark) => ArmTracks.markFloor(mark);
+  static int markSpan(int mark) => ArmTracks.markSpan(mark);
+  static int generationOf(int level) => ArmTracks.generationOf(level);
+  static const double basePowerPerLevel = ArmTracks.basePowerPerLevel;
+  static const double minRegolithGrowth = ArmTracks.minRegolithGrowth;
+  static const double maxRegolithGrowth = ArmTracks.maxRegolithGrowth;
+  static const double piercePerLevel = ArmTracks.piercePerLevel;
 
-  /// Each supply level adds this many points to the gauge.
-  static const int energyPerCapLevel = 10;
+  int get energyCap => arm.energyCap.value;
 
-  int get energyCap => energyCapBase + energyPerCapLevel * supplyLevel.value;
-
-  /// A regen tick always pours in exactly one point. What the supply upgrade
-  /// buys is a SHORTER wait, not a bigger pour: the sustained strike rate is
-  /// then literally the regen rate, and the gauge's ceiling stays what it is
-  /// -- the length of a burst.
+  /// A regen tick always pours in exactly one point. What the supply
+  /// upgrade buys is a SHORTER wait, not a bigger pour: the sustained
+  /// strike rate is then literally the regen rate, and the gauge's
+  /// ceiling stays what it is -- the length of a burst.
   int get energyPerRegen => 1;
 
-  /// The wait between two points at rest.
-  static const double baseEnergySeconds = 2.0;
-
-  /// Each supply level adds this share to the regen RATE, additively: five
-  /// hundred levels come out at +50%, so the wait bottoms out at 1.333 s.
-  /// Speeding the rate rather than shortening the wait is what keeps the
-  /// formula from crossing zero at the top of the track.
-  static const double regenSpeedPerLevel = 0.001;
-
-  double get energySeconds =>
-      baseEnergySeconds / (1 + regenSpeedPerLevel * supplyLevel.value);
-
-  /// Five generations on a growing ladder (owner, 2026-09-01): the
-  /// listed level is where each mark is OBTAINED -- Mk I at 0, Mk II at
-  /// 100, Mk III at 300, Mk IV at 600, Mk V at 1000. So Mk I plays the
-  /// first hundred, and every next span is a hundred longer.
-  static const int maxPartLevel = 1000;
-  static const int markSpanStep = 100;
-  static const int markCount = 5;
-
-  /// The total level at which [mark] becomes available to build.
-  static int markCeiling(int mark) => markSpanStep * mark * (mark + 1) ~/ 2;
-
-  /// Where the span PLAYED while carrying [mark] begins.
-  static int markFloor(int mark) => markCeiling(mark);
-
-  /// Levels played while carrying [mark]: 100, 200, 300, 400, and none
-  /// on the summit -- Mk V is obtained at the track's very top.
-  static int markSpan(int mark) =>
-      mark >= markCount - 1 ? 0 : markCeiling(mark + 1) - markCeiling(mark);
-
-  /// The mark a level has EARNED the threshold of, 0 (Mk I) to 4.
-  static int generationOf(int level) {
-    var generation = 0;
-    while (generation < markCount - 1 && level >= markCeiling(generation + 1)) {
-      generation++;
-    }
-    return generation;
-  }
-
-  /// PROVISIONAL buff rates. Balance comes later; what is meant to last is
-  /// that each part carries several of these at once.
-  static const double basePowerPerLevel = 10;
-  static const double minRegolithGrowth = 1.03;
-  static const double maxRegolithGrowth = 1.05;
-  static const double piercePerLevel = 0.00001;
+  double get energySeconds => arm.energySeconds.value;
 
   /// What one unupgraded drill delivers per cycle.
   static const double basePerDrillPower = 10;
@@ -518,10 +403,6 @@ class PrototypeSimulation {
     return multiplier;
   }
 
-  double get criticalChance => 0.05;
-
-  double get criticalMultiplier => 2;
-
   double get echoChance => drillEchoChance(DrillId.regolith);
 
   /// Rarer than quantonium up top and commoner far down, so the early game is
@@ -533,178 +414,32 @@ class PrototypeSimulation {
     return chance > 0.4 ? 0.4 : chance;
   }
 
-  double get quantoniumChance {
-    final chance = 0.12 + layer.value * 0.0015 + 0.02 * quantoniumLevel.value;
-    return chance > 0.5 ? 0.5 : chance;
-  }
-
-  /// The wallet exponent and its upgrade track. Data is counted in
-  /// measurements rather than in tonnes, so the gross it compresses grows
-  /// with play instead of exploding with the economy -- which is why the
-  /// exponent can be this gentle and still keep the wallet in readable
-  /// numbers. Each purchased step multiplies a cycle's whole earnings by
-  /// gross^step, so it stays capped. PROVISIONAL.
-  /// How much substrate one cube is compiled from.
-  ///
-  /// A plain divisor, not a power. A sublinear curve made splitting a haul
-  /// across many short runs pay more than one long one -- n runs of x/n came
-  /// to n^0.75 times a single run of x -- so the optimum was to restart as
-  /// often as the gate allowed. Dividing is neutral: the same substrate
-  /// compiles to the same cubes however many restarts it took, and WHEN to
-  /// restart goes back to being a question about when you want to spend.
-  static const double rawPerCube = 1000;
-
-  /// What one compiler level adds to the rate.
-  static const double compilerStep = 0.05;
-
-  /// The oversaturation gate: one run's raw data reaching this allows a
-  /// collapse. Sized against the accrual below so a first collapse is days
-  /// of play, not minutes. PROVISIONAL.
-  // Recalibrated when data stopped being a computed measurement and became
-  // a dug resource: the old 3e8 was denominated in normalised sightings,
-  // which no longer exist. PROVISIONAL -- tune against tool/data_pace.
-  /// What ONE collapse costs, in cubes.
-  ///
-  /// Cubes rather than the raw substrate behind them, so the collapse gauge
-  /// and the restart preview read the same figure. Consequence to keep in
-  /// view: the compiler upgrade lifts cubes, so it brings the collapse nearer
-  /// as well as paying more -- one lever, two effects.
-  static final BigDouble collapseThresholdBase = BigDouble.fromNum(1.5e5);
-
-  /// How many collapses the centre can hold at once -- one per rack.
-  ///
-  /// The wall is the decision: one full rack already lets the player collapse,
-  /// and every rack they wait for is another collapse point banked in the
-  /// same act. Past the fifth there is nowhere to put the cubes, so leaving
-  /// it full is a real loss rather than a safe idle.
-  static const int maxPendingCollapses = 5;
-
-  /// What each rack costs over the one before it.
-  ///
-  /// The costs are CUMULATIVE totals, not prices paid one after another: the
-  /// first rack is full at the base, the second at base x2.6, the third at
-  /// base x2.6^2. So a run worth twice the base fills the first rack and
-  /// makes a start on the second, and one worth five times fills two.
-  /// PROVISIONAL.
-  static const double collapseRackGrowth = 2.6;
-
-  /// What the gate is multiplied by per collapse already performed. Later
-  /// cycles reach far deeper far sooner, and data accrues with depth, so a
-  /// fixed gate would fall in hours by the fifth cycle. PROVISIONAL.
-  static const double collapseThresholdGrowth = 4;
-
-  /// Drift: the collapse threshold melts by this factor per wall-clock day,
-  /// online and offline alike.
-  static const double collapseDriftPerDay = 0.97;
-
-  /// How many days of drift a cycle accrues before the melt stops.
-  ///
-  /// Capped rather than endless (decision 2026-08-29). At 30 days the wall
-  /// stands at 0.97^30 = 40% of base -- a relief of x2.5, which is still less
-  /// than the x4 a single collapse adds, so waiting can never outrun the
-  /// ladder. Uncapped it eventually could, and a player who leaves for a
-  /// season would come back to a gate that had melted to nothing.
-  static const double collapseDriftCapDays = 30;
+  static const double rawPerCube = CollapseLedger.rawPerCube;
+  static const double compilerStep = CollapseLedger.compilerStep;
+  static final BigDouble collapseThresholdBase =
+      CollapseLedger.collapseThresholdBase;
+  static const int maxPendingCollapses = CollapseLedger.maxPendingCollapses;
+  static const double collapseRackGrowth = CollapseLedger.collapseRackGrowth;
+  static const double collapseThresholdGrowth =
+      CollapseLedger.collapseThresholdGrowth;
+  static const double collapseDriftPerDay = CollapseLedger.collapseDriftPerDay;
+  static const double collapseDriftCapDays =
+      CollapseLedger.collapseDriftCapDays;
 
   int get simulationNumber => restarts.value + 1;
-
-  /// Cycles CLOSED, not the ordinal of the one being played. A fresh save
-  /// has none: the first cycle exists once the first rack fills and the
-  /// player collapses it.
-  int get cycleNumber => collapses.value;
-
-  /// How many collapses are ready to be taken right now, 0 to
-  /// [maxPendingCollapses]. Each is worth a collapse point and closes a
-  /// cycle, so taking three at once is three of both.
-  int pendingCollapses(int nowMs) {
-    var full = 0;
-    for (var rack = 0; rack < unlockedServers; rack++) {
-      if (!walletEarned.gteWithTolerance(collapseCost(rack, nowMs))) break;
-      full++;
-    }
-    return full;
-  }
-
-  /// The cubes at which [rack] (0-based) is full -- a running total, so rack 2
-  /// being full means rack 0 and rack 1 are too.
+  int get cycleNumber => ledger.cycleNumber;
+  int pendingCollapses(int nowMs) => ledger.pendingCollapses(nowMs);
   BigDouble collapseCost(int rack, int nowMs) =>
-      collapseThreshold(nowMs) *
-      BigDouble.fromNum(math.pow(collapseRackGrowth, rack).toDouble());
+      ledger.collapseCost(rack, nowMs);
+  double rackFill(int rack, int nowMs) => ledger.rackFill(rack, nowMs);
+  double get compileRate => ledger.compileRate;
+  BigDouble get walletEarned => ledger.walletEarned.value;
+  BigDouble collapseThreshold(int nowMs) => ledger.collapseThreshold(nowMs);
+  double driftDays(int nowMs) => ledger.driftDays(nowMs);
+  double driftProgress(int nowMs) => ledger.driftProgress(nowMs);
+  double driftDiscount(int nowMs) => ledger.driftDiscount(nowMs);
 
-  /// How full one rack is, 0 to 1. A rack fills from where the one before it
-  /// finished, so the wall reads left to right without gaps.
-  double rackFill(int rack, int nowMs) {
-    final to = collapseCost(rack, nowMs);
-    final from = rack == 0 ? BigDouble.zero : collapseCost(rack - 1, nowMs);
-    final span = to - from;
-    if (span <= BigDouble.zero) return 0;
-    return ((walletEarned - from) / span).toDouble().clamp(0.0, 1.0);
-  }
-
-  /// Cubes per unit of substrate, before the divisor.
-  double get compileRate => 1 + compilerStep * compilerLevel.value;
-
-  /// What the current simulation would compile into.
-  ///
-  /// This run's substrate divided by [rawPerCube], not raised to a power.
-  /// A sublinear curve would pay more for splitting one haul across many
-  /// short runs than for one long one, and per-run banking would turn
-  /// into restart-spam; a division is neutral, so the same substrate is
-  /// worth the same cubes however many restarts it took to dig.
-  BigDouble get walletEarned =>
-      rawData.value * BigDouble.fromNum(compileRate / rawPerCube);
-
-  /// The collapse threshold at [nowMs], melted by drift since the cycle
-  /// began -- on the acknowledged clock, see [driftDays].
-  BigDouble collapseThreshold(int nowMs) {
-    final base =
-        collapseThresholdBase *
-        BigDouble.fromNum(collapseThresholdGrowth)
-            .pow(collapses.value.toDouble());
-    final days = driftDays(nowMs);
-    if (days <= 0) return base;
-    return base *
-        BigDouble.fromNum(math.pow(collapseDriftPerDay, days).toDouble());
-  }
-
-  /// Days of drift this cycle has banked, capped at [collapseDriftCapDays].
-  ///
-  /// Measured on the ACKNOWLEDGED clock, so an absence past [absenceCapMs]
-  /// melts the gate by two days, not by however long the player was gone.
-  /// A negative start means the app has not stamped the cycle yet.
-  double driftDays(int nowMs) {
-    final start = cycleStartMs.value;
-    if (start < 0) return 0;
-    final seen = seenNow(nowMs);
-    if (seen <= start) return 0;
-    final days = (seen - start) / Duration.millisecondsPerDay;
-    return days > collapseDriftCapDays ? collapseDriftCapDays : days;
-  }
-
-  /// How far through the drift window the cycle is, 0 to 1.
-  double driftProgress(int nowMs) => driftDays(nowMs) / collapseDriftCapDays;
-
-  /// How much of the gate the drift has already eaten, 0 to 1. What the wall
-  /// is worth now is (1 - this) of what it was worth on day zero.
-  double driftDiscount(int nowMs) =>
-      1 - math.pow(collapseDriftPerDay, driftDays(nowMs)).toDouble();
-
-  /// Whether one run's raw data has oversaturated the simulation.
-  bool collapseReady(int nowMs) => pendingCollapses(nowMs) >= 1;
-
-  /// One haul as MEASUREMENTS rather than as tonnes: how many typical drops
-  /// of its kind this is, over how often a drop of that kind is seen.
-  ///
-  /// Books a haul of substrate: into the store like any resource, and into
-  /// the cycle's running total, which is what the wallet is compressed from.
-  ///
-  /// The cycle total is kept apart because it must survive a Restart: the
-  /// store is wiped, the record of what this CYCLE has produced is not.
-  void _recordData(BigDouble gained) {
-    if (gained.isZero) return;
-    stock.add(ResourceId.rawData, gained);
-    cycleData.value = cycleData.value + gained;
-  }
+  void _recordData(BigDouble gained) => ledger.record(gained);
 
   /// The offline throttle: absence produces at a quarter of live pace.
   static const double offlineEfficiency = 0.25;
@@ -757,19 +492,11 @@ class PrototypeSimulation {
             merged[entry.key] =
                 (merged[entry.key] ?? BigDouble.zero) + entry.value;
           }
-          for (final line in craftLines) {
-            // The benches run at the SAME offline efficiency as the
-            // mine: absence throttles everything the AI runs -- one
-            // rule, one number, and the meta node that raises it will
-            // raise both. Time dilation, so a unit in progress simply
-            // advances slower.
-            _runCraftLine(
-              line,
-              step * offlineEfficiency,
-              crafted,
-              offline: true,
-            );
-          }
+          // The benches run at the SAME offline efficiency as the mine:
+          // absence throttles everything the AI runs -- one rule, one
+          // number, and the meta node that raises it will raise both.
+          // Time dilation, so a unit in progress simply advances slower.
+          shop.run(step * offlineEfficiency, crafted, offline: true);
           // The replicators obey the same throttle, and running inside
           // the slices lets them compound what the mine and the benches
           // deliver as it arrives.
@@ -886,196 +613,70 @@ class PrototypeSimulation {
   static const double strikeCritPower = 1.20;
 
   // ------------------------------------------------------------ drills
-  //
-  // A drill is a bore of some RADIUS working the face on its own CYCLE.
-  // What it brings up is what its blow brings up, scaled by how much face
-  // it covers -- one loot table, one truth, a wider sweep.
 
-  /// The bore every drill starts with, in metres.
-  static const double drillRadiusBase = 5;
+  /// The drills, their tracks and prices; see [DrillBank]. The names below
+  /// forward to it so every screen and test keeps one address.
+  late final DrillBank drillBank = DrillBank(stock);
 
-  /// What one level of the radius track adds. Additive on the RADIUS, so
-  /// the area it buys grows as pi(2r+1) -- the same level is worth more the
-  /// wider the bore already is, which is the whole point of the track.
-  static const double drillRadiusPerLevel = 1;
+  static const double drillRadiusBase = DrillBank.drillRadiusBase;
+  static const double drillRadiusPerLevel = DrillBank.drillRadiusPerLevel;
+  static const double drillSpeedStep = DrillBank.drillSpeedStep;
+  static const double drillIntervalFloor = DrillBank.drillIntervalFloor;
+  static const double drillCritBase = DrillBank.drillCritBase;
+  static const double drillCritPerLevel = DrillBank.drillCritPerLevel;
+  static const double drillCritPower = DrillBank.drillCritPower;
+  static const double drillEchoBase = DrillBank.drillEchoBase;
+  static const double drillEchoPerLevel = DrillBank.drillEchoPerLevel;
+  static const List<DrillRow> drillTable = DrillBank.drillTable;
+  static DrillRow rowFor(DrillId id) => DrillBank.rowFor(id);
+  static int drillDriveCap(DrillId id) => DrillBank.driveCap(id);
+  static BigDouble drillCostOf(DrillPart part, int level) =>
+      DrillBank.costOf(part, level);
 
-  /// What one level of the drive track cuts off the CURRENT interval. The
-  /// track is finite: it ends where the interval meets [drillIntervalFloor],
-  /// and its whole lifetime value is base / floor whatever this number is --
-  /// the percentage only sets how many levels that value is spread over.
-  static const double drillSpeedStep = 0.01;
-
-  /// No drill cycles faster than this. A floor rather than an asymptote, so
-  /// the timer can never outrun the frame.
-  static const double drillIntervalFloor = 2;
-
-  /// The calibration track: one number buying both odds.
-  static const double drillCritBase = 0.05;
-  static const double drillCritPerLevel = 0.002;
-  static const double drillCritPower = 1.20;
-  static const double drillEchoBase = 0.01;
-  static const double drillEchoPerLevel = 0.0005;
-
-  /// Every drill in the game, in the order they open.
-  ///
-  /// A table rather than a branch per drill: a new drill is a row here plus
-  /// its resource, not a new field threaded through every place that counts.
-  static const List<DrillRow> drillTable = [
-    DrillRow(DrillId.regolith, ResourceId.regolith, 'Реголітовий', 4),
-    DrillRow(DrillId.cuprite, ResourceId.cuprite, 'Купритовий', 100),
-    DrillRow(DrillId.ferrite, ResourceId.ferrite, 'Феритовий', 100),
-    DrillRow(DrillId.silicite, ResourceId.silicite, 'Силіцитовий', 100),
-    DrillRow(DrillId.crystal, ResourceId.crystals, 'Кристалічний', 100),
-  ];
-
-  static DrillRow rowFor(DrillId id) =>
-      drillTable.firstWhere((row) => row.id == id);
-
-  /// The levels each drill carries. Only the regolith drill is owned for
-  /// now; the rest wait on the restart tree.
-  final Map<DrillId, DrillState> drillState = {
-    for (final row in drillTable) row.id: DrillState(row.id),
-  };
-
-  DrillState drill(DrillId id) => drillState[id]!;
-
-  bool drillOwned(DrillId id) => id == DrillId.regolith;
-
-  /// The bore, in metres.
-  double drillRadius(DrillId id) =>
-      drillRadiusBase + drillRadiusPerLevel * drill(id).radius.value;
-
-  /// The face it covers, in square metres.
-  double drillArea(DrillId id) {
-    final r = drillRadius(id);
-    return math.pi * r * r;
-  }
-
-  /// How much more face than a fresh bore -- and so how much more its blow
-  /// brings up. Exactly 1 at level 0, which is what makes wiring it safe.
-  BigDouble drillYieldScale(DrillId id) => BigDouble.fromNum(
-    drillArea(id) / (math.pi * drillRadiusBase * drillRadiusBase),
-  );
-
-  /// Seconds between cycles, never below the floor.
-  double drillInterval(DrillId id) {
-    final base = rowFor(id).intervalBase;
-    final cut = math.pow(1 - drillSpeedStep, drill(id).drive.value).toDouble();
-    final interval = base * cut;
-    return interval < drillIntervalFloor ? drillIntervalFloor : interval;
-  }
-
-  /// The last drive level that still buys anything.
-  ///
-  /// Sold levels past this would cost real resources for nothing, so the
-  /// track simply ends here instead of clamping in silence.
-  static int drillDriveCap(DrillId id) {
-    final base = rowFor(id).intervalBase;
-    if (base <= drillIntervalFloor) return 0;
-    final n =
-        math.log(drillIntervalFloor / base) / math.log(1 - drillSpeedStep);
-    return n.ceil();
-  }
-
-  double drillCritChance(DrillId id) =>
-      drillCritBase + drillCritPerLevel * drill(id).calibration.value;
-
-  double drillEchoChance(DrillId id) =>
-      drillEchoBase + drillEchoPerLevel * drill(id).calibration.value;
-
-  static BigDouble drillCostOf(DrillPart part, int level) {
-    final base = switch (part) {
-      DrillPart.radius => 400.0,
-      DrillPart.drive => 900.0,
-      DrillPart.calibration => 2500.0,
-    };
-    final growth = switch (part) {
-      DrillPart.radius => 1.15,
-      DrillPart.drive => 1.17,
-      DrillPart.calibration => 1.22,
-    };
-    return (BigDouble.fromNum(base) *
-            BigDouble.fromNum(growth).pow(level.toDouble()))
-        .floor();
-  }
-
+  Map<DrillId, DrillState> get drillState => drillBank.states;
+  DrillState drill(DrillId id) => drillBank.drill(id);
+  bool drillOwned(DrillId id) => drillBank.owned(id);
+  double drillRadius(DrillId id) => drillBank.radius(id);
+  double drillArea(DrillId id) => drillBank.area(id);
+  BigDouble drillYieldScale(DrillId id) => drillBank.yieldScale(id);
+  double drillInterval(DrillId id) => drillBank.interval(id);
+  double drillCritChance(DrillId id) => drillBank.critChance(id);
+  double drillEchoChance(DrillId id) => drillBank.echoChance(id);
   BigDouble drillUpgradeCost(DrillId id, DrillPart part) =>
-      drillCostOf(part, drill(id).levelOf(part).value);
-
-  /// Where a track stops. Radius and calibration run on; the drive track is
-  /// finite by construction.
-  int drillCap(DrillId id, DrillPart part) =>
-      part == DrillPart.drive ? drillDriveCap(id) : 1 << 30;
-
-  bool drillAtCap(DrillId id, DrillPart part) =>
-      drill(id).levelOf(part).value >= drillCap(id, part);
-
+      drillBank.upgradeCost(id, part);
+  int drillCap(DrillId id, DrillPart part) => drillBank.cap(id, part);
+  bool drillAtCap(DrillId id, DrillPart part) => drillBank.atCap(id, part);
   bool canUpgradeDrill(DrillId id, DrillPart part) =>
-      drillOwned(id) &&
-      !drillAtCap(id, part) &&
-      stock.has(ResourceId.credits, drillUpgradeCost(id, part));
-
-  int upgradeDrill(DrillId id, DrillPart part, {int levels = 1}) => batch(() {
-    if (!drillOwned(id)) return 0;
-    final signal = drill(id).levelOf(part);
-    final cap = drillCap(id, part);
-    var bought = 0;
-    while (bought < levels && signal.value < cap) {
-      if (!stock.spend(ResourceId.credits, drillCostOf(part, signal.value))) {
-        break;
-      }
-      signal.value = signal.value + 1;
-      bought++;
-    }
-    return bought;
-  });
-
-  int affordableDrillLevels(DrillId id, DrillPart part) {
-    var purse = stock.amount(ResourceId.credits);
-    var level = drill(id).levelOf(part).value;
-    final cap = drillCap(id, part);
-    var count = 0;
-    while (level < cap && count < 1000) {
-      final price = drillCostOf(part, level);
-      if (purse < price) break;
-      purse -= price;
-      level++;
-      count++;
-    }
-    return count;
-  }
+      drillBank.canUpgrade(id, part);
+  int upgradeDrill(DrillId id, DrillPart part, {int levels = 1}) =>
+      batch(() => drillBank.upgrade(id, part, levels: levels));
+  int affordableDrillLevels(DrillId id, DrillPart part) =>
+      drillBank.affordableLevels(id, part);
 
   /// The band a strike's regolith lands in.
   ///
   /// The two ends move on different parts: the bit raises the FLOOR (a
   /// heavier head never comes back empty) and the drive raises the CEILING
   /// (a harder blow is what shakes a jackpot loose). PROVISIONAL rates.
-  BigDouble get strikeRegolithMin =>
-      _strikeRegolithMean *
-      BigDouble.fromNum(1 - regolithSpread) *
-      BigDouble.fromNum(minRegolithGrowth).pow(bitLevel.value.toDouble());
+  late final Computed<BigDouble> _strikeRegolithMin;
+  late final Computed<BigDouble> _strikeRegolithMax;
+  late final Computed<BigDouble> _strikeRegolithMean;
+  late final Computed<({BigDouble min, BigDouble max})> _strikeRegolithBand;
 
-  BigDouble get strikeRegolithMax =>
-      _strikeRegolithMean *
-      BigDouble.fromNum(1 + regolithSpread) *
-      BigDouble.fromNum(maxRegolithGrowth).pow(driveLevel.value.toDouble());
+  BigDouble get strikeRegolithMin => _strikeRegolithMin.value;
+  BigDouble get strikeRegolithMax => _strikeRegolithMax.value;
 
-  BigDouble get _strikeRegolithMean =>
-      regolithPerCycle.value * BigDouble.fromNum(strikeShareOfRig);
+  /// The band as every vitrine must quote it -- financing already applied.
+  ({BigDouble min, BigDouble max}) get strikeRegolithBand =>
+      _strikeRegolithBand.value;
 
-  /// What the arm swings on its own, before the rig is consulted.
-  BigDouble armPowerAt(int level) =>
-      BigDouble.fromNum(baseStrikePower + basePowerPerLevel * level);
+  BigDouble armPowerAt(int level) => arm.powerAt(level, baseStrikePower);
 
-  /// How much of the layer's REMAINING hp every blow collapses, the drive's
-  /// own buff on top of the floor every blow has.
-  /// The share of a layer's REMAINING hp every blow collapses on top of
-  /// its own power. EARNED, never born (owner, 2026-09-01): only the
-  /// drive's levels count, so a fresh arm digs on muscle alone and the
-  /// log-of-overmatch melt is something the player builds.
-  double get pierceShare => piercePerLevel * driveLevel.value;
+  double get pierceShare => arm.pierceShare.value;
 
-  BigDouble get strikePower => strikePowerAt(bitLevel.value);
+  late final Computed<BigDouble> _strikePower;
+
+  BigDouble get strikePower => _strikePower.value;
 
   /// The blow, never weaker than a share of the rig: an arm that could not
   /// keep up with its own drills would make the manual lane noise by the
@@ -1086,119 +687,34 @@ class PrototypeSimulation {
     return scaled > own ? scaled : own;
   }
 
-  /// PROVISIONAL price curves, gentle enough that five hundred levels are a
-  /// road rather than a wall.
-  static BigDouble costOf(ArmPart part, int level) {
-    final base = switch (part) {
-      ArmPart.bit => 120.0,
-      ArmPart.drive => 200.0,
-      ArmPart.supply => 150.0,
-    };
-    // Owner's multipliers (2026-09-01), reverse-engineered from the
-    // reference ladders: supply is the steep track.
-    final growth = switch (part) {
-      ArmPart.bit => 1.353,
-      ArmPart.drive => 1.365,
-      ArmPart.supply => 3.04,
-    };
-    return (BigDouble.fromNum(base) *
-            BigDouble.fromNum(growth).pow(level.toDouble()))
-        .ceil();
-  }
+  static BigDouble costOf(ArmPart part, int level) =>
+      ArmTracks.costOf(part, level);
 
-  Signal<int> levelOf(ArmPart part) => switch (part) {
-    ArmPart.bit => bitLevel,
-    ArmPart.drive => driveLevel,
-    ArmPart.supply => supplyLevel,
-  };
-
-  Signal<int> markOf(ArmPart part) => switch (part) {
-    ArmPart.bit => bitMark,
-    ArmPart.drive => driveMark,
-    ArmPart.supply => supplyMark,
-  };
-
-  Signal<int> peakOf(ArmPart part) => switch (part) {
-    ArmPart.bit => bitPeak,
-    ArmPart.drive => drivePeak,
-    ArmPart.supply => supplyPeak,
-  };
-
-  /// The best mark of [part] the player has ever built, from 0 (Mk I).
-  int knownGeneration(ArmPart part) => peakOf(part).value;
-
-  static const int lastMark = markCount - 1;
-
-  /// As far as [part] can be levelled before it has to be rebuilt: the
-  /// level at which the NEXT mark is obtained. The summit levels to the
-  /// track's top and rebuilds into nothing.
-  int ceilingOf(ArmPart part) {
-    final mark = markOf(part).value;
-    return mark >= lastMark ? maxPartLevel : markCeiling(mark + 1);
-  }
-
-  bool atMarkCeiling(ArmPart part) => levelOf(part).value >= ceilingOf(part);
-
-  /// A part at its ceiling with a mark left to build is ready to evolve.
-  bool canEvolve(ArmPart part) =>
-      atMarkCeiling(part) && markOf(part).value < lastMark;
-
-  /// Rebuilds [part] into its next mark. Returns the mark it now carries, or
-  /// null when it was not ready -- the caller has nothing to celebrate then.
-  int? evolve(ArmPart part) => batch(() {
-    if (!canEvolve(part)) return null;
-    final mark = markOf(part);
-    mark.value = mark.value + 1;
-    final peak = peakOf(part);
-    if (mark.value > peak.value) peak.value = mark.value;
-    return mark.value;
-  });
-
-  bool atMaxLevel(ArmPart part) =>
-      levelOf(part).value >= maxPartLevel && markOf(part).value >= lastMark;
-
-  BigDouble upgradeCost(ArmPart part) => costOf(part, levelOf(part).value);
-
-  bool canUpgrade(ArmPart part) =>
-      !atMarkCeiling(part) && stock.has(ResourceId.credits, upgradeCost(part));
-
-  /// Buys [levels] of [part], stopping at the cap or at what the store can
-  /// pay for -- whichever comes first. Returns how many actually landed.
-  int upgrade(ArmPart part, {int levels = 1}) => batch(() {
-    final signal = levelOf(part);
-    final ceiling = ceilingOf(part);
-    var bought = 0;
-    while (bought < levels && signal.value < ceiling) {
-      final price = costOf(part, signal.value);
-      if (!stock.spend(ResourceId.credits, price)) break;
-      signal.value = signal.value + 1;
-      bought++;
-    }
-    return bought;
-  });
-
-  /// How many levels of [part] the store could pay for right now.
-  int affordableLevels(ArmPart part) {
-    var purse = stock.amount(ResourceId.credits);
-    var level = levelOf(part).value;
-    final ceiling = ceilingOf(part);
-    var count = 0;
-    while (level < ceiling && count < maxPartLevel) {
-      final price = costOf(part, level);
-      if (!purse.gteWithTolerance(price)) break;
-      purse -= price;
-      level++;
-      count++;
-    }
-    return count;
-  }
+  Signal<int> levelOf(ArmPart part) => arm.levelOf(part);
+  Signal<int> markOf(ArmPart part) => arm.markOf(part);
+  Signal<int> peakOf(ArmPart part) => arm.peakOf(part);
+  int knownGeneration(ArmPart part) => arm.knownGeneration(part);
+  int ceilingOf(ArmPart part) => arm.ceilingOf(part);
+  bool atMarkCeiling(ArmPart part) => arm.atMarkCeiling(part);
+  bool canEvolve(ArmPart part) => arm.canEvolve(part);
+  int? evolve(ArmPart part) => batch(() => arm.evolve(part));
+  bool atMaxLevel(ArmPart part) => arm.atMaxLevel(part);
+  BigDouble upgradeCost(ArmPart part) => arm.upgradeCost(part);
+  bool canUpgrade(ArmPart part) => arm.canUpgrade(part);
+  int upgrade(ArmPart part, {int levels = 1}) =>
+      batch(() => arm.upgrade(part, levels: levels));
+  int affordableLevels(ArmPart part) => arm.affordableLevels(part);
 
   /// What one strike is expected to bring out of the face: the drop at this
   /// depth times how often the lane pays. A locked ore is worth nothing.
-  BigDouble expectedPerStrike(ResourceId id) {
+  final Map<ResourceId, Computed<BigDouble>> _expectedPerStrike = {};
+
+  BigDouble expectedPerStrike(ResourceId id) => _expectedPerStrike[id]!.value;
+
+  BigDouble _expectedPerStrikeOf(ResourceId id) {
     switch (id) {
       case ResourceId.regolith:
-        return _strikeRegolithMean * fundScaleOf(ResourceId.regolith);
+        return _strikeRegolithMean.value * fundScaleOf(ResourceId.regolith);
       case ResourceId.crystals:
         return crystalDropAt(layer.value) *
             BigDouble.fromNum(crystalChance) *
@@ -1230,10 +746,10 @@ class PrototypeSimulation {
   /// is the roll times the area. Everything else still belongs to
   /// strikes alone -- the drill's multiplier never touches the rest of
   /// the table (owner, 2026-09-01).
+  late final Computed<BigDouble> _expectedRegolithPerCycle;
+
   BigDouble expectedPerCycle(ResourceId id) => id == ResourceId.regolith
-      ? _strikeRegolithMean *
-            fundScaleOf(ResourceId.regolith) *
-            (drillYieldScale(DrillId.regolith) - BigDouble.one)
+      ? _expectedRegolithPerCycle.value
       : BigDouble.zero;
 
   /// The average yield of one resource per second at the current face.
@@ -1266,97 +782,87 @@ class PrototypeSimulation {
   /// Extraction belongs to strikes alone. The drill's cycle ends in a strike
   /// of its own, so both lanes roll the same loot table at the same odds,
   /// each on its own streams; the difference between the lanes is who threw
-  /// the blow. No crit roll here -- crits are the drill's drama.
+  /// the blow. The crit is rolled inside the loot roll (on this lane's own
+  /// stream) and multiplies the BLOW only -- never the haul.
   StrikeOutcome strike() => batch(() {
     if (energy.value < strikeCost) return StrikeOutcome.none;
     energy.value = energy.value - strikeCost;
 
-    final rolled = _rollLoot(prefix: 'strike.', multiplier: BigDouble.one);
+    final rolled = _rollLoot(prefix: 'strike.');
     final damage = rolled.critical
         ? strikePower * BigDouble.fromNum(strikeCritPower)
         : strikePower;
     final result = _applyDamage(damage);
+    final ores = Map<ResourceId, BigDouble>.of(rolled.loot)
+      ..remove(ResourceId.regolith);
     return StrikeOutcome(
       spent: strikeCost,
       layersBroken: result.broken,
       thickLayersBroken: result.thickBroken,
       regolithGained: rolled.loot[ResourceId.regolith] ?? BigDouble.zero,
-      oresGained: rolled.loot..remove(ResourceId.regolith),
+      oresGained: ores,
       critical: rolled.critical,
     );
   });
 
   /// What every strike carries out of the face, whoever struck.
   ///
-  /// Regolith always, at the strike share of the cycle formula; ores and
-  /// crystals by chance at the table's own odds. Each lane rolls on its own
-  /// streams ([prefix]), so manual digging can never shift the drill's
-  /// sequence. Quantonium is NOT loot: the anti-brick drip belongs to the
-  /// heartbeat.
+  /// Regolith always, inside the promised band; ores, crystals, the
+  /// quantonium glint and the substrate by chance at the table's own odds.
+  /// Each lane rolls on its own streams ([prefix]), so manual digging can
+  /// never shift the drill's sequence. Every lane pays its financing
+  /// multiplier here and nowhere else.
   ({bool critical, Map<ResourceId, BigDouble> loot}) _rollLoot({
     required String prefix,
-    required BigDouble multiplier,
     double? critChance,
   }) {
     final loot = <ResourceId, BigDouble>{};
+    final streams = _streamsFor(prefix);
 
-    // The one crit in the game. Rolled here so the loot scales in place; the
-    // caller reads the flag to scale the blow itself the same way.
-    final critical = random
-        .stream('${prefix}loot.crit')
-        .chance(critChance ?? strikeCritChance);
-    if (critical) {
-      multiplier = multiplier * BigDouble.fromNum(strikeCritPower);
-    }
+    // The one crit in the game. Rolled here, on this lane's stream, so the
+    // sequence stays where it always was; it scales the BLOW the caller
+    // throws, never the haul (owner, 2026-08-27) -- what the loot table
+    // promises is exactly what any strike pays.
+    final critical = streams.crit.chance(critChance ?? strikeCritChance);
 
     // A roll inside the band the loot table promises. The band's ends are
     // upgraded separately, so the roll walks between them rather than around
     // a mean -- one draw either way, so adding the parts shifted no stream.
     final low = strikeRegolithMin;
     final span = strikeRegolithMax - low;
-    final spread = random.stream('${prefix}regolith').nextDouble();
-    final regolith =
-        (low + span * BigDouble.fromNum(spread)) *
-        multiplier *
-        fundScaleOf(ResourceId.regolith);
-    stock.add(ResourceId.regolith, regolith);
-    loot[ResourceId.regolith] = regolith;
+    final spread = streams.regolith.nextDouble();
+    loot[ResourceId.regolith] = _payRegolith(
+      low + span * BigDouble.fromNum(spread),
+    );
 
     for (final row in oreTable) {
       if (layer.value < row.unlockAt) continue;
-      if (random.stream('$prefix${row.stream}').chance(row.chance)) {
-        final drop = oreDropAt(layer.value) * multiplier * fundScaleOf(row.id);
+      if (streams.ores[row.id]!.chance(row.chance)) {
+        final drop = oreDropAt(layer.value) * fundScaleOf(row.id);
         stock.add(row.id, drop);
         loot[row.id] = drop;
       }
     }
 
-    if (random.stream('${prefix}crystal').chance(crystalChance)) {
+    if (streams.crystal.chance(crystalChance)) {
       final drop =
-          crystalDropAt(layer.value) *
-          multiplier *
-          fundScaleOf(ResourceId.crystals);
+          crystalDropAt(layer.value) * fundScaleOf(ResourceId.crystals);
       stock.add(ResourceId.crystals, drop);
       loot[ResourceId.crystals] = drop;
     }
 
     // Named apart from the cycle's own anti-brick stream: the loot glint and
     // the heartbeat drip must never share a sequence.
-    if (random
-        .stream('${prefix}quantonium.loot')
-        .chance(strikeQuantoniumChance)) {
-      final drop = quantoniumDropAt(layer.value).big * multiplier;
+    if (streams.quantonium.chance(strikeQuantoniumChance)) {
+      final drop = quantoniumDropAt(layer.value).big;
       stock.add(ResourceId.quantonium, drop);
       loot[ResourceId.quantonium] = drop;
     }
 
     // The substrate lane. Its own stream, named apart from everything else,
     // so adding it shifted no roll that came before it.
-    if (random.stream('${prefix}rawdata').chance(rawDataChance)) {
-      final drop =
-          rawDataDropAt(layer.value) *
-          multiplier *
-          fundScaleOf(ResourceId.rawData);
+    if (streams.rawData.chance(rawDataChance)) {
+      final drop = rawDataDropAt(layer.value) * fundScaleOf(ResourceId.rawData);
       _recordData(drop);
       loot[ResourceId.rawData] = drop;
     }
@@ -1372,7 +878,6 @@ class PrototypeSimulation {
     // lives inside the loot roll.
     final rolled = _rollLoot(
       prefix: '',
-      multiplier: BigDouble.one,
       critChance: drillCritChance(DrillId.regolith),
     );
     final loot = rolled.loot;
@@ -1386,6 +891,8 @@ class PrototypeSimulation {
     final widened =
         struckRegolith * (drillYieldScale(DrillId.regolith) - BigDouble.one);
     if (!widened.isZero) {
+      // The strike's cut already carries the financing multiplier, so the
+      // widening adds bare on top of it.
       stock.add(ResourceId.regolith, widened);
       loot[ResourceId.regolith] = struckRegolith + widened;
     }
@@ -1394,9 +901,8 @@ class PrototypeSimulation {
 
     // The anti-brick drip lives in the loot table now: every strike can
     // shake quantonium loose, and the cycle rolls it through its own strike.
-    final quantoniumGained = loot.containsKey(ResourceId.quantonium)
-        ? quantoniumDropAt(layer.value)
-        : 0;
+    final quantoniumGained =
+        loot[ResourceId.quantonium]?.toDouble().round() ?? 0;
 
     // The cycle's blow is the rig's power plus the SAME strike a click
     // throws -- a full strike, damage and loot alike, not loot only. One
@@ -1447,6 +953,15 @@ class PrototypeSimulation {
     return (broken: broken, thickBroken: thickBroken);
   }
 
+  /// The ONE door regolith enters the store through: every lane -- the
+  /// strike's roll, the drill's widening, the break payouts -- pays the
+  /// financing multiplier here, so no payout can ever forget it again.
+  BigDouble _payRegolith(BigDouble base) {
+    final paid = base * fundScaleOf(ResourceId.regolith);
+    stock.add(ResourceId.regolith, paid);
+    return paid;
+  }
+
   /// Returns whether the broken layer was a thick one.
   bool _breakLayer() {
     final thick = isThick(layer.value);
@@ -1461,11 +976,10 @@ class PrototypeSimulation {
           BigDouble.fromNum(thickSpan) *
           fundScaleOf(ResourceId.rawData);
       final bonus = BigDouble.fromNum(thickSpan);
-      final regolith = regolithPerCycle.value * bonus;
       final crystals =
           crystalDropAt(layer.value) * bonus * fundScaleOf(ResourceId.crystals);
       final quantonium = (quantoniumDropAt(layer.value) * thickSpan).big;
-      stock.add(ResourceId.regolith, regolith);
+      _payRegolith(regolithPerCycle.value * bonus);
       stock.add(ResourceId.crystals, crystals);
       for (final row in oreTable) {
         if (layer.value < row.unlockAt) continue;
@@ -1474,10 +988,7 @@ class PrototypeSimulation {
       stock.add(ResourceId.quantonium, quantonium);
       stock.add(ResourceId.samples, BigDouble.one);
     } else {
-      stock.add(
-        ResourceId.regolith,
-        regolithPerCycle.value * BigDouble.fromNum(1.5),
-      );
+      _payRegolith(regolithPerCycle.value * BigDouble.fromNum(1.5));
     }
     _recordData(payout);
 
@@ -1502,453 +1013,100 @@ class PrototypeSimulation {
 
   bool get energyFull => energy.value >= energyCap;
 
-  bool get canBuyDrill => stock.has(ResourceId.regolith, drillCost.value);
-
-  void buyDrill() {
-    batch(() {
-      if (!stock.spend(ResourceId.regolith, drillCost.value)) return;
-      drills.value = drills.value + 1;
-    });
-  }
-
-  bool get canBuyPowerUpgrade =>
-      stock.has(ResourceId.regolith, powerUpgradeCost.value);
-
-  void buyPowerUpgrade() {
-    batch(() {
-      if (!stock.spend(ResourceId.regolith, powerUpgradeCost.value)) return;
-      drillPowerLevel.value = drillPowerLevel.value + 1;
-    });
-  }
-
   // ---------------------------------------------------------- financing
 
-  /// What the first round costs; every next costs [trancheCostGrowth] more.
-  /// PROVISIONAL, like every constant here.
-  static final BigDouble roundCostBase = BigDouble.fromNum(500);
-  static const double roundCostGrowth = 1.9;
+  static final BigDouble roundCostBase = FinancingBooks.roundCostBase;
+  static const double roundCostGrowth = FinancingBooks.roundCostGrowth;
+  static const List<({ResourceId id, double step})> fundTable =
+      FinancingBooks.fundTable;
+  static const double fundSpentStep = FinancingBooks.fundSpentStep;
+  static const double fundRankStep = FinancingBooks.fundRankStep;
+  static const int fundCapBase = FinancingBooks.fundCapBase;
+  static const int fundCapPerRank = FinancingBooks.fundCapPerRank;
+  static double fundStep(ResourceId id) => FinancingBooks.fundStep(id);
+  static int investCostAt(int level) => FinancingBooks.investCostAt(level);
+  static int tranchesInto(int levels) => FinancingBooks.tranchesInto(levels);
+  static int rankThreshold(int rank) => FinancingBooks.rankThreshold(rank);
 
-  /// Each fundable resource and its per-level step. THE RULE: financing
-  /// funds what earns credits -- the price list plus credits themselves --
-  /// plus ONE owner's exception: raw data, at the slowest step, because the
-  /// substrate is the product the simulation is mined FOR. Quantonium stays
-  /// with the trees. Steps UNEQUAL on purpose (owner's numbers).
-  /// PROVISIONAL.
-  static const List<({ResourceId id, double step})> fundTable = [
-    (id: ResourceId.credits, step: 1.07),
-    (id: ResourceId.regolith, step: 1.05),
-    (id: ResourceId.cuprite, step: 1.06),
-    (id: ResourceId.ferrite, step: 1.05),
-    (id: ResourceId.rawData, step: 1.01),
-  ];
+  int get tranchesPerRound => books.tranchesPerRound;
+  Signal<BigDouble> get creditsEarned => books.creditsEarned;
+  Signal<int> fundingOf(ResourceId id) => books.fundingOf(id);
+  int get financeRound => books.round;
+  BigDouble roundFloor(int round) => books.roundFloor(round);
+  BigDouble get nextRoundCost => books.nextRoundCost;
+  double get roundProgress => books.roundProgress;
+  int investCost(ResourceId id) => books.investCost(id);
+  int get tranchesSpent => books.tranchesSpent;
+  Signal<int> get tranchesGranted => books.tranchesGranted;
+  int grantedLevelsOf(ResourceId id) => books.grantedLevelsOf(id);
+  bool get fundingWasReset => books.wasReset;
+  set fundingWasReset(bool value) => books.wasReset = value;
+  int get tranchesFree => books.tranchesFree;
+  int grantFundLevels(ResourceId id, int levels) =>
+      books.grantLevels(id, levels);
+  int get financeRank => books.rank;
+  double get rankProgress => books.rankProgress;
+  int get fundCap => books.cap;
+  bool canInvest(ResourceId id) => books.canInvest(id);
+  bool investTranche(ResourceId id) => books.invest(id);
+  BigDouble get fundGlobalScale => books.globalScale;
 
-  /// Tranches paid per closed round. A future tree node raises it.
-  int get tranchesPerRound => 3;
-
-  /// The global compounding for every tranche SPENT and every rank climbed.
-  static const double fundSpentStep = 1.01;
-  static const double fundRankStep = 1.02;
-
-  /// How many more levels every multiplier gains per rank. TEN, not the
-  /// five first asked for: cap room grows lanes×this per rank against a
-  /// threshold step that settles at 40, and with four lanes a five left
-  /// nowhere to spend past rank four -- the same lock the thresholds were
-  /// already capped against, reopened from the other side.
-  static const int fundCapBase = 10;
-  static const int fundCapPerRank = 10;
-
-  /// Credits earned over this simulation's whole life -- income only, never
-  /// reduced by spending. This is what financing rounds are raised against:
-  /// the AI proves turnover, the backer opens the next round.
-  final Signal<BigDouble> creditsEarned = Signal(
-    BigDouble.zero,
-    name: 'credits earned',
-  );
-
-  final Map<ResourceId, Signal<int>> _funding = {
-    for (final row in fundTable)
-      row.id: Signal(0, name: 'funding ${row.id.name}'),
-  };
-
-  Signal<int> fundingOf(ResourceId id) => _funding[id]!;
-
-  static double fundStep(ResourceId id) =>
-      fundTable.firstWhere((row) => row.id == id).step;
-
-  /// Rounds closed so far, from lifetime turnover. Geometric ladder:
-  /// total to reach round n is base·(g^n − 1)/(g − 1), inverted with a log
-  /// so a qa-scale turnover does not loop a million times.
-  late final Computed<int> _financeRound;
-  int get financeRound => _financeRound.value;
-
-  /// Lifetime turnover at which [round] is reached.
-  BigDouble roundFloor(int round) =>
-      roundCostBase *
-      (BigDouble.fromNum(roundCostGrowth).pow(round.toDouble()) -
-          BigDouble.one) /
-      BigDouble.fromNum(roundCostGrowth - 1);
-
-  /// What the NEXT round still wants, and how far along it is.
-  BigDouble get nextRoundCost =>
-      roundCostBase *
-      BigDouble.fromNum(roundCostGrowth).pow(financeRound.toDouble());
-
-  double get roundProgress {
-    final into = creditsEarned.value - roundFloor(financeRound);
-    if (into <= BigDouble.zero) return 0;
-    final frac = (into / nextRoundCost).toDouble();
-    return frac > 1 ? 1 : frac;
-  }
-
-  /// What buying the NEXT level of a lane costs, in tranches: one for the
-  /// first twenty levels, two for the next twenty, and so on. Deep levels
-  /// cost more -- and, through the spent-multiplier, also pump the global
-  /// harder per level: the price is its own compensation.
-  static int investCostAt(int level) => 1 + level ~/ 20;
-
-  int investCost(ResourceId id) => investCostAt(_funding[id]!.value);
-
-  /// Tranches sunk into [levels] of one lane, price tiers included.
-  /// Closed form of summing [investCostAt] over 0..levels-1.
-  static int tranchesInto(int levels) {
-    final blocks = levels ~/ 20;
-    final rest = levels % 20;
-    return 10 * blocks * (blocks + 1) + rest * (blocks + 1);
-  }
-
-  /// Tranches ever invested, whatever they were invested in -- COST-
-  /// weighted, so a deep level counts for what it actually drained. This is
-  /// what ranks are climbed on and what the global spent-multiplier
-  /// compounds from: the backer rewards commitment, not hoarding.
-  late final Computed<int> _tranchesSpent;
-  int get tranchesSpent => _tranchesSpent.value;
-
-  /// Tranches granted outright -- by a tree node that gifts levels, or any
-  /// future source. Counted as both given AND spent, so a gift climbs ranks
-  /// and pumps the global exactly like poured tranches, without silently
-  /// draining the player's own free pool. A Signal, not a field: the free
-  /// pool depends on it, and a grant must invalidate that chain.
-  final Signal<int> tranchesGranted = Signal(0, name: 'tranches granted');
-
-  /// Gifted levels per lane, remembered apart from bought ones: when a
-  /// balance change makes a saved distribution impossible, the reset melts
-  /// only what the player poured -- gifts are the floor it melts down to.
-  final Map<ResourceId, int> _grantedLevels = {
-    for (final row in fundTable) row.id: 0,
-  };
-
-  int grantedLevelsOf(ResourceId id) => _grantedLevels[id] ?? 0;
-
-  /// Set by [readJson] when it had to melt an impossible distribution, so
-  /// the app can tell the player to redistribute. Cleared by the reader.
-  bool fundingWasReset = false;
-
-  /// Whether the loaded funding books balance: no lane above its cap, and
-  /// the free pool not in the negative. A save from a build with different
-  /// prices, tranche pay or thresholds can violate either.
-  bool get _fundingBooksBalance {
-    if (financeRound * tranchesPerRound +
-            tranchesGranted.value -
-            tranchesSpent <
-        0) {
-      return false;
-    }
-    for (final row in fundTable) {
-      if (_funding[row.id]!.value > fundCap) return false;
-    }
-    return true;
-  }
-
-  /// Melts every lane down to its gifted floor and re-credits the gifts at
-  /// today's prices. Free tranches come back in full for the player to pour
-  /// again -- correctly this time.
-  void _resetFunding() {
-    var granted = 0;
-    for (final row in fundTable) {
-      final floor = _grantedLevels[row.id] ?? 0;
-      _funding[row.id]!.value = floor;
-      granted += tranchesInto(floor);
-    }
-    tranchesGranted.value = granted;
-    fundingWasReset = true;
-  }
-
-  late final Computed<int> _tranchesFree;
-  int get tranchesFree => _tranchesFree.value;
-
-  /// Gifts [levels] of [id], cap-clamped, at no cost to the free pool: each
-  /// level's tiered price is credited to [tranchesGranted] as it is spent.
-  /// Returns how many levels actually landed.
-  int grantFundLevels(ResourceId id, int levels) {
-    final signal = _funding[id]!;
-    var landed = 0;
-    while (landed < levels && signal.value < fundCap) {
-      tranchesGranted.value =
-          tranchesGranted.value + investCostAt(signal.value);
-      signal.value = signal.value + 1;
-      landed++;
-    }
-    _grantedLevels[id] = (_grantedLevels[id] ?? 0) + landed;
-    return landed;
-  }
-
-  /// What climbing to rank [rank] costs in TOTAL tranches spent.
-  ///
-  /// The step walks 20, 25, 30, 35, 40 and then stays at 40 -- capped on
-  /// purpose. Uncapped it grew quadratically against level caps that grow
-  /// linearly, and past rank ~10 there was nowhere left to spend enough:
-  /// a hard lock by arithmetic. Flat steps keep both lines linear, with a
-  /// margin of 50 tranches for ever (pinned by test).
-  static int rankThreshold(int rank) {
-    var total = 0;
-    for (var step = 1; step <= rank; step++) {
-      final increment = step < 5 ? 15 + 5 * step : 40;
-      total += increment;
-    }
-    return total;
-  }
-
-  /// The financing rank: how far the SPENDING has climbed.
-  late final Computed<int> _financeRank;
-  int get financeRank => _financeRank.value;
-
-  /// How far along the next rank's requirement the spending is, 0 to 1.
-  double get rankProgress {
-    final floor = rankThreshold(financeRank);
-    final ceiling = rankThreshold(financeRank + 1);
-    if (ceiling <= floor) return 0;
-    return ((tranchesSpent - floor) / (ceiling - floor)).clamp(0.0, 1.0);
-  }
-
-  /// Where every multiplier's level stops at the current rank.
-  late final Computed<int> _fundCap;
-  int get fundCap => _fundCap.value;
-
-  bool canInvest(ResourceId id) =>
-      tranchesFree >= investCost(id) && _funding[id]!.value < fundCap;
-
-  bool investTranche(ResourceId id) {
-    if (!canInvest(id)) return false;
-    final signal = _funding[id]!;
-    signal.value = signal.value + 1;
-    return true;
-  }
-
-  /// The global compounding: every spent tranche and every rank multiply
-  /// EVERY funded lane, whatever the tranche was spent on.
-  late final Computed<BigDouble> _fundGlobalScale;
-  BigDouble get fundGlobalScale => _fundGlobalScale.value;
-
-  /// The effective multiplier a resource's income wears -- one cached
-  /// Computed per lane, because the strike loot reads all of them on every
-  /// blow. A lane outside the table is untouched: not even the global rides
-  /// it -- prestige fuel answers to the trees, not to the backer.
-  final Map<ResourceId, Computed<BigDouble>> _fundScales = {};
-
-  BigDouble fundScaleOf(ResourceId id) =>
-      _fundScales[id]?.value ?? BigDouble.one;
-
-  /// Every credit income lands here, whatever sold it: the wallet gets the
-  /// money, the financing ladder gets the proof of turnover.
-  void _earnCredits(BigDouble paid) {
-    stock.add(ResourceId.credits, paid);
-    creditsEarned.value = creditsEarned.value + paid;
-  }
+  /// The effective multiplier a resource's income wears; see
+  /// [FinancingBooks.scaleOf].
+  BigDouble fundScaleOf(ResourceId id) => books.scaleOf(id);
 
   // --------------------------------------------------------- replicator
 
-  /// The replicator runs in CYCLES: one cycle is the resource's own
-  /// BASE craft time, and each finished cycle pays the tier's yield.
-  /// PROVISIONAL by rule zero.
-  static const double replicatorMinSeconds = 1;
+  /// The machines, one per craftable resource, each its own object with
+  /// its own signals and graph -- see [ReplicatorMachine]. The tier
+  /// tables live beside it; the statics below forward to them so every
+  /// caller keeps one address.
+  late final Map<ResourceId, rep.ReplicatorMachine> _replicators = {
+    for (final id in rep.replicableIds) id: rep.ReplicatorMachine(stock, id),
+  };
 
-  /// Each speed level shaves one percent off the CURRENT cycle time
-  /// (0.99^n -- the drill-drive reading: geometric, never crossing
-  /// zero), still floored at one second.
-  static const double replicatorSpeedDecay = 0.99;
+  rep.ReplicatorMachine replicator(ResourceId id) => _replicators[id]!;
 
-  /// One number per tier -- the shape every replicator table shares.
-  static double _tierOf(
-    ResourceId id,
-    double materials,
-    double building,
-    double tech,
-  ) {
-    for (final group in tradeGroups) {
-      if (group.ids.contains(id)) {
-        return switch (group.key) {
-          'materials' => materials,
-          'building' => building,
-          'tech' => tech,
-          _ => materials,
-        };
-      }
-    }
-    return materials;
-  }
-
-  /// What one cycle pays before the amount track, by tier.
-  static int replicatorBaseYield(ResourceId id) =>
-      _tierOf(id, 100, 50, 5).round();
-
-  /// The cycle stretches the craft time by tier (owner, 2026-09-01):
-  /// materials x2, building x4, technologies x8.
-  static double replicatorDurationFactor(ResourceId id) => _tierOf(id, 2, 4, 8);
-
-  /// What one amount level ADDS to the payout, by tier.
+  static const double replicatorMinSeconds = rep.replicatorMinSeconds;
+  static const double replicatorSpeedDecay = rep.replicatorSpeedDecay;
+  static List<ResourceId> get replicableIds => rep.replicableIds;
+  static int replicatorBaseYield(ResourceId id) => rep.replicatorBaseYield(id);
+  static double replicatorDurationFactor(ResourceId id) =>
+      rep.replicatorDurationFactor(id);
   static int replicatorAmountStep(ResourceId id) =>
-      _tierOf(id, 10, 5, 1).round();
-
-  /// What the replicator may copy: only what a bench can MAKE -- the
-  /// craft outputs. Raw diggings, currencies and prestige fuel never
-  /// replicate (owner, 2026-09-01).
-  static final List<ResourceId> replicableIds = [
-    for (final row in craftTable) row.output,
-  ];
-
-  /// The one-time toll for pointing the machine at a resource, paid in
-  /// units of THAT resource and priced by its tier (owner, 2026-09-01):
-  /// materials 5000, building components 2500, technologies 750.
-  /// PROVISIONAL by rule zero.
-  static double replicatorUnlockCost(ResourceId id) {
-    for (final group in tradeGroups) {
-      if (group.ids.contains(id)) {
-        return switch (group.key) {
-          'materials' => 5000,
-          'building' => 2500,
-          'tech' => 750,
-          _ => 5000,
-        };
-      }
-    }
-    return 5000;
-  }
-
-  /// Which resources the machine has been calibrated for.
-  final Map<ResourceId, Signal<bool>> _replicatorUnlocked = {
-    for (final row in craftTable)
-      row.output: Signal(false, name: 'replicator open ${row.output.name}'),
-  };
-
-  Signal<bool> replicatorUnlockedOf(ResourceId id) => _replicatorUnlocked[id]!;
-
-  /// Quantonium's first use since its restart-currency role was cut
-  /// (owner, 2026-09-01): every replicator payment point also costs
-  /// the mineral. Unlock is flat by tier; tracks double per level.
-  /// PROVISIONAL by rule zero.
+      rep.replicatorAmountStep(id);
+  static double replicatorUnlockCost(ResourceId id) =>
+      rep.replicatorUnlockCost(id);
   static double replicatorUnlockQuant(ResourceId id) =>
-      _tierOf(id, 2500, 5000, 10000);
+      rep.replicatorUnlockQuant(id);
+  static double replicatorSecondsAt(ResourceId id, int speedLevel) =>
+      rep.replicatorSecondsAt(id, speedLevel);
 
-  /// Track quantonium bases ride the tier too: a share of the unlock
-  /// ask (speed 10%, amount 15%), doubling per level.
-  BigDouble replicatorSpeedQuant(ResourceId id) =>
-      BigDouble.fromNum(replicatorUnlockQuant(id) * 0.1) *
-      BigDouble.fromNum(2).pow(_replicatorSpeed[id]!.value.toDouble());
-
-  BigDouble replicatorAmountQuant(ResourceId id) =>
-      BigDouble.fromNum(replicatorUnlockQuant(id) * 0.15) *
-      BigDouble.fromNum(2).pow(_replicatorAmount[id]!.value.toDouble());
-
-  bool canUnlockReplicator(ResourceId id) =>
-      !_replicatorUnlocked[id]!.value &&
-      stock.has(id, BigDouble.fromNum(replicatorUnlockCost(id))) &&
-      stock.has(
-        ResourceId.quantonium,
-        BigDouble.fromNum(replicatorUnlockQuant(id)),
-      );
-
-  /// Pays the toll -- the resource itself plus quantonium -- and opens
-  /// its replicator.
-  bool unlockReplicator(ResourceId id) => batch(() {
-    if (!canUnlockReplicator(id)) return false;
-    stock.spend(id, BigDouble.fromNum(replicatorUnlockCost(id)));
-    stock.spend(
-      ResourceId.quantonium,
-      BigDouble.fromNum(replicatorUnlockQuant(id)),
-    );
-    _replicatorUnlocked[id]!.value = true;
-    return true;
-  });
-
-  /// The two tracks every machine carries: SPEED shortens the cycle
-  /// (rate-multiplied, floored), AMOUNT adds +1 to the payout.
-  final Map<ResourceId, Signal<int>> _replicatorSpeed = {
-    for (final row in craftTable)
-      row.output: Signal(0, name: 'replicator speed ${row.output.name}'),
-  };
-  final Map<ResourceId, Signal<int>> _replicatorAmount = {
-    for (final row in craftTable)
-      row.output: Signal(0, name: 'replicator amount ${row.output.name}'),
-  };
-
-  /// How far into its current cycle each machine stands, 0..1.
-  final Map<ResourceId, Signal<double>> _replicatorFraction = {
-    for (final row in craftTable)
-      row.output: Signal(0, name: 'replicator cycle ${row.output.name}'),
-  };
-
-  Signal<int> replicatorSpeedOf(ResourceId id) => _replicatorSpeed[id]!;
-  Signal<int> replicatorAmountOf(ResourceId id) => _replicatorAmount[id]!;
-  Signal<double> replicatorFractionOf(ResourceId id) =>
-      _replicatorFraction[id]!;
-
-  /// The machine's cycle, seconds: the resource's craft time stretched
-  /// by the tier factor, shaved 1% per speed level, never under the
-  /// floor.
-  double replicatorSeconds(ResourceId id) {
-    final base = craftRecipeOf(id)!.baseSeconds * replicatorDurationFactor(id);
-    final paced =
-        base * math.pow(replicatorSpeedDecay, _replicatorSpeed[id]!.value);
-    return paced < replicatorMinSeconds ? replicatorMinSeconds : paced;
-  }
-
-  /// What one finished cycle pays: tier yield plus the amount track's
-  /// tier steps.
-  int replicatorYieldOf(ResourceId id) =>
-      replicatorBaseYield(id) +
-      replicatorAmountStep(id) * _replicatorAmount[id]!.value;
-
-  /// Both tracks price in the resource itself, geometrically off the
-  /// tier's unlock toll. PROVISIONAL by rule zero.
+  Signal<bool> replicatorUnlockedOf(ResourceId id) => replicator(id).unlocked;
+  Signal<int> replicatorSpeedOf(ResourceId id) => replicator(id).speed;
+  Signal<int> replicatorAmountOf(ResourceId id) => replicator(id).amount;
+  Signal<double> replicatorFractionOf(ResourceId id) => replicator(id).fraction;
+  double replicatorSeconds(ResourceId id) => replicator(id).seconds.value;
+  int replicatorYieldOf(ResourceId id) => replicator(id).yieldPerCycle.value;
   BigDouble replicatorSpeedCost(ResourceId id) =>
-      BigDouble.fromNum(replicatorUnlockCost(id)) *
-      BigDouble.fromNum(3).pow(_replicatorSpeed[id]!.value + 1.0);
-
+      replicator(id).speedCost.value;
   BigDouble replicatorAmountCost(ResourceId id) =>
-      BigDouble.fromNum(replicatorUnlockCost(id)) *
-      BigDouble.fromNum(4).pow(_replicatorAmount[id]!.value + 1.0);
+      replicator(id).amountCost.value;
+  BigDouble replicatorSpeedQuant(ResourceId id) =>
+      replicator(id).speedQuant.value;
+  BigDouble replicatorAmountQuant(ResourceId id) =>
+      replicator(id).amountQuant.value;
+  BigDouble replicatorPerSecondOf(ResourceId id) =>
+      replicator(id).perSecond.value;
 
-  bool canUpgradeReplicatorSpeed(ResourceId id) =>
-      _replicatorUnlocked[id]!.value &&
-      stock.has(id, replicatorSpeedCost(id)) &&
-      stock.has(ResourceId.quantonium, replicatorSpeedQuant(id));
-
-  bool canUpgradeReplicatorAmount(ResourceId id) =>
-      _replicatorUnlocked[id]!.value &&
-      stock.has(id, replicatorAmountCost(id)) &&
-      stock.has(ResourceId.quantonium, replicatorAmountQuant(id));
-
-  bool upgradeReplicatorSpeed(ResourceId id) => batch(() {
-    if (!canUpgradeReplicatorSpeed(id)) return false;
-    stock.spend(id, replicatorSpeedCost(id));
-    stock.spend(ResourceId.quantonium, replicatorSpeedQuant(id));
-    _replicatorSpeed[id]!.value = _replicatorSpeed[id]!.value + 1;
-    return true;
-  });
-
-  bool upgradeReplicatorAmount(ResourceId id) => batch(() {
-    if (!canUpgradeReplicatorAmount(id)) return false;
-    stock.spend(id, replicatorAmountCost(id));
-    stock.spend(ResourceId.quantonium, replicatorAmountQuant(id));
-    _replicatorAmount[id]!.value = _replicatorAmount[id]!.value + 1;
-    return true;
-  });
-
-  /// The vitrine's floor: whole cycles per minute times the payout.
-  BigDouble replicatorPerMinuteOf(ResourceId id) =>
-      !_replicatorUnlocked[id]!.value
-      ? BigDouble.zero
-      : BigDouble.fromNum(replicatorYieldOf(id) * 60.0 / replicatorSeconds(id));
+  bool canUnlockReplicator(ResourceId id) => replicator(id).canUnlock;
+  bool unlockReplicator(ResourceId id) => batch(() => replicator(id).unlock());
+  bool canUpgradeReplicatorSpeed(ResourceId id) => replicator(id).canSpeedUp;
+  bool canUpgradeReplicatorAmount(ResourceId id) => replicator(id).canWiden;
+  bool upgradeReplicatorSpeed(ResourceId id) =>
+      batch(() => replicator(id).speedUp());
+  bool upgradeReplicatorAmount(ResourceId id) =>
+      batch(() => replicator(id).widen());
 
   /// The last [seenNow] stamp the replicators settled to; -1 = never.
   int replicatorLastSeenMs = -1;
@@ -1977,18 +1135,9 @@ class PrototypeSimulation {
   Map<ResourceId, BigDouble> _runReplicator(double span) {
     final gains = <ResourceId, BigDouble>{};
     batch(() {
-      for (final id in replicableIds) {
-        if (!_replicatorUnlocked[id]!.value) continue;
-        final total =
-            _replicatorFraction[id]!.value + span / replicatorSeconds(id);
-        final whole = total.floor();
-        _replicatorFraction[id]!.value = total - whole;
-        if (whole <= 0) continue;
-        final gained = BigDouble.fromNum(
-          whole * replicatorYieldOf(id).toDouble(),
-        );
-        stock.add(id, gained);
-        gains[id] = gained;
+      for (final machine in _replicators.values) {
+        final gained = machine.run(span);
+        if (!gained.isZero) gains[machine.id] = gained;
       }
     });
     return gains;
@@ -1996,485 +1145,73 @@ class PrototypeSimulation {
 
   // -------------------------------------------------------------- craft
 
-  /// The machines. Two to start with; the rest are bought with credits.
-  final List<CraftLine> craftLines = [];
-
-  /// The last [seenNow] stamp [syncCraft] settled to; -1 = never stamped.
-  /// Acknowledged-clock units, so the 48h absence cap is inherited.
-  int craftLastSeenMs = -1;
+  List<CraftLine> get craftLines => shop.lines;
+  int get craftLastSeenMs => shop.lastSeenMs;
+  set craftLastSeenMs(int value) => shop.lastSeenMs = value;
 
   /// Advances every line by the wall time since the last call and returns
-  /// what the span produced, for the offline window. One formula from the
-  /// time delta -- identical online and offline, per the house rule; the
-  /// pause melts under it like the drift and the request board do.
+  /// what the span produced, for the offline window. Banks the wall span
+  /// first: the acknowledged clock only advances when observed, and craft
+  /// must not depend on someone else having looked.
   Map<ResourceId, BigDouble> syncCraft(int nowMs) {
-    // Bank the wall span first: the acknowledged clock only advances when
-    // observed, and craft must not depend on someone else having looked.
     observeWall(nowMs);
-    final seen = wallSeenMs;
-    if (craftLastSeenMs < 0) {
-      craftLastSeenMs = seen;
-      return const {};
-    }
-    final span = (seen - craftLastSeenMs) / 1000.0;
-    craftLastSeenMs = seen;
-    if (span <= 0) return const {};
-    final made = <ResourceId, BigDouble>{};
-    batch(() {
-      for (final line in craftLines) {
-        _runCraftLine(line, span, made);
-      }
-    });
-    return made;
+    return shop.sync(wallSeenMs);
   }
 
-  void _runCraftLine(
-    CraftLine line,
-    double span,
-    Map<ResourceId, BigDouble> made, {
-    bool offline = false,
-  }) {
-    final row = craftRecipeOf(line.recipe.value);
-    if (line.halted.value) {
-      // A hand-stop is a FREEZE-FRAME: progress, boost and the picture
-      // all hold exactly where they were until the player resumes.
-      return;
-    }
-    if (row == null || line.done) return;
-    // The walk goes UNIT BY UNIT. A unit is prepaid on start and delivered
-    // whole on finish; each finish may add a boost stack, which speeds up
-    // every unit after it. Stepping through them keeps one long span
-    // identical to the same span in pieces -- the offline-parity invariant.
-    var remaining = span;
-    var guard = 0;
-    while (remaining > 1e-9 && guard++ < 700000) {
-      if (!line.unitLoaded.value && !_loadCraftUnit(line, row)) {
-        // Standing hungry drains the warm-up: a stack dies for every
-        // [craftBoostDecaySeconds] of starvation, the remainder banked
-        // so a long span equals the same span in pieces.
-        final bank = line.starveBank.value + remaining;
-        final lost = bank ~/ craftBoostDecaySeconds;
-        if (lost > 0 && line.boostStacks.value > 0) {
-          final left = line.boostStacks.value - lost;
-          line.boostStacks.value = left < 0 ? 0 : left;
-        }
-        line.starveBank.value = bank % craftBoostDecaySeconds;
-        break;
-      }
-      // The bench is fed and working: the hunger bank starts over.
-      line.starveBank.value = 0;
-      final eff = line.craftSeconds.value;
-      final timeLeft = (1 - line.unitFraction.value) * eff;
-      if (remaining < timeLeft - 1e-12) {
-        line.unitFraction.value = line.unitFraction.value + remaining / eff;
-        break;
-      }
-      remaining -= timeLeft;
-      final ordinal = line.unitOrdinal.value;
-      // An absence pays the floor: no duplicate rolls and no new boost
-      // stacks (owner's rule) -- chance is a bonus for the present eye.
-      // The ordinal still advances, so the coins resume deterministically
-      // from the right place when the player returns.
-      final doubled = !offline && craftDuplicateRoll(ordinal);
-      if (doubled) line.dupCount.value = line.dupCount.value + 1;
-      final units = line.unitsPerCraft.value * (doubled ? 2 : 1);
-      final out = BigDouble.fromNum(units);
-      stock.add(row.output, out);
-      made[row.output] = (made[row.output] ?? BigDouble.zero) + out;
-      line.producedCount.value = line.producedCount.value + units;
-      line.unitFraction.value = 0;
-      line.unitLoaded.value = false;
-      line.unitOrdinal.value = ordinal + 1;
-      if (!offline &&
-          line.boostStacks.value < craftBoostCap &&
-          craftBoostRoll(ordinal)) {
-        line.boostStacks.value = line.boostStacks.value + 1;
-      }
-      if (line.done) break;
-    }
-  }
-
-  /// Takes one unit's full inputs from the stock, or refuses untouched:
-  /// the unit is PREPAID, all or nothing.
-  bool _loadCraftUnit(CraftLine line, CraftRecipe row) {
-    final scale = math.pow(craftCostStep, line.tier.value).toDouble();
-    for (final entry in row.inputs.entries) {
-      final need = BigDouble.fromNum(entry.value * scale);
-      if (!stock.amount(entry.key).gteWithTolerance(need)) return false;
-    }
-    for (final entry in row.inputs.entries) {
-      final need = BigDouble.fromNum(entry.value * scale);
-      final held = stock.amount(entry.key);
-      stock.spend(entry.key, need.gteWithTolerance(held) ? held : need);
-    }
-    line.unitLoaded.value = true;
-    return true;
-  }
-
-  /// Puts a loaded, unfinished unit's inputs back on the shelf -- the
-  /// cancel path. Uses the line's CURRENT recipe and tier, so it must run
-  /// before either changes.
-  void _refundCraftUnit(CraftLine line) {
-    if (!line.unitLoaded.value) return;
-    final row = craftRecipeOf(line.recipe.value);
-    if (row != null) {
-      final scale = math.pow(craftCostStep, line.tier.value).toDouble();
-      for (final entry in row.inputs.entries) {
-        stock.add(entry.key, BigDouble.fromNum(entry.value * scale));
-      }
-    }
-    line.unitLoaded.value = false;
-  }
-
-  /// Assigns what the line makes and the run mode, chosen together in the
-  /// picker. A fresh order restarts the count toward [limit] (-1 =
-  /// endless) and the warm-up: the boost belongs to the job. The unit in
-  /// progress is scrapped and its prepaid inputs go back on the shelf --
-  /// cancelling never costs resources (owner's rule).
-  /// Assigning is launching a NEW order, so the compression level may be
-  /// chosen with it -- the mid-job lock guards a RUNNING job, not this.
   void assignCraftRecipe(
     int index,
     ResourceId? output, {
     int limit = -1,
     int? tier,
-  }) {
-    final line = craftLines[index];
-    _refundCraftUnit(line);
-    line.recipe.value = craftRecipeOf(output)?.output;
-    line.limit.value = limit;
-    line.producedCount.value = 0;
-    line.halted.value = false;
-    line.unitFraction.value = 0;
-    line.boostStacks.value = 0;
-    line.unitOrdinal.value = 0;
-    line.dupCount.value = 0;
-    if (tier != null) {
-      line.tier.value = tier.clamp(0, line.tierCap.value);
-    }
-  }
+  }) => shop.assign(index, output, limit: limit, tier: tier);
 
-  /// Stops or resumes the line by hand: a freeze-frame. The machine keeps
-  /// its recipe, its order, its loaded unit and its boost, and frees the
-  /// compression level while it stands.
-  void setCraftHalted(int index, bool value) {
-    craftLines[index].halted.value = value;
-  }
-
-  /// Picks the compression level. Refused while the line is running: the
-  /// level is fixed for the length of a job, changeable the moment the
-  /// machine stands.
-  bool setCraftTier(int index, int value) {
-    final line = craftLines[index];
-    if (line.running) return false;
-    final clamped = value.clamp(0, line.tierCap.value);
-    if (clamped != line.tier.value) {
-      // A different compression is a different JOB: the unit in progress
-      // is refunded (at the OLD tier it was paid at), and the next one
-      // starts from zero with a cold boost (owner's rule).
-      _refundCraftUnit(line);
-      line.tier.value = clamped;
-      line.unitFraction.value = 0;
-      line.boostStacks.value = 0;
-      line.unitOrdinal.value = 0;
-      line.dupCount.value = 0;
-    }
-    return true;
-  }
-
-  BigDouble get craftLineCost =>
-      BigDouble.fromNum(2000) *
-      BigDouble.fromNum(6)
-          .pow((craftLines.length - craftStartLines).toDouble());
-
-  bool get canBuyCraftLine => stock.has(ResourceId.credits, craftLineCost);
-
-  bool buyCraftLine() {
-    if (!stock.spend(ResourceId.credits, craftLineCost)) return false;
-    craftLines.add(CraftLine(stock, craftLines.length));
-    return true;
-  }
-
-  BigDouble craftCapCost(int index) =>
-      BigDouble.fromNum(500) *
-      BigDouble.fromNum(4).pow(craftLines[index].tierCap.value.toDouble());
-
-  bool canBuyCraftCap(int index) =>
-      craftLines[index].tierCap.value < craftTierCapMax &&
-      stock.has(ResourceId.credits, craftCapCost(index));
-
-  /// Raises the line's compression ceiling. The CHOSEN level never moves
-  /// with the purchase: standing below the ceiling is a legitimate trade,
-  /// not an oversight.
-  bool buyCraftCap(int index) {
-    if (!canBuyCraftCap(index)) return false;
-    if (!stock.spend(ResourceId.credits, craftCapCost(index))) return false;
-    final line = craftLines[index];
-    line.tierCap.value = line.tierCap.value + 1;
-    return true;
-  }
-
-  BigDouble craftSpeedCost(int index) =>
-      BigDouble.fromNum(300) *
-      BigDouble.fromNum(1.6).pow(craftLines[index].speedLevel.value.toDouble());
-
-  bool canBuyCraftSpeed(int index) =>
-      stock.has(ResourceId.credits, craftSpeedCost(index));
-
-  bool buyCraftSpeed(int index) {
-    if (!stock.spend(ResourceId.credits, craftSpeedCost(index))) return false;
-    final line = craftLines[index];
-    line.speedLevel.value = line.speedLevel.value + 1;
-    return true;
-  }
+  void setCraftHalted(int index, bool value) => shop.setHalted(index, value);
+  bool setCraftTier(int index, int value) => shop.setTier(index, value);
+  BigDouble get craftLineCost => shop.lineCost;
+  bool get canBuyCraftLine => shop.canBuyLine;
+  bool buyCraftLine() => shop.buyLine();
+  BigDouble craftCapCost(int index) => shop.capCost(index);
+  bool canBuyCraftCap(int index) => shop.canBuyCap(index);
+  bool buyCraftCap(int index) => shop.buyCap(index);
+  BigDouble craftSpeedCost(int index) => shop.speedCost(index);
+  bool canBuyCraftSpeed(int index) => shop.canBuySpeed(index);
+  bool buyCraftSpeed(int index) => shop.buySpeed(index);
 
   // -------------------------------------------------------------- trade
 
-  /// The price list. Fixed by design: no depth scaling, no market swings --
-  /// a pile of regolith is worth the same credits whenever it is sold, so
-  /// "when to sell" is about what the player needs, never about timing.
-  /// PROVISIONAL numbers, like every other constant here.
-  static const List<({ResourceId id, double price})> priceTable = [
-    (id: ResourceId.regolith, price: 0.4),
-    (id: ResourceId.cuprite, price: 820),
-    (id: ResourceId.ferrite, price: 1400),
-    // Crafted goods carry a margin over what their inputs would fetch raw
-    // (metals ~+35%, products ~+70%): crafting is meant to become the best
-    // credit channel of the late run. PROVISIONAL.
-    (id: ResourceId.cuprum, price: 45000),
-    (id: ResourceId.ferrum, price: 76000),
-    (id: ResourceId.silicon, price: 120000),
-    (id: ResourceId.wire, price: 1.7e6),
-    (id: ResourceId.frame, price: 2.7e6),
-    (id: ResourceId.reinforcedGlass, price: 2.0e6),
-    (id: ResourceId.chip, price: 4.0e6),
-    (id: ResourceId.processor, price: 5.0e7),
-    (id: ResourceId.sensor, price: 2.0e7),
-    (id: ResourceId.module, price: 4.5e7),
-  ];
+  static const List<({ResourceId id, double price})> priceTable =
+      TradeDesk.priceTable;
+  static const List<int> sellShares = TradeDesk.sellShares;
+  static const List<({String key, List<ResourceId> ids})> tradeGroups =
+      tradeGroupTable;
+  static const int requestIntervalMs = TradeDesk.requestIntervalMs;
+  static const int requestLifetimeMs = TradeDesk.requestLifetimeMs;
+  static const double requestShareFloor = TradeDesk.requestShareFloor;
+  static const double requestShareCeil = TradeDesk.requestShareCeil;
+  static const double requestPremiumFloor = TradeDesk.requestPremiumFloor;
+  static const double requestPremiumCeil = TradeDesk.requestPremiumCeil;
+  static const double requestSecondLineChance =
+      TradeDesk.requestSecondLineChance;
 
-  /// The shares a position can sell at. Steps rather than a free slider:
-  /// four honest notches read at a glance, and the setting survives being
-  /// toggled off without inventing a fifth "0%" state.
-  static const List<int> sellShares = [25, 50, 75, 100];
+  Signal<bool> sellingOf(ResourceId id) => desk.sellingOf(id);
+  Signal<bool> sellingGroupOf(String key) => desk.sellingGroupOf(key);
+  bool sellsInSweep(ResourceId id) => desk.sellsInSweep(id);
+  Signal<int> sellShareOf(ResourceId id) => desk.sellShareOf(id);
+  BigDouble sellPrice(ResourceId id) => desk.sellPrice(id);
+  BigDouble sellLot(ResourceId id) => desk.sellLot(id);
+  BigDouble sellYield(ResourceId id) => desk.sellYield(id);
+  BigDouble sellAllYield() => desk.sellAllYield;
+  BigDouble sellPosition(ResourceId id) => desk.sellPosition(id);
+  BigDouble sellAll() => desk.sellAll();
 
-  final Map<ResourceId, Signal<bool>> _selling = {
-    for (final row in priceTable)
-      row.id: Signal(true, name: 'selling ${row.id.name}'),
-  };
-
-  final Map<ResourceId, Signal<int>> _sellShare = {
-    for (final row in priceTable)
-      row.id: Signal(100, name: 'sell share ${row.id.name}'),
-  };
-
-  /// Whether "sell everything" takes this position. An off position keeps
-  /// its colour, its share and its own sell button -- the toggle means one
-  /// thing only.
-  Signal<bool> sellingOf(ResourceId id) => _selling[id]!;
-
-  /// The trade shelves: which sellable ids sit under which group switch.
-  static const List<({String key, List<ResourceId> ids})> tradeGroups = [
-    (
-      key: 'resources',
-      ids: [ResourceId.regolith, ResourceId.cuprite, ResourceId.ferrite],
-    ),
-    (
-      key: 'materials',
-      ids: [ResourceId.cuprum, ResourceId.ferrum, ResourceId.silicon],
-    ),
-    (
-      key: 'building',
-      ids: [ResourceId.wire, ResourceId.frame, ResourceId.reinforcedGlass],
-    ),
-    (
-      key: 'tech',
-      ids: [
-        ResourceId.chip,
-        ResourceId.processor,
-        ResourceId.sensor,
-        ResourceId.module,
-      ],
-    ),
-  ];
-
-  /// Each shelf's switch, INDEPENDENT of the positions' own: turning the
-  /// group off does not rewrite what each position chose, so turning it
-  /// back on restores the exact picture the player had set up.
-  final Map<String, Signal<bool>> _groupSelling = {
-    for (final group in tradeGroups)
-      group.key: Signal(true, name: 'selling ${group.key}'),
-  };
-
-  Signal<bool> sellingGroupOf(String key) => _groupSelling[key]!;
-
-  /// The resources shelf's switch, kept under its old name for callers.
-  Signal<bool> get sellingResources => _groupSelling['resources']!;
-
-  /// Whether "sell everything" takes [id] right now: its own switch AND its
-  /// shelf's.
-  bool sellsInSweep(ResourceId id) {
-    for (final group in tradeGroups) {
-      if (group.ids.contains(id)) {
-        return _groupSelling[group.key]!.value && _selling[id]!.value;
-      }
-    }
-    return false;
-  }
-
-  /// What share of the held amount a sale moves, in percent.
-  Signal<int> sellShareOf(ResourceId id) => _sellShare[id]!;
-
-  BigDouble sellPrice(ResourceId id) =>
-      BigDouble.fromNum(priceTable.firstWhere((row) => row.id == id).price);
-
-  /// The amount one manual sale of [id] would move right now.
-  BigDouble sellLot(ResourceId id) =>
-      stock.amount(id) * BigDouble.fromNum(_sellShare[id]!.value / 100);
-
-  /// What one manual sale of [id] pays right now, credit funding included.
-  BigDouble sellYield(ResourceId id) =>
-      sellLot(id) * sellPrice(id) * fundScaleOf(ResourceId.credits);
-
-  /// What "sell everything" pays: only positions left switched on. The
-  /// button quotes this same number, so it can never surprise.
-  BigDouble sellAllYield() {
-    var sum = BigDouble.zero;
-    for (final row in priceTable) {
-      if (sellsInSweep(row.id)) sum += sellYield(row.id);
-    }
-    return sum;
-  }
-
-  /// Sells [id] at its share, toggle or no toggle: the per-position button
-  /// is a manual override, and a manual act obeys the finger, not the flag.
-  BigDouble sellPosition(ResourceId id) {
-    final lot = sellLot(id);
-    if (lot.isZero) return BigDouble.zero;
-    final paid = sellYield(id);
-    batch(() {
-      stock.spend(id, lot);
-      _earnCredits(paid);
-    });
-    return paid;
-  }
-
-  /// Sells every position that is switched on. Returns the credits paid.
-  BigDouble sellAll() {
-    var paid = BigDouble.zero;
-    batch(() {
-      for (final row in priceTable) {
-        if (sellsInSweep(row.id)) paid += sellPosition(row.id);
-      }
-    });
-    return paid;
-  }
-
-  // ------------------------------------------------------------- requests
-
-  /// How many requests can wait at once. A future tree node raises it.
-  int get requestSlots => 3;
-
-  /// How often a new request arrives, wall-clock. PROVISIONAL.
-  static const int requestIntervalMs = 8 * 60 * 1000;
-
-  /// How long a request waits before leaving. Expiry costs nothing: the
-  /// premium is a bonus on top of list price, never a gate (safeguard 4).
-  static const int requestLifetimeMs = 12 * 60 * 1000;
-
-  static const double requestShareFloor = 0.15;
-  static const double requestShareCeil = 0.45;
-  static const double requestPremiumFloor = 0.15;
-  static const double requestPremiumCeil = 0.40;
-  static const double requestSecondLineChance = 0.45;
-
-  /// The requests on the board, oldest first. Mutated only by
-  /// [syncRequests] and [fulfilRequest]; redraws ride the app's own clock.
-  final List<TradeRequest> requests = [];
-
-  /// When the next courier is due. Zero means the board has never been
-  /// looked at -- the first sync posts a request immediately, so the tab is
-  /// never empty on first visit.
-  int nextRequestAtMs = 0;
-
-  /// Retires the expired, posts the due. Wall-clock like the drift, and for
-  /// the same reason: couriers do not pause with the engines. A long absence
-  /// posts at most a boardful -- the backlog is not replayed one by one.
-  void syncRequests(int nowMs) {
-    requests.removeWhere((request) => request.expiresAtMs <= nowMs);
-    if (nextRequestAtMs == 0) nextRequestAtMs = nowMs;
-    while (nextRequestAtMs <= nowMs) {
-      if (requests.length >= requestSlots || !_spawnRequest(nowMs)) {
-        // The board is full, or there is nothing to ask for yet: the next
-        // courier comes a full interval from NOW, not the moment a slot
-        // frees -- a freed slot is not a delivery.
-        nextRequestAtMs = nowMs + requestIntervalMs;
-        break;
-      }
-      nextRequestAtMs += requestIntervalMs;
-    }
-  }
-
-  bool _spawnRequest(int nowMs) {
-    // Only what the player actually holds is asked for: a request for an ore
-    // the run has never seen would be a wall, and the amounts are shares of
-    // the pile so they scale with progress by construction.
-    final pool = [
-      for (final row in priceTable)
-        if (!stock.amount(row.id).isZero) row.id,
-    ];
-    if (pool.isEmpty) return false;
-    final roll = random.stream('trade.request');
-    final lines = pool.length > 1 && roll.chance(requestSecondLineChance)
-        ? 2
-        : 1;
-    final needs = <({ResourceId id, BigDouble amount})>[];
-    for (var line = 0; line < lines; line++) {
-      final id = pool.removeAt(roll.nextInt(pool.length));
-      final share =
-          requestShareFloor +
-          (requestShareCeil - requestShareFloor) * roll.nextDouble();
-      needs.add((id: id, amount: stock.amount(id) * BigDouble.fromNum(share)));
-    }
-    final premium =
-        requestPremiumFloor +
-        (requestPremiumCeil - requestPremiumFloor) * roll.nextDouble();
-    requests.add(
-      TradeRequest(
-        needs: needs,
-        premium: premium,
-        expiresAtMs: nowMs + requestLifetimeMs,
-      ),
-    );
-    return true;
-  }
-
-  /// List price of everything the request wants, plus its premium.
-  BigDouble requestPayout(TradeRequest request) {
-    var sum = BigDouble.zero;
-    for (final need in request.needs) {
-      sum += need.amount * sellPrice(need.id);
-    }
-    // A request is a sale: the credits lane pays here too.
-    return sum *
-        BigDouble.fromNum(1 + request.premium) *
-        fundScaleOf(ResourceId.credits);
-  }
-
-  bool canFulfil(TradeRequest request) =>
-      request.needs.every((need) => stock.has(need.id, need.amount));
-
-  bool fulfilRequest(TradeRequest request) {
-    if (!requests.contains(request) || !canFulfil(request)) return false;
-    batch(() {
-      for (final need in request.needs) {
-        stock.spend(need.id, need.amount);
-      }
-      _earnCredits(requestPayout(request));
-    });
-    requests.remove(request);
-    return true;
-  }
+  int get requestSlots => desk.requestSlots;
+  List<TradeRequest> get requests => desk.requests;
+  int get nextRequestAtMs => desk.nextRequestAtMs;
+  set nextRequestAtMs(int value) => desk.nextRequestAtMs = value;
+  void syncRequests(int nowMs) => desk.syncRequests(nowMs);
+  BigDouble requestPayout(TradeRequest request) => desk.requestPayout(request);
+  bool canFulfil(TradeRequest request) => desk.canFulfil(request);
+  bool fulfilRequest(TradeRequest request) => desk.fulfilRequest(request);
 
   /// The run, as a plain map.
   ///
@@ -2491,91 +1228,36 @@ class PrototypeSimulation {
     'restarts': restarts.value,
     'collapses': collapses.value,
     'servers': servers.value,
-    'data': {
-      'raw': rawData.value.toJson(),
-      'gross': cycleData.value.toJson(),
-      'banked': dataBanked.value.toJson(),
-      'wallet': dataWallet.value.toJson(),
-      'exponent': compilerLevel.value,
-      'cycleStartSeen': cycleStartMs.value,
-    },
+    // Only departures from a fresh run are written, section by section:
+    // a missing key reads back as its default, so nothing below can be
+    // misread by an older build, and a new section follows the same rule
+    // instead of copying "write everything".
+    'data': ledger.toJson(),
     'energy': energy.value,
-    'bores': {
-      for (final row in drillTable)
-        row.id.name: {
-          'radius': drill(row.id).radius.value,
-          'drive': drill(row.id).drive.value,
-          'calibration': drill(row.id).calibration.value,
-        },
-    },
-    'arm': {
-      'bit': bitLevel.value,
-      'drive': driveLevel.value,
-      'supply': supplyLevel.value,
-      'bitMark': bitMark.value,
-      'driveMark': driveMark.value,
-      'supplyMark': supplyMark.value,
-      'bitPeak': bitPeak.value,
-      'drivePeak': drivePeak.value,
-      'supplyPeak': supplyPeak.value,
-    },
+    'bores': drillBank.toJson(),
+    'arm': arm.toJson(),
     'tree': {
-      'power': powerLevel.value,
-      'enrichment': enrichmentLevel.value,
-      'discount': discountLevel.value,
-      'quantonium': quantoniumLevel.value,
+      if (powerLevel.value != 0) 'power': powerLevel.value,
+      if (enrichmentLevel.value != 0) 'enrichment': enrichmentLevel.value,
+      if (discountLevel.value != 0) 'discount': discountLevel.value,
+      if (quantoniumLevel.value != 0) 'quantonium': quantoniumLevel.value,
     },
     'stock': stock.toJson(),
-    'clock': {'seen': wallSeenMs, 'last': lastWallMs},
-    'finance': {
-      'earned': creditsEarned.value.toJson(),
-      if (tranchesGranted.value != 0) 'granted': tranchesGranted.value,
-      for (final row in fundTable)
-        if ((_grantedLevels[row.id] ?? 0) != 0)
-          'granted.${row.id.name}': _grantedLevels[row.id],
-      for (final row in fundTable)
-        if (_funding[row.id]!.value != 0) row.id.name: _funding[row.id]!.value,
-    },
+    'clock': clock.toJson(),
+    'finance': books.toJson(),
     if (replicatorLastSeenMs >= 0 ||
-        _replicatorUnlocked.values.any((open) => open.value))
+        _replicators.values.any((machine) => machine.unlocked.value))
       'replicator': {
         if (replicatorLastSeenMs >= 0) 'last': replicatorLastSeenMs,
-        if (_replicatorUnlocked.values.any((open) => open.value))
+        if (_replicators.values.any((machine) => machine.unlocked.value))
           'u': [
-            for (final entry in _replicatorUnlocked.entries)
-              if (entry.value.value) entry.key.name,
+            for (final machine in _replicators.values)
+              if (machine.unlocked.value) machine.id.name,
           ],
-        for (final entry in _replicatorSpeed.entries)
-          if (entry.value.value != 0) 'sp.${entry.key.name}': entry.value.value,
-        for (final entry in _replicatorAmount.entries)
-          if (entry.value.value != 0) 'am.${entry.key.name}': entry.value.value,
-        for (final entry in _replicatorFraction.entries)
-          if (entry.value.value != 0) 'fr.${entry.key.name}': entry.value.value,
+        for (final machine in _replicators.values) ...machine.toJson(),
       },
-    'craft': {
-      'last': craftLastSeenMs,
-      'lines': [for (final line in craftLines) line.toJson()],
-    },
-    'trade': {
-      // Only departures from the defaults are written: a fresh build reads
-      // an old save and every position simply sells whole, switched on.
-      'off': [
-        for (final row in priceTable)
-          if (!_selling[row.id]!.value) row.id.name,
-      ],
-      if (_groupSelling.values.any((signal) => !signal.value))
-        'groupOff': [
-          for (final group in tradeGroups)
-            if (!_groupSelling[group.key]!.value) group.key,
-        ],
-      'share': {
-        for (final row in priceTable)
-          if (_sellShare[row.id]!.value != 100)
-            row.id.name: _sellShare[row.id]!.value,
-      },
-      'nextAt': nextRequestAtMs,
-      'requests': [for (final request in requests) request.toJson()],
-    },
+    'craft': shop.toJson(),
+    'trade': desk.toJson(),
     'random': random.toJson(),
   };
 
@@ -2593,71 +1275,9 @@ class PrototypeSimulation {
     restarts.value = _readInt(json['restarts'], 0);
     collapses.value = _readInt(json['collapses'], 0);
     servers.value = _readInt(json['servers'], 1).clamp(1, maxPendingCollapses);
-    final data = json['data'];
-    if (data is Map) {
-      rawData.value = _readBig(data['raw']);
-      cycleData.value = _readBig(data['gross']);
-      dataBanked.value = _readBig(data['banked']);
-      dataWallet.value = _readBig(data['wallet']);
-      compilerLevel.value = _readInt(data['exponent'], 0);
-      // Older saves stamped the cycle in EPOCH ms under 'cycleStartMs'; the
-      // acknowledged clock cannot honour that unit, so their drift restarts
-      // once rather than being misread as decades of melt.
-      cycleStartMs.value = _readInt(data['cycleStartSeen'], -1);
-    } else {
-      rawData.value = BigDouble.zero;
-      cycleData.value = BigDouble.zero;
-      dataBanked.value = BigDouble.zero;
-      dataWallet.value = BigDouble.zero;
-      compilerLevel.value = 0;
-      cycleStartMs.value = -1;
-    }
-    final bores = json['bores'];
-    for (final row in drillTable) {
-      final held = bores is Map ? bores[row.id.name] : null;
-      final state = drill(row.id);
-      for (final part in DrillPart.values) {
-        final stored = held is Map ? _readInt(held[part.name], 0) : 0;
-        state.levelOf(part).value = stored.clamp(0, drillCap(row.id, part));
-      }
-    }
-    final arm = json['arm'];
-    if (arm is Map) {
-      bitLevel.value = _readInt(arm['bit'], 0).clamp(0, maxPartLevel);
-      driveLevel.value = _readInt(arm['drive'], 0).clamp(0, maxPartLevel);
-      supplyLevel.value = _readInt(arm['supply'], 0).clamp(0, maxPartLevel);
-      // A save from before the marks were kept knows only where the parts
-      // stand, and standing at a level is proof enough of having been built
-      // that far. A mark ABOVE what its level's threshold allows melts
-      // DOWN to the walked one (safeguard six): the ladder's numbers
-      // changed, and nobody inherits a mark they have not reached.
-      for (final part in ArmPart.values) {
-        final level = levelOf(part).value;
-        final built = generationOf(level);
-        final mark = _readInt(
-          arm['${part.name}Mark'],
-          built,
-        ).clamp(0, lastMark);
-        markOf(part).value = mark < built ? mark : built;
-        // A peak above the last mark cannot be a mark: it is a level,
-        // written by a build that kept peaks in levels. Convert rather than
-        // clamp -- clamping turned every such save into "Mk V already seen".
-        final stored = _readInt(arm['${part.name}Peak'], markOf(part).value);
-        final seen = (stored > lastMark ? generationOf(stored) : stored).clamp(
-          0,
-          lastMark,
-        );
-        peakOf(part).value = seen > markOf(part).value
-            ? seen
-            : markOf(part).value;
-      }
-    } else {
-      for (final part in ArmPart.values) {
-        levelOf(part).value = 0;
-        markOf(part).value = 0;
-        peakOf(part).value = 0;
-      }
-    }
+    ledger.readJson(json['data']);
+    drillBank.readJson(json['bores']);
+    arm.readJson(json['arm']);
     energy.value = _readInt(json['energy'], energyCap).clamp(0, energyCap);
 
     final tree = json['tree'];
@@ -2673,162 +1293,59 @@ class PrototypeSimulation {
       stock.readJson(Map<String, Object?>.from(held));
     }
 
-    final clock = json['clock'];
-    if (clock is Map) {
-      wallSeenMs = _readInt(clock['seen'], 0);
-      lastWallMs = _readInt(clock['last'], 0);
-    } else {
-      wallSeenMs = 0;
-      lastWallMs = 0;
-    }
+    clock.readJson(json['clock']);
 
-    final finance = json['finance'];
-    if (finance is Map) {
-      creditsEarned.value = _readBig(finance['earned']);
-      tranchesGranted.value = _readInt(finance['granted'], 0);
-      // Keys from the three-line era (extraction/telemetry/sales) simply
-      // miss: those tranches come back as free ones and are re-poured.
-      for (final row in fundTable) {
-        _funding[row.id]!.value = _readInt(finance[row.id.name], 0);
-        _grantedLevels[row.id] = _readInt(finance['granted.${row.id.name}'], 0);
-      }
-      // A distribution this build's numbers cannot account for -- prices
-      // moved, the tranche pay shrank, thresholds shifted -- is not carried
-      // as a debt the player never took. It melts to the gifted floor and
-      // the tranches come back to be poured again.
-      if (!_fundingBooksBalance) _resetFunding();
-    } else {
-      creditsEarned.value = BigDouble.zero;
-      tranchesGranted.value = 0;
-      for (final row in fundTable) {
-        _funding[row.id]!.value = 0;
-        _grantedLevels[row.id] = 0;
-      }
-    }
+    books.readJson(json['finance']);
 
-    final trade = json['trade'];
-    requests.clear();
-    if (trade is Map) {
-      final off = trade['off'];
-      final share = trade['share'];
-      for (final row in priceTable) {
-        _selling[row.id]!.value = off is! List || !off.contains(row.id.name);
-        final stored = share is Map ? share[row.id.name] : null;
-        _sellShare[row.id]!.value = sellShares.contains(stored)
-            ? stored as int
-            : 100;
-      }
-      final groupOff = trade['groupOff'];
-      for (final group in tradeGroups) {
-        // The legacy shape was a bare `true` meaning the one shelf of the
-        // three-row era; it lands on the resources shelf.
-        final off = groupOff is List
-            ? groupOff.contains(group.key)
-            : groupOff == true && group.key == 'resources';
-        _groupSelling[group.key]!.value = !off;
-      }
-      nextRequestAtMs = _readInt(trade['nextAt'], 0);
-      final posted = trade['requests'];
-      if (posted is List) {
-        for (final entry in posted) {
-          final request = TradeRequest.fromJson(entry);
-          if (request != null) requests.add(request);
-        }
-      }
-    } else {
-      for (final row in priceTable) {
-        _selling[row.id]!.value = true;
-        _sellShare[row.id]!.value = 100;
-      }
-      for (final group in tradeGroups) {
-        _groupSelling[group.key]!.value = true;
-      }
-      nextRequestAtMs = 0;
-    }
+    desk.readJson(json['trade']);
 
     final replicator = json['replicator'];
     replicatorLastSeenMs = -1;
-    for (final open in _replicatorUnlocked.values) {
-      open.value = false;
-    }
-    for (final level in _replicatorSpeed.values) {
-      level.value = 0;
-    }
-    for (final level in _replicatorAmount.values) {
-      level.value = 0;
-    }
-    for (final fraction in _replicatorFraction.values) {
-      fraction.value = 0;
+    for (final machine in _replicators.values) {
+      machine.reset();
     }
     if (replicator is Map) {
       final opened = replicator['u'];
-      if (opened is List) {
-        for (final id in replicableIds) {
-          if (opened.contains(id.name)) {
-            _replicatorUnlocked[id]!.value = true;
-          }
-        }
-      }
-      for (final id in replicableIds) {
-        _replicatorSpeed[id]!.value = _readInt(replicator['sp.${id.name}'], 0);
-        _replicatorAmount[id]!.value = _readInt(replicator['am.${id.name}'], 0);
-        _replicatorFraction[id]!.value = _readDouble(
-          replicator['fr.${id.name}'],
-        ).clamp(0.0, 1.0);
+      for (final machine in _replicators.values) {
+        machine.readJson(
+          replicator,
+          unlocked: opened is List && opened.contains(machine.id.name),
+        );
       }
       replicatorLastSeenMs = _readInt(replicator['last'], -1);
     }
-    final craft = json['craft'];
-    craftLines.clear();
-    if (craft is Map) {
-      craftLastSeenMs = craft['last'] is num
-          ? (craft['last'] as num).toInt()
-          : -1;
-      final storedLines = craft['lines'];
-      if (storedLines is List) {
-        for (var i = 0; i < storedLines.length; i++) {
-          craftLines.add(CraftLine(stock, i)..readJson(storedLines[i]));
-        }
-      }
-    } else {
-      craftLastSeenMs = -1;
-    }
-    while (craftLines.length < craftStartLines) {
-      craftLines.add(CraftLine(stock, craftLines.length));
-    }
+    shop.readJson(json['craft']);
 
     final rolls = json['random'];
     if (rolls is Map) {
-      random = RandomSource.fromJson(Map<String, dynamic>.from(rolls));
+      // A save whose values are corrupt (right shape, wrong contents)
+      // must still load: the streams fall back to fresh ones rather than
+      // throwing past the backup-and-quarantine path.
+      try {
+        random = RandomSource.fromJson(Map<String, dynamic>.from(rolls));
+      } on Object {
+        random = RandomSource(seed: random.seed);
+      }
     }
 
     runStartSeenMs = _readInt(json['simStart'], 0);
     _resetLayer();
-    final damaged = json['layerHp'];
-    if (damaged is String) {
-      final remaining = BigDouble.parse(damaged);
-      if (remaining > BigDouble.zero && remaining < layerHpMax.value) {
-        layerHp.value = remaining;
-      }
+    final remaining = _readBig(json['layerHp']);
+    if (remaining > BigDouble.zero && remaining < layerHpMax.value) {
+      layerHp.value = remaining;
     }
   });
 
+  /// The three readers every section goes through. Each is lenient by
+  /// design: a save with the right shape and a wrong value falls back to
+  /// the default rather than throwing -- the player never loses a run to
+  /// one bad figure.
   static int _readInt(Object? value, int fallback) =>
-      value is int ? value : fallback;
+      value is num ? value.toInt() : fallback;
 
-  static double _readDouble(Object? value) =>
-      value is num ? value.toDouble() : 0;
-
-  static BigDouble _readBig(Object? value) =>
-      value is String ? BigDouble.parse(value) : BigDouble.zero;
-
-  /// The next drill-count milestone that doubles power, or null past the last.
-  int? get nextMilestone {
-    for (final threshold in const [10, 25, 50, 100]) {
-      if (drills.value < threshold) return threshold;
-    }
-    return null;
-  }
+  static BigDouble _readBig(Object? value) => value is String
+      ? (BigDouble.tryParse(value) ?? BigDouble.zero)
+      : BigDouble.zero;
 
   /// What a single drill would deliver at the given upgrade level.
   BigDouble perDrillPowerWith(int upgrades) =>
@@ -2845,4 +1362,26 @@ class PrototypeSimulation {
       perDrillPowerWith(upgrades) *
       BigDouble.fromNum(_milestoneMultiplier(drills)) *
       (BigDouble.one + BigDouble.fromNum(0.25) * modules.value.big);
+}
+
+/// One lane's loot-roll stream handles, resolved once. The names ARE the
+/// parity contract: a rename shifts every roll that follows.
+class _LootStreams {
+  _LootStreams(RandomSource source, String prefix, Iterable<dynamic> ores)
+    : crit = source.stream('${prefix}loot.crit'),
+      regolith = source.stream('${prefix}regolith'),
+      crystal = source.stream('${prefix}crystal'),
+      quantonium = source.stream('${prefix}quantonium.loot'),
+      rawData = source.stream('${prefix}rawdata'),
+      ores = {
+        for (final row in ores)
+          row.id as ResourceId: source.stream('$prefix${row.stream}'),
+      };
+
+  final RandomStream crit;
+  final RandomStream regolith;
+  final RandomStream crystal;
+  final RandomStream quantonium;
+  final RandomStream rawData;
+  final Map<ResourceId, RandomStream> ores;
 }

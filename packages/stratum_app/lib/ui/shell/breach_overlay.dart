@@ -4,6 +4,7 @@ import '../../game.dart';
 import '../hud.dart';
 import '../save_menu.dart';
 import '../tokens.dart';
+import '../clock_text.dart';
 
 /// The clock has been wound back past what the save already lived.
 ///
@@ -24,16 +25,8 @@ class BreachOverlay extends StatefulWidget {
 class _BreachOverlayState extends State<BreachOverlay> {
   bool _saves = false;
 
-  String _countdown() {
-    final left = widget.untilMs - DateTime.now().millisecondsSinceEpoch;
-    if (left <= 0) return '0:00:00';
-    final s = (left / 1000).ceil();
-    final h = s ~/ 3600;
-    final m = (s % 3600) ~/ 60;
-    final sec = s % 60;
-    return '$h:${m.toString().padLeft(2, '0')}:'
-        '${sec.toString().padLeft(2, '0')}';
-  }
+  String _countdown() =>
+      hmsClock(widget.untilMs - DateTime.now().millisecondsSinceEpoch);
 
   @override
   Widget build(BuildContext context) {

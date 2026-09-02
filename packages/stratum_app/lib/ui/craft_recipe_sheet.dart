@@ -4,12 +4,13 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
-import 'craft_clock.dart';
+import 'clock_text.dart';
 import 'game_icons.dart';
 import 'hud.dart';
 import 'resource_icon.dart';
 import 'resource_style.dart';
 import 'tokens.dart';
+import 'tier_track.dart';
 
 /// The picker, rethought as MENU + PASSPORT: a light list of what the line
 /// could make (icon, name, a sufficiency lamp -- no prices), and one card
@@ -159,13 +160,8 @@ class _CraftRecipeSheetState extends State<CraftRecipeSheet> {
       label = 'ОБЕРИ РЕЦЕПТ';
     } else {
       final recipe = craftRecipeOf(_picked)!;
-      final yieldPer = BigDouble.fromNum(
-        recipe.baseYield * math.pow(craftYieldStep, _tier),
-      );
-      final seconds = math.max(
-        craftMinSeconds,
-        recipe.baseSeconds * math.pow(craftTimeStep, _tier) / _jobSpeed,
-      );
+      final yieldPer = BigDouble.fromNum(craftUnitsAt(recipe, _tier));
+      final seconds = craftSecondsAt(recipe, _tier, _jobSpeed);
       label =
           'ЗАПУСТИТИ · ${style!.label.toUpperCase()} · '
           '+$yieldPer / ${craftClock(seconds)}'
@@ -306,14 +302,9 @@ class _Passport extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = resourceStyles[recipe.output]!;
-    final costScale = math.pow(craftCostStep, tier).toDouble();
-    final seconds = math.max(
-      craftMinSeconds,
-      recipe.baseSeconds * math.pow(craftTimeStep, tier) / speed,
-    );
-    final yieldPer = BigDouble.fromNum(
-      recipe.baseYield * math.pow(craftYieldStep, tier),
-    );
+    final costScale = craftCostScaleAt(tier);
+    final seconds = craftSecondsAt(recipe, tier, speed);
+    final yieldPer = BigDouble.fromNum(craftUnitsAt(recipe, tier));
     return HudPlate(
       cut: 5,
       fill: Palette.well.withValues(alpha: 0.55),
@@ -388,25 +379,7 @@ class _Passport extends StatelessWidget {
           const SizedBox(height: 4),
           // The ladder in the board's own language: chosen cells lit,
           // bought ones banked, the rest dark.
-          Row(
-            children: [
-              for (var i = 0; i < craftTierCapMax; i++) ...[
-                if (i > 0) const SizedBox(width: 1.5),
-                Expanded(
-                  child: SizedBox(
-                    height: 4.5,
-                    child: ColoredBox(
-                      color: i < tier
-                          ? Palette.gold
-                          : i < tierCap
-                          ? Palette.goldWell
-                          : Palette.card,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
+          TierTrack(tier: tier, cap: tierCap),
           const SizedBox(height: 8),
           Row(
             children: [

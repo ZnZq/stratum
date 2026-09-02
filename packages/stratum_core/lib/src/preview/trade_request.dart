@@ -34,9 +34,8 @@ class TradeRequest {
     if (raw is Map) {
       for (final id in ResourceId.values) {
         final amount = raw[id.name];
-        if (amount is String) {
-          needs.add((id: id, amount: BigDouble.parse(amount)));
-        }
+        final parsed = amount is String ? BigDouble.tryParse(amount) : null;
+        if (parsed != null) needs.add((id: id, amount: parsed));
       }
     }
     if (needs.isEmpty) return null;

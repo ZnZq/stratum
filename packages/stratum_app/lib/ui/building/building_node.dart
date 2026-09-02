@@ -75,8 +75,8 @@ const List<BuildingNode> buildingNodes = [
     kind: NodeBreed.root,
   ),
 
-  // ================= ВИДОБУТОК (захід) =================
-  // -- шахта
+  // ================= EXTRACTION (west) =================
+  // -- the mine
   BuildingNode(
     id: 'shoring',
     label: 'КРІПЛЕННЯ СТОВБУРА',
@@ -109,7 +109,7 @@ const List<BuildingNode> buildingNodes = [
     kind: NodeBreed.oneShot,
     locked: true,
   ),
-  // -- маніпулятор
+  // -- the manipulator
   BuildingNode(
     id: 'hydraulics',
     label: 'ГІДРАВЛІКА',
@@ -142,7 +142,7 @@ const List<BuildingNode> buildingNodes = [
     kind: NodeBreed.oneShot,
     locked: true,
   ),
-  // -- бур
+  // -- the drill
   BuildingNode(
     id: 'rigTower',
     label: 'БУРОВА ВЕЖА',
@@ -174,7 +174,7 @@ const List<BuildingNode> buildingNodes = [
     breed: 'мало рівнів · відчутний множник',
     kind: NodeBreed.fewStrong,
   ),
-  // -- ресурси
+  // -- resources
   BuildingNode(
     id: 'separator',
     label: 'СЕПАРАТОР',
@@ -209,7 +209,7 @@ const List<BuildingNode> buildingNodes = [
     simGated: true,
   ),
 
-  // ================= ДАТАЦЕНТР (північ) =================
+  // ================= DATACENTRE (north) =================
   BuildingNode(
     id: 'rack',
     label: 'СТІЙКА ДЦ',
@@ -264,7 +264,7 @@ const List<BuildingNode> buildingNodes = [
     locked: true,
   ),
 
-  // ================= КОМПЛЕКС (північний схід) =================
+  // ================= COMPLEX (north-east) =================
   BuildingNode(
     id: 'powerGrid',
     label: 'ЕНЕРГОМЕРЕЖА',
@@ -301,7 +301,7 @@ const List<BuildingNode> buildingNodes = [
     simGated: true,
   ),
 
-  // ================= КРАФТ (схід) =================
+  // ================= CRAFT (east) =================
   BuildingNode(
     id: 'beltDrives',
     label: 'КОНВЕЄРНІ ПРИВОДИ',
@@ -389,7 +389,7 @@ const List<BuildingNode> buildingNodes = [
     locked: true,
   ),
 
-  // ================= ТОРГІВЛЯ (південь) =================
+  // ================= TRADE (south) =================
   BuildingNode(
     id: 'brokerNet',
     label: 'БРОКЕРСЬКА МЕРЕЖА',

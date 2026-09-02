@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
@@ -99,19 +97,18 @@ class _CraftResourceStripState extends State<CraftResourceStrip> {
     for (final line in sim.craftLines) {
       final row = craftRecipeOf(line.recipe.value);
       if (row == null || line.done) continue;
-      final scale = math.pow(craftCostStep, line.tier.value).toDouble();
+      final scale = craftCostScaleAt(line.tier.value);
       for (final entry in row.inputs.entries) {
         eaten.add(entry.key);
         if (line.starving.value &&
-            !sim.stock.amount(entry.key).gteWithTolerance(
-              BigDouble.fromNum(entry.value * scale),
-            )) {
+            !sim.stock
+                .amount(entry.key)
+                .gteWithTolerance(BigDouble.fromNum(entry.value * scale))) {
           short.add(entry.key);
         }
       }
     }
-    final shown = eaten.toList()
-      ..sort((a, b) => a.index.compareTo(b.index));
+    final shown = eaten.toList()..sort((a, b) => a.index.compareTo(b.index));
     return HudPlate(
       cut: 7,
       fill: Palette.shell.withValues(alpha: 0.7),

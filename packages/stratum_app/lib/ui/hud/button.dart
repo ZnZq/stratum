@@ -126,9 +126,7 @@ class _HudButtonState extends State<HudButton> {
         onTapDown: widget.holdRepeat
             ? (_) => _holdDown()
             : (_) => _setDown(true),
-        onTapUp: widget.holdRepeat
-            ? (_) => _holdUp()
-            : (_) => _setDown(false),
+        onTapUp: widget.holdRepeat ? (_) => _holdUp() : (_) => _setDown(false),
         onTapCancel: widget.holdRepeat ? _holdUp : () => _setDown(false),
         onTap: widget.holdRepeat ? null : widget.onTap,
         child: AnimatedScale(

@@ -5,12 +5,14 @@ import 'package:flutter/widgets.dart';
 import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
-import 'craft_clock.dart';
+import 'clock_text.dart';
 import 'hud.dart';
 import 'resource_icon.dart';
 import 'resource_style.dart';
 import 'tabler_icons.dart';
 import 'tokens.dart';
+import 'phase_servo.dart';
+import 'tier_track.dart';
 
 /// One crafting line, laid out as the owner drew it: the compression panel
 /// with its trade-offs on the left, the conveyor -- inputs in, machine,
@@ -49,8 +51,6 @@ class _CraftLineCardState extends State<CraftLineCard>
   /// crafts the snap even crossed the wrap and flashed phantom crates.
   /// A single phase nudged toward the truth cannot jump by construction.
   final ValueNotifier<double> _phase = ValueNotifier(0);
-  double _coreSeen = -1;
-  double _pendingErr = 0;
   Duration _last = Duration.zero;
 
   /// The job the scene was last drawn for: a recipe change or an ordinal
@@ -59,13 +59,17 @@ class _CraftLineCardState extends State<CraftLineCard>
   ResourceId? _recipeSeen;
   int _ordinalSeen = 0;
 
+  /// The scene's own smooth phase, settling to the core in a third of a
+  /// second -- the pace the conveyor was tuned to.
+  final PhaseServo _servo = PhaseServo(settleSeconds: 1 / 3);
+
   CraftLine get _line => widget.game.sim.craftLines[widget.index];
 
   @override
   void initState() {
     super.initState();
-    _phase.value = _line.craftProgress;
-    _coreSeen = _line.craftProgress;
+    _servo.snap(_line.craftProgress);
+    _phase.value = _servo.phase;
     _recipeSeen = _line.recipe.value;
     _ordinalSeen = _line.unitOrdinal.value;
     _ticker = createTicker((elapsed) {
@@ -78,48 +82,22 @@ class _CraftLineCardState extends State<CraftLineCard>
       final line = lines[widget.index];
       final unit = line.effectiveSeconds;
       final ordinal = line.unitOrdinal.value;
-      final newJob =
-          line.recipe.value != _recipeSeen || ordinal < _ordinalSeen;
+      // A fresh job is a snap, never a chase; so is a line that is not
+      // running. Frame holes are the servo's own business.
+      final newJob = line.recipe.value != _recipeSeen || ordinal < _ordinalSeen;
       _recipeSeen = line.recipe.value;
       _ordinalSeen = ordinal;
-      if (newJob || raw > const Duration(milliseconds: 250)) {
-        // A fresh job, or frames were not being drawn (occluded window,
-        // screen switch). The scene shows the CURRENT state and never
-        // replays or chases: snap to the core's truth, drop the debt.
-        _phase.value = line.craftProgress;
-        _coreSeen = line.craftProgress;
-        _pendingErr = 0;
-        return;
-      }
-      if (line.running && !line.starving.value && unit > 0) {
-        var ph = (_phase.value + dt / unit) % 1.0;
-        // Correct ONLY when the core actually settles: between its
-        // once-a-second settlements its figure is STALE, and chasing a
-        // stale value pinned the free-running phase at 99% until the next
-        // sync. On a settle, bank the wrap-aware error and bleed it out
-        // over the following frames.
-        final core = line.craftProgress;
-        if (core != _coreSeen) {
-          _coreSeen = core;
-          var err = core - ph;
-          if (err > 0.5) {
-            err -= 1;
-          } else if (err < -0.5) {
-            err += 1;
-          }
-          _pendingErr = err;
-        }
-        if (_pendingErr.abs() > 1e-6) {
-          final bleed = _pendingErr * math.min(1, dt * 3);
-          ph = (ph + bleed) % 1.0;
-          _pendingErr -= bleed;
-        }
-        _phase.value = ph < 0 ? ph + 1 : ph;
+      if (newJob || !line.running || line.starving.value || unit <= 0) {
+        _servo.snap(line.craftProgress);
       } else {
-        _phase.value = line.craftProgress;
-        _coreSeen = line.craftProgress;
-        _pendingErr = 0;
+        _servo.advance(
+          dt: dt,
+          raw: raw.inMicroseconds / 1e6,
+          unitSeconds: unit,
+          core: line.craftProgress,
+        );
       }
+      _phase.value = _servo.phase;
     })..start();
   }
 
@@ -180,8 +158,7 @@ class _CraftLineCardState extends State<CraftLineCard>
                                     : (1 -
                                               line.craftSeconds.value /
                                                   (recipe.baseSeconds *
-                                                      math.pow(
-                                                        craftTimeStep,
+                                                      craftTimeScaleAt(
                                                         line.tier.value,
                                                       )))
                                           .clamp(0.0, 1.0)
@@ -466,8 +443,8 @@ class _CompressionPanel extends StatelessWidget {
     final tier = line.tier.value;
     final cap = line.tierCap.value;
     final yieldMult = math.pow(craftYieldStep, tier).toDouble();
-    final costMult = math.pow(craftCostStep, tier).toDouble();
-    final timeMult = math.pow(craftTimeStep, tier).toDouble();
+    final costMult = craftCostScaleAt(tier);
+    final timeMult = craftTimeScaleAt(tier);
     final runway = line.recipe.value == null ? -1.0 : line.runwaySeconds.value;
     return SizedBox(
       width: 114,
@@ -508,25 +485,7 @@ class _CompressionPanel extends StatelessWidget {
             const SizedBox(height: 4),
             // The track: chosen cells lit, bought ones banked, the rest of
             // the ladder dark -- one glance says level, ceiling, headroom.
-            Row(
-              children: [
-                for (var i = 0; i < craftTierCapMax; i++) ...[
-                  if (i > 0) const SizedBox(width: 1.5),
-                  Expanded(
-                    child: SizedBox(
-                      height: 4.5,
-                      child: ColoredBox(
-                        color: i < tier
-                            ? Palette.gold
-                            : i < cap
-                            ? Palette.goldWell
-                            : Palette.card,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
+            TierTrack(tier: tier, cap: cap),
             const SizedBox(height: 5),
             _mod('вихід', '×${_short(yieldMult)}', Palette.tech),
             _mod('витрата', '×${_short(costMult)}', Palette.amber),
@@ -1001,9 +960,7 @@ class _ConveyorPainter extends CustomPainter {
     glowText(
       rate ?? '—',
       Offset(rateX, beltY - 40),
-      dimmed || rate == null || rate == '—'
-          ? Palette.textFaint
-          : Palette.tech,
+      dimmed || rate == null || rate == '—' ? Palette.textFaint : Palette.tech,
       7,
       centred: true,
     );
@@ -1124,7 +1081,7 @@ class _ConveyorPainter extends CustomPainter {
       final left = (1 - progress) * unitSeconds;
       final label = TextPainter(
         text: TextSpan(
-          text: _shortClock(left),
+          text: shortClock(left),
           style: AppText.display(
             6,
             weight: FontWeight.w700,
@@ -1135,16 +1092,6 @@ class _ConveyorPainter extends CustomPainter {
       )..layout();
       label.paint(canvas, drumC - Offset(label.width / 2, label.height / 2));
     }
-  }
-
-  /// The countdown squeezed into the drum: `43s`, `1:27`, `61m`.
-  static String _shortClock(double seconds) {
-    final whole = seconds.ceil();
-    if (whole < 60) return '${whole}s';
-    if (whole < 3600) {
-      return '${whole ~/ 60}:${(whole % 60).toString().padLeft(2, '0')}';
-    }
-    return '${whole ~/ 60}m';
   }
 
   @override

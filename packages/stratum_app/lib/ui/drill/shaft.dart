@@ -1,10 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
-import '../tokens.dart';
+import '../frame_clock.dart';
 
 /// What is behind the rig: the emptiness the drill has already cut.
 ///
@@ -22,27 +21,16 @@ class ShaftBackdrop extends StatefulWidget {
 }
 
 class _ShaftBackdropState extends State<ShaftBackdrop>
-    with SingleTickerProviderStateMixin {
-  late final Ticker _ticker;
+    with SingleTickerProviderStateMixin, FrameClock {
   final ValueNotifier<double> _time = ValueNotifier(0);
 
   @override
-  void initState() {
-    super.initState();
-    _ticker = createTicker(_onFrame)..start();
+  void onFrame(double dt, Duration raw) {
+    _time.value += dt;
   }
-
-  void _onFrame(Duration elapsed) {
-    final delta = clampFrameDelta(elapsed - _lastFrame);
-    _lastFrame = elapsed;
-    _time.value += delta.inMicroseconds / 1e6;
-  }
-
-  Duration _lastFrame = Duration.zero;
 
   @override
   void dispose() {
-    _ticker.dispose();
     _time.dispose();
     super.dispose();
   }

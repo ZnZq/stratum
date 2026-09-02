@@ -3,10 +3,10 @@ import 'package:stratum_core/stratum_core.dart';
 
 import '../game.dart';
 import 'arm_style.dart';
-import 'buy_button.dart';
 import 'hud.dart';
 import 'part_face.dart';
 import 'tokens.dart';
+import 'upgrade_row.dart';
 
 /// One part of the arm: its face, its generation, and every buff it carries.
 ///
@@ -51,69 +51,22 @@ class PartCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              HudTap(
-                onTap: onRead,
-                child: PartFace(part: part, mark: mark, lit: ready, size: 32),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          style.label.toUpperCase(),
-                          style: AppText.body(
-                            8.5,
-                            weight: FontWeight.w700,
-                            color: Palette.tech,
-                            letterSpacing: 1.6,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        _MarkTag(generation: mark),
-                        const Spacer(),
-                        Text(
-                          '$level',
-                          style: AppText.display(
-                            9.5,
-                            weight: FontWeight.w600,
-                            color: ready || maxed
-                                ? Palette.gold
-                                : Palette.textFaint,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    _GenerationTrack(generation: mark),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              SizedBox(
-                // One width whatever the price says, so the card does not
-                // twitch every time a purchase moves the cost up a digit.
-                width: 104,
-                child: maxed
-                    ? const HudButton(
-                        onTap: null,
-                        label: 'межа',
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                      )
-                    : BuyButton(
-                        cost: '${game.sim.upgradeCost(part)}',
-                        enabled: game.sim.canUpgrade(part) && steps > 0,
-                        onTap: () => game.upgradeArm(part, levels: steps),
-                      ),
-              ),
-            ],
+          UpgradeRow(
+            leading: HudTap(
+              onTap: onRead,
+              child: PartFace(part: part, mark: mark, lit: ready, size: 32),
+            ),
+            title: style.label,
+            beside: _MarkTag(generation: mark),
+            besideGap: 6,
+            level: level,
+            levelLit: ready || maxed,
+            detail: _GenerationTrack(generation: mark),
+            detailGap: 5,
+            capped: maxed,
+            cost: '${game.sim.upgradeCost(part)}',
+            enabled: game.sim.canUpgrade(part) && steps > 0,
+            onBuy: () => game.upgradeArm(part, levels: steps),
           ),
           const SizedBox(height: 6),
           // The road to the next mark, on its own line where it has room --

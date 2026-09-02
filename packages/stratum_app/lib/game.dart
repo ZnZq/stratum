@@ -10,6 +10,7 @@ import 'package:stratum_core/stratum_core.dart';
 import 'floating_number.dart';
 import 'notice.dart';
 import 'save_store.dart';
+import 'ui/float_cue.dart';
 
 /// Owns the simulation and the loops that drive it.
 ///
@@ -69,127 +70,11 @@ class Game extends ChangeNotifier {
 
   final SaveStore store;
 
-  /// Bumped whenever the shape of a save changes, with a migration to match.
-  /// A gap in the chain is an error rather than a silent skip -- see
-  /// [SaveCodec].
+  /// The save chain lives in the core, where each step is pinned by a
+  /// test; the app only picks it up.
   static final SaveCodec codec = SaveCodec(
-    currentVersion: 8,
-    migrations: [
-      // v7 -> v8: raw data stopped being a computed measurement and became a
-      // resource dug out of the rock. The old accumulators are denominated in
-      // normalised sightings -- billions of them -- and carrying either one
-      // across would trip the collapse gate on the first frame and hand out a
-      // wallet nobody earned. Both start over; nothing had been spent from
-      // them yet.
-      SaveMigration(
-        fromVersion: 7,
-        apply: (sections) {
-          final run = sections['run'];
-          if (run is! Map) return sections;
-          final out = Map<String, Object?>.from(run)..remove('data');
-          return {...sections, 'run': out};
-        },
-      ),
-      // v6 -> v7: the peak each part has been BUILT to is a mark, 0..4. Every
-      // peak ever written to disk was a LEVEL -- and the build that started
-      // reading them as marks clamped, so a peak of 137 landed as 4 and every
-      // generation read as already known. There is no way back to the real
-      // figure, so it is rebuilt from what the run can prove: the mark the
-      // part stands at, or the mark its level has walked into.
-      SaveMigration(
-        fromVersion: 6,
-        apply: (sections) {
-          final run = sections['run'];
-          if (run is! Map) return sections;
-          final arm = run['arm'];
-          if (arm is! Map) return sections;
-          final out = Map<String, Object?>.from(arm);
-          int read(Object? value) => value is num ? value.toInt() : 0;
-          for (final part in const ['bit', 'drive', 'supply']) {
-            final walked = PrototypeSimulation.generationOf(read(out[part]));
-            final built = read(out['${part}Mark']);
-            out['${part}Peak'] = walked > built ? walked : built;
-          }
-          return {
-            ...sections,
-            'run': {...Map<String, Object?>.from(run), 'arm': out},
-          };
-        },
-      ),
-      // v5 -> v6: the manual lane became the manipulator arm. Its three
-      // levers were strike power, energy cap and energy regen; they are now
-      // three PARTS, and cap and regen merged into one. Strike power carries
-      // over to the bit and the old cap level to the supply, which is the
-      // closest thing each had; the regen track has no heir and is dropped.
-      SaveMigration(
-        fromVersion: 5,
-        apply: (sections) {
-          final run = sections['run'];
-          if (run is! Map) return sections;
-          final out = Map<String, Object?>.from(run);
-          final strikes = out.remove('strikes');
-          out['arm'] = {
-            'bit': strikes is Map ? strikes['power'] ?? 0 : 0,
-            'drive': 0,
-            'supply': strikes is Map ? strikes['cap'] ?? 0 : 0,
-          };
-          return {...sections, 'run': out};
-        },
-      ),
-      // v4 -> v5: data is counted in measurements now, not in tonnes. The
-      // old accumulators are in units a thousandfold larger, and keeping
-      // them would leave the collapse gate permanently open, so they are
-      // dropped and start over -- nothing had been spent from them yet.
-      SaveMigration(
-        fromVersion: 4,
-        apply: (sections) {
-          final run = sections['run'];
-          if (run is! Map) return sections;
-          final out = Map<String, Object?>.from(run)..remove('data');
-          return {...sections, 'run': out};
-        },
-      ),
-      // v3 -> v4: measurement data arrived (raw, cycle gross, wallet).
-      // Purely additive -- absent keys fall back to fresh accumulators -- so
-      // the bump only fences old builds off saves they cannot keep whole.
-      SaveMigration(fromVersion: 3, apply: (sections) => sections),
-      // v2 -> v3: forcing is gone; its charge gauge became energy.
-      SaveMigration(
-        fromVersion: 2,
-        apply: (sections) {
-          final run = sections['run'];
-          if (run is! Map) return sections;
-          final out = Map<String, Object?>.from(run);
-          if (out.containsKey('charge')) {
-            out['energy'] = out.remove('charge');
-          }
-          return {...sections, 'run': out};
-        },
-      ),
-      // v1 -> v2: the always-drop stopped being "ore" and became regolith,
-      // with the chance ores taking the ore name for themselves.
-      SaveMigration(
-        fromVersion: 1,
-        apply: (sections) {
-          Map<String, Object?>? renamed(Object? holder) {
-            if (holder is! Map) return null;
-            final stock = holder['stock'];
-            if (stock is! Map) return null;
-            final out = Map<String, Object?>.from(stock);
-            if (out.containsKey('ore')) {
-              out['regolith'] = out.remove('ore');
-            }
-            return {...Map<String, Object?>.from(holder), 'stock': out};
-          }
-
-          return {
-            ...sections,
-            'run': ?renamed(sections['run']),
-            'meta': ?renamed(sections['meta']),
-          };
-        },
-      ),
-    ],
+    currentVersion: stratumSaveVersion,
+    migrations: stratumSaveMigrations,
   );
 
   /// Housekeeping on wall-clock, not a game rhythm: a missed save must be
@@ -467,7 +352,11 @@ class Game extends ChangeNotifier {
       );
       _played.reset();
       return true;
-    } on SaveFormatException catch (error) {
+    } on Object catch (error) {
+      // Anything the read throws -- a malformed document, a corrupt value
+      // deep inside a section -- is the same verdict: this file does not
+      // load, try the backup, then quarantine. Catching only the codec's
+      // own exception let a value-corrupt save escape that path.
       debugPrint('$error');
       return false;
     }
@@ -552,7 +441,9 @@ class Game extends ChangeNotifier {
   ///
   /// Surfaced so the menu can say why a slot stayed empty instead of leaving
   /// the player to guess.
-  String? get storageFault => _storageFault;
+  String? get storageFault =>
+      _storageFault ??
+      (store.listFaults.isEmpty ? null : store.listFaults.values.first);
   String? _storageFault;
 
   Future<bool> deleteSlot(SaveSlot slot) async {
@@ -813,19 +704,6 @@ class Game extends ChangeNotifier {
 
   double get energyPerSecond => sim.energyPerRegen / sim.energySeconds;
 
-  /// What the store gains of [id] per second, hand and rig together.
-  BigDouble yieldPerSecond(ResourceId id) => sim.yieldPerSecond(
-    id,
-    energyPerSecond: energyPerSecond,
-    cycleSeconds: cycleSeconds,
-  );
-
-  /// How long one point of energy takes, for the gauge to say so out loud.
-  String get energyInterval => '${sim.energySeconds.toStringAsFixed(3)} с';
-
-  static String secondsLabel(Duration interval) =>
-      '${(interval.inMilliseconds / 1000).toStringAsFixed(1)} с';
-
   /// The requests the player has already laid eyes on. Attention state,
   /// not progress -- it lives here rather than in the save, and a reload
   /// lighting the dot once is the honest outcome: the board IS news again.
@@ -951,36 +829,16 @@ class Game extends ChangeNotifier {
     // float is for the strike's crit -- the same drama whichever lane threw
     // the blow.
     if (outcome.critical) _reportCrit();
-    if (outcome.thickLayersBroken > 0) {
-      _addFloat(
-        text: 'ТОВСТИЙ ШАР · всі ресурси ×${PrototypeSimulation.thickSpan}',
-        color: 0xFFFFD782,
-        left: 28,
-        top: 42,
-        size: 16,
-      );
-    }
+    if (outcome.thickLayersBroken > 0) _addFloat(FloatCue.thickLayer());
     if (outcome.layersBroken > 0) {
       breakFlashes.value = breakFlashes.value + 1;
     }
-    if (outcome.echoes > 0) {
-      _addFloat(
-        text: 'ехо · подвійний удар',
-        color: 0xFF9FE1CB,
-        left: 104,
-        top: 70,
-        size: 14,
-      );
-    }
+    if (outcome.echoes > 0) _addFloat(FloatCue.echo);
   }
 
-  void _addFloat({
-    required String text,
-    required int color,
-    required double left,
-    required double top,
-    required double size,
-  }) {
+  /// Puts a cue over the face; the words and the spot are the cue's own
+  /// business, this only keeps the queue.
+  void _addFloat(FloatCue cue) {
     // Nobody to see it, and nothing to retire it: an unwatched float is a
     // float that waits for the player to come back and then arrives late.
     if (!_watched) return;
@@ -988,11 +846,11 @@ class Game extends ChangeNotifier {
     floats.add(
       FloatingNumber(
         id: _nextFloatId++,
-        text: text,
-        color: color,
-        left: left,
-        top: top,
-        size: size,
+        text: cue.text,
+        color: cue.color,
+        left: cue.left,
+        top: cue.top,
+        size: cue.size,
       ),
     );
   }
@@ -1009,13 +867,7 @@ class Game extends ChangeNotifier {
   /// firing several times a second over the thing the player is watching.
   void _reportCrit() {
     if (_hidden || _background) return;
-    _addFloat(
-      text: 'крит',
-      color: 0xB3FFD782,
-      left: 96 + (hitShakes.value * 37 % 150).toDouble(),
-      top: 118 + (hitShakes.value * 17 % 46).toDouble(),
-      size: 11,
-    );
+    _addFloat(FloatCue.crit(hitShakes.value));
   }
 
   /// One manual blow at the face.
@@ -1034,16 +886,6 @@ class Game extends ChangeNotifier {
     // No gain announcements here: the stockpile watcher reports every income
     // once, and a second voice was double-counting the streaks.
     _syncEnergyLoop();
-    notifyListeners();
-  }
-
-  void buyDrill() {
-    sim.buyDrill();
-    notifyListeners();
-  }
-
-  void buyPowerUpgrade() {
-    sim.buyPowerUpgrade();
     notifyListeners();
   }
 
@@ -1082,6 +924,7 @@ class Game extends ChangeNotifier {
     }
     _played.stop();
     _autosave?.cancel();
+    _breachTimer?.cancel();
     _lifecycle.dispose();
     drill.dispose();
     energyLoop.dispose();

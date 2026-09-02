@@ -1,7 +1,5 @@
 import 'package:flutter/widgets.dart';
 
-import 'box.dart';
-
 class HudCorners {
   const HudCorners({
     this.topLeft = false,

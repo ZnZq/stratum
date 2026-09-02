@@ -259,4 +259,36 @@ void main() {
     expect(back.tranchesFree, sim.tranchesFree);
     expect(back.financeRank, sim.financeRank);
   });
+
+  test('the regolith fund level scales a break payout like the roll', () {
+    // Two identical digs on the same seed, one with financing poured into
+    // regolith: every regolith payout -- the roll AND the break bonus --
+    // must scale by exactly the same multiplier, because they all enter
+    // through the one door.
+    BigDouble dig(int levels) {
+      final sim = PrototypeSimulation(seed: 77);
+      sim.grantFundLevels(ResourceId.regolith, levels);
+      var thick = 1;
+      while (!PrototypeSimulation.isThick(thick)) {
+        thick++;
+      }
+      sim.layer.value = thick;
+      sim.layerHp.value = BigDouble.one; // one blow away from the payout
+      final before = sim.regolith.value;
+      final outcome = sim.strike();
+      expect(outcome.thickLayersBroken, greaterThan(0));
+      return sim.regolith.value - before;
+    }
+
+    final plain = dig(0);
+    final funded = dig(5);
+    final scale =
+        (PrototypeSimulation(seed: 77)..grantFundLevels(ResourceId.regolith, 5))
+            .fundScaleOf(ResourceId.regolith);
+    expect(scale > BigDouble.one, isTrue);
+    expect(
+      funded.toDouble(),
+      closeTo((plain * scale).toDouble(), (plain * scale).toDouble() * 1e-9),
+    );
+  });
 }

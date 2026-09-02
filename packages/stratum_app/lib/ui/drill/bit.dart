@@ -5,9 +5,9 @@ import '../tokens.dart';
 import 'metrics.dart';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/scheduler.dart';
 
 import 'pipe.dart';
+import '../frame_clock.dart';
 
 /// The bit, cutting.
 ///
@@ -28,29 +28,18 @@ class DrillBit extends StatefulWidget {
 }
 
 class DrillBitState extends State<DrillBit>
-    with SingleTickerProviderStateMixin {
-  late final Ticker _ticker;
+    with SingleTickerProviderStateMixin, FrameClock {
   late final ValueNotifier<double> _flutes = ValueNotifier(widget.phase);
   final ValueNotifier<double> _bite = ValueNotifier(0);
-  Duration _lastFrame = Duration.zero;
 
   @override
-  void initState() {
-    super.initState();
-    _ticker = createTicker(_onFrame)..start();
-  }
-
-  void _onFrame(Duration elapsed) {
-    final delta = clampFrameDelta(elapsed - _lastFrame);
-    _lastFrame = elapsed;
-    _flutes.value =
-        (_flutes.value + delta.inMicroseconds / 1e6 / rigFlutePeriod) % 1.0;
+  void onFrame(double dt, Duration raw) {
+    _flutes.value = (_flutes.value + dt / rigFlutePeriod) % 1.0;
     _bite.value = widget.engine.progress;
   }
 
   @override
   void dispose() {
-    _ticker.dispose();
     _flutes.dispose();
     _bite.dispose();
     super.dispose();
