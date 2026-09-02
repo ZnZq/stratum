@@ -176,8 +176,8 @@ const Map<ResourceId, ResourceStyle> resourceStyles = {
     shelf: ResourceShelf.currency,
   ),
   ResourceId.rawData: (
-    label: 'Сирі дані',
-    note: 'уламки підкладки · рідкісно з удару',
+    label: 'Датасет',
+    note: 'навчальні дані · рідкісно з удару',
     icon: Ti.cpu,
     colour: Palette.tech,
     shelf: ResourceShelf.research,

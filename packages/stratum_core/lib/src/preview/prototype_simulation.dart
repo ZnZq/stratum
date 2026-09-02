@@ -500,8 +500,7 @@ class PrototypeSimulation {
 
   static const double rawPerCube = CollapseLedger.rawPerCube;
   static const double compilerStep = CollapseLedger.compilerStep;
-  static final BigDouble collapseThresholdBase =
-      CollapseLedger.collapseThresholdBase;
+  static final BigDouble serverMemoryBase = CollapseLedger.serverMemoryBase;
   static const int maxPendingCollapses = CollapseLedger.maxPendingCollapses;
   static const double collapseRackGrowth = CollapseLedger.collapseRackGrowth;
   static const double collapseThresholdGrowth =
@@ -518,6 +517,8 @@ class PrototypeSimulation {
   double rackFill(int rack, int nowMs) => ledger.rackFill(rack, nowMs);
   double get compileRate => ledger.compileRate;
   BigDouble get walletEarned => ledger.walletEarned.value;
+  BigDouble get modelMemory => ledger.modelMemory.value;
+  Signal<double> get bytesPerParameter => ledger.bytesPerParameter;
   BigDouble collapseThreshold(int nowMs) => ledger.collapseThreshold(nowMs);
   double driftDays(int nowMs) => ledger.driftDays(nowMs);
   double driftProgress(int nowMs) => ledger.driftProgress(nowMs);

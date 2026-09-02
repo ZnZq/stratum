@@ -92,6 +92,8 @@ class _BreachOverlayState extends State<BreachOverlay> {
         if (_saves)
           SaveMenu(
             game: widget.game,
+            // The breach covers the shell, so no strip stands under it.
+            floor: AppMetrics.navBar,
             onClose: () => setState(() => _saves = false),
           ),
       ],

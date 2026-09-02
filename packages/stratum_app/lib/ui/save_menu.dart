@@ -20,10 +20,18 @@ import 'tokens.dart';
 /// and none of them can be undone, so each is armed by its own tick first. The
 /// tick clears itself after the action, so a card is never left loaded.
 class SaveMenu extends StatefulWidget {
-  const SaveMenu({required this.game, required this.onClose, super.key});
+  const SaveMenu({
+    required this.game,
+    required this.onClose,
+    required this.floor,
+    super.key,
+  });
 
   final Game game;
   final VoidCallback onClose;
+
+  /// What the navigation takes under the sheet; see [HudModal.floor].
+  final double floor;
 
   @override
   State<SaveMenu> createState() => _SaveMenuState();
@@ -75,6 +83,7 @@ class _SaveMenuState extends State<SaveMenu> {
       icon: Ic.saves,
       title: 'ЗБЕРЕЖЕННЯ',
       anchor: ModalAnchor.stretch,
+      floor: widget.floor,
       contentPadding: EdgeInsets.zero,
       onClose: widget.onClose,
       footer: _Footer(

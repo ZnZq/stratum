@@ -13,12 +13,13 @@ import 'tokens.dart';
 /// -- and the only honest differences are the currency, the colour and the
 /// name. A second file would have made them drift.
 enum TreeKind {
-  /// Bought with OLAP cubes, banked by a Restart. Tunes what the runs inside
-  /// this cycle get.
-  simulation('olap-куби', Ic.tree, Palette.gold),
+  /// Bought with parameters, trained by a Restart: the tree is the model's
+  /// architecture, and a node is capacity allotted to a skill. Tunes what
+  /// the runs inside this cycle get.
+  simulation('параметри', Ic.tree, Palette.gold),
 
-  /// Bought with collapse points, one per rack taken. A level below, so it
-  /// keeps the alarm colour the collapse act is written in.
+  /// Bought with patches, one per server overloaded. A level below, so it
+  /// keeps the alarm colour the overload act is written in.
   firmware('патчі', Ic.collapse, Palette.alarm);
 
   const TreeKind(this.currency, this.icon, this.accent);

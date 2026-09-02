@@ -24,10 +24,14 @@ void main() {
         )
         .toDouble();
     final perCycle = perSecond * cycleSeconds;
-    // The gate is denominated in cubes, so the pace has to be too.
+    // The gate is denominated in server memory, so the pace is measured in
+    // parameters and converted at the training footprint.
     final perDay =
         perSecond * 86400 / PrototypeSimulation.rawPerCube * sim.compileRate;
-    final days = PrototypeSimulation.collapseThresholdBase.toDouble() / perDay;
+    final firstServer =
+        PrototypeSimulation.serverMemoryBase.toDouble() /
+        sim.bytesPerParameter.value;
+    final days = firstServer / perDay;
     print(
       '${depth.toString().padLeft(5)} m  '
       'per cycle ${perCycle.toStringAsFixed(1).padLeft(9)}  '

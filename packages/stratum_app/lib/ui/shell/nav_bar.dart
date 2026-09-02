@@ -8,16 +8,18 @@ import '../tokens.dart';
 import 'dotted.dart';
 import 'screen_strip.dart';
 
-/// The two-level navigation: sections along the bottom, and the current
-/// section's screens on a strip above them.
+/// The two-level navigation: the current world's sections along the
+/// bottom, and the current section's screens on a strip above them.
 ///
 /// The strip is always there. Folding it away saved 44 pixels and cost the
 /// player their bearings: where you are and what else is here should not be
 /// something you have to tap to find out. Screens reserve the room through
-/// [AppMetrics.navTotal].
+/// [AppMetrics.navTotal]. A section that is its one screen leaves the strip
+/// empty rather than showing a row of one.
 class NavBar extends StatelessWidget {
   const NavBar({
     required this.game,
+    required this.world,
     required this.screen,
     required this.console,
     required this.onSection,
@@ -26,6 +28,9 @@ class NavBar extends StatelessWidget {
   });
 
   final Game game;
+
+  /// Whose row of sections is shown.
+  final GameWorld world;
 
   /// The open screen, or null when the player has stepped out to the shell.
   final GameScreen? screen;
@@ -39,24 +44,24 @@ class NavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final open = screen;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // The row keeps its height with nothing in it: panels anchor to
-        // [AppMetrics.navTotal], and a bar that changed height would leave
-        // them floating.
-        SizedBox(
-          height: AppMetrics.navStrip,
-          child: screen == null
-              ? null
-              : ScreenStrip(
-                  game: game,
-                  section: screen!.section,
-                  screen: screen!,
-                  onScreen: onScreen,
-                ),
-        ),
+        // The strip only where a section has one. The shell knows the
+        // same rule (its floor), so screens and sheets stand on the row
+        // that is actually there rather than on a reserved blank.
+        if (open != null && !open.section.single)
+          SizedBox(
+            height: AppMetrics.navStrip,
+            child: ScreenStrip(
+              game: game,
+              section: open.section,
+              screen: open,
+              onScreen: onScreen,
+            ),
+          ),
         // No bar behind it: the icons and chips carry their own shapes, so a
         // slab under them only walls the shell off from its own navigation.
         SizedBox(
@@ -68,7 +73,7 @@ class NavBar extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              for (final section in NavSection.values)
+              for (final section in NavSection.of(world))
                 // A centred cluster: the seated well is 46 wide, and a fixed
                 // slot keeps the tabs together in the middle. 78 was a
                 // cluster while there were four sections; at five it filled
@@ -77,7 +82,7 @@ class NavBar extends StatelessWidget {
                   width: 64,
                   child: _SectionTab(
                     section: section,
-                    current: section == screen?.section,
+                    current: section == open?.section,
                     open: section.opensAsPanel && console,
                     marked: sectionNeedsAttention(section, game),
                     onTap: () => onSection(section),

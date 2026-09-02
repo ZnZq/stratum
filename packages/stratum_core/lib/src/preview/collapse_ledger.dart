@@ -5,14 +5,23 @@ import '../reactive_graph.dart';
 import '../stockpile.dart';
 import 'acknowledged_clock.dart';
 
-/// Data, cubes and the collapse wall: what a run's substrate compiles
-/// into, how many racks it fills, and how the gate melts with drift on
-/// the acknowledged clock. Owns every number the datacentre reads.
+/// The dataset, the model and the server wall: what a run's dataset
+/// trains into (parameters), how much server memory the model takes, how
+/// many servers it fills, and how the capacity fragments with uptime on
+/// the acknowledged clock. Owns every number the AI centre reads.
+///
+/// The code keeps its older words -- cubes, compile, collapse, drift --
+/// where renaming would cost a save migration; the lore since 2026-09-03
+/// reads them as parameters, training, overload and fragmentation.
 class CollapseLedger {
   CollapseLedger(this._stock, this._clock) {
     walletEarned = Computed(
       () => rawData.value * BigDouble.fromNum(compileRate / rawPerCube),
       name: 'wallet earned',
+    );
+    modelMemory = Computed(
+      () => walletEarned.value * BigDouble.fromNum(bytesPerParameter.value),
+      name: 'model memory',
     );
   }
 
@@ -56,23 +65,35 @@ class CollapseLedger {
   /// epoch ms). -1 until the app stamps it.
   final Signal<int> cycleStartMs = Signal(-1, name: 'cycle start');
 
-  /// How much substrate one cube is compiled from.
+  /// How much dataset one parameter is trained from.
   ///
   /// A plain divisor, not a power. A sublinear curve made splitting a
   /// haul across many short runs pay more than one long one, so the
   /// optimum was to restart as often as the gate allowed. Dividing is
-  /// neutral: the same substrate compiles to the same cubes however many
-  /// restarts it took.
-  static const double rawPerCube = 1000;
+  /// neutral: the same dataset trains the same parameters however many
+  /// restarts it took. PROVISIONAL: this is the pace knob, and the owner
+  /// balances it later (Chinchilla's 20 tokens per parameter is the
+  /// reference point).
+  static const double rawPerCube = 2;
 
-  /// What one compiler level adds to the rate.
+  /// What one learning-rate level adds to the rate.
   static const double compilerStep = 0.05;
 
-  /// What ONE collapse costs, in cubes -- cubes rather than the raw
-  /// substrate behind them, so the collapse gauge and the restart preview
-  /// read the same figure. The compiler upgrade therefore lifts cubes AND
-  /// brings the collapse nearer: one lever, two effects. PROVISIONAL.
-  static final BigDouble collapseThresholdBase = BigDouble.fromNum(1.5e5);
+  /// How many bytes of server memory one parameter takes while the model
+  /// is TRAINED: fp16 weights and gradients plus fp32 master weights and
+  /// two Adam moments -- sixteen. A physical number, never a balance
+  /// knob; what tree nodes will lower it (an FP8 optimiser to 6, then
+  /// quantisation) are lore-true steps, and each one pushes the overload
+  /// away. Lives in the graph because the wall depends on it.
+  final Signal<double> bytesPerParameter = Signal(
+    16,
+    name: 'bytes per parameter',
+  );
+
+  /// The first server's memory: one gibibyte (owner, 2026-09-03). The
+  /// wall is priced in bytes so that the model's size and the server's
+  /// capacity are the same kind of number. PROVISIONAL.
+  static final BigDouble serverMemoryBase = BigDouble.fromNum(1 << 30);
 
   /// How many collapses the centre can hold at once -- one per rack.
   /// Past the fifth there is nowhere to put the cubes, so leaving the
@@ -88,13 +109,14 @@ class CollapseLedger {
   /// PROVISIONAL.
   static const double collapseThresholdGrowth = 4;
 
-  /// Drift: the threshold melts by this factor per wall-clock day, online
-  /// and offline alike.
+  /// Drift, read in the game as fragmentation: the server's usable memory
+  /// shrinks by this factor per wall-clock day of uptime, online and
+  /// offline alike, and a reflash (a new cycle) starts it clean.
   static const double collapseDriftPerDay = 0.97;
 
-  /// How many days of drift a cycle accrues before the melt stops. At 30
-  /// days the wall stands at 40% of base -- less than the x4 a single
-  /// collapse adds, so waiting can never outrun the ladder.
+  /// How many days of uptime fragment the memory before it settles. At 30
+  /// days the capacity stands at 40% of base -- less than the x4 a single
+  /// overload adds, so waiting can never outrun the ladder.
   static const double collapseDriftCapDays = 30;
 
   /// Cycles CLOSED, not the ordinal of the one being played.
@@ -106,7 +128,7 @@ class CollapseLedger {
   int pendingCollapses(int nowMs) {
     var full = 0;
     for (var rack = 0; rack < unlockedServers; rack++) {
-      if (!walletEarned.value.gteWithTolerance(collapseCost(rack, nowMs))) {
+      if (!modelMemory.value.gteWithTolerance(collapseCost(rack, nowMs))) {
         break;
       }
       full++;
@@ -114,33 +136,39 @@ class CollapseLedger {
     return full;
   }
 
-  /// The cubes at which [rack] (0-based) is full -- a running total, so
-  /// rack 2 being full means rack 0 and rack 1 are too.
+  /// The memory, in bytes, at which server [rack] (0-based) is full -- a
+  /// running total, so rack 2 being full means rack 0 and rack 1 are too.
   BigDouble collapseCost(int rack, int nowMs) =>
       collapseThreshold(nowMs) *
       BigDouble.fromNum(math.pow(collapseRackGrowth, rack).toDouble());
 
-  /// How full one rack is, 0 to 1. A rack fills from where the one before
-  /// it finished, so the wall reads left to right without gaps.
+  /// How full one server is, 0 to 1. A server fills from where the one
+  /// before it finished, so the wall reads left to right without gaps.
   double rackFill(int rack, int nowMs) {
     final to = collapseCost(rack, nowMs);
     final from = rack == 0 ? BigDouble.zero : collapseCost(rack - 1, nowMs);
     final span = to - from;
     if (span <= BigDouble.zero) return 0;
-    return ((walletEarned.value - from) / span).toDouble().clamp(0.0, 1.0);
+    return ((modelMemory.value - from) / span).toDouble().clamp(0.0, 1.0);
   }
 
-  /// Cubes per unit of substrate, before the divisor.
+  /// Parameters per unit of dataset, before the divisor: the learning
+  /// rate, in the game's words.
   double get compileRate => 1 + compilerStep * compilerLevel.value;
 
-  /// What the current simulation would compile into.
+  /// What the current simulation would train into, in parameters.
   late final Computed<BigDouble> walletEarned;
 
-  /// The collapse threshold at [nowMs], melted by drift since the cycle
+  /// The memory the model being trained takes, in bytes: parameters times
+  /// [bytesPerParameter]. This is what the wall measures.
+  late final Computed<BigDouble> modelMemory;
+
+  /// The first server's capacity at [nowMs], in bytes: the base grown by
+  /// every overload taken, then fragmented by uptime since the cycle
   /// began -- on the acknowledged clock, see [driftDays].
   BigDouble collapseThreshold(int nowMs) {
     final base =
-        collapseThresholdBase *
+        serverMemoryBase *
         BigDouble.fromNum(collapseThresholdGrowth)
             .pow(collapses.value.toDouble());
     final days = driftDays(nowMs);

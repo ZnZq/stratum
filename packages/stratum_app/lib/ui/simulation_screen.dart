@@ -7,17 +7,19 @@ import '../game.dart';
 import 'cubes_icon.dart';
 import 'resource_icon.dart';
 import 'hud.dart';
+import 'memory_text.dart';
 import 'navigation.dart';
 import 'server_rack.dart';
 import 'tokens.dart';
 import 'clock_text.dart';
 
-/// The Data Centre: the machine the digging is FOR.
+/// The Simulation room of the AI centre: the machine the digging is FOR.
 ///
 /// Everything a simulation ENDS with. The other screens are windows down a
-/// hole; this one looks at the machine the hole feeds -- substrate comes up
-/// the shaft, the racks compile it into cubes, and the two acts that spend
-/// them live here with the wall that says how close the next one is.
+/// hole; this one looks at the machine the hole feeds -- the dataset comes
+/// up the shaft, training turns it into parameters, the model fills the
+/// servers, and the two acts live here with the wall that says how close
+/// the next overload is.
 ///
 /// One surface, like the rest of the game: the racks run edge to edge, the
 /// readouts sit over their floor, and nothing below is boxed.
@@ -89,10 +91,18 @@ class SimulationScreen extends StatelessWidget {
     final open = sim.unlockedServers;
     const racks = PrototypeSimulation.maxPendingCollapses;
     final fills = [for (var r = 0; r < racks; r++) sim.rackFill(r, now)];
-    // Only the rack being filled has a price worth reading: the ones behind
-    // are paid for and the ones ahead are locked.
-    final next = ready < open ? '${sim.collapseCost(ready, now)}' : null;
-    return _panel(sim, fills, next, '${sim.walletEarned}', now, ready, open);
+    // Only the server being filled has a capacity worth reading: the ones
+    // behind are full and the ones ahead are locked.
+    final next = ready < open ? memoryText(sim.collapseCost(ready, now)) : null;
+    return _panel(
+      sim,
+      fills,
+      next,
+      memoryText(sim.modelMemory),
+      now,
+      ready,
+      open,
+    );
   }
 
   Widget _panel(
@@ -129,7 +139,7 @@ class SimulationScreen extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: HudStat(
-                  label: 'сирі дані',
+                  label: 'датасет',
                   align: CrossAxisAlignment.end,
                   corners: const HudCorners(topRight: true),
                   value: '${sim.rawData.value}',
@@ -162,7 +172,7 @@ class SimulationScreen extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: HudStat(
-                  label: 'olap-куби',
+                  label: 'параметри',
                   align: CrossAxisAlignment.end,
                   corners: HudCorners.none,
                   value: '${sim.dataWallet.value}',
@@ -216,9 +226,9 @@ class SimulationScreen extends StatelessWidget {
                   figure: '+${sim.bankableData.value}',
                   unit: const _Unit(size: 22, child: CubesIcon(size: 22)),
                   // Named for what it PAYS, not for what it ends: the run
-                  // compiles into cubes, which is the game's own word for it
-                  // (compileRate, rawPerCube).
-                  action: 'СКОМПІЛЮВАТИ',
+                  // trains the model on its dataset, and the parameters it
+                  // adds are what the tree next door spends.
+                  action: 'НАВЧИТИ',
                   onAct: null,
                 ),
                 const SizedBox(height: 13),
@@ -300,20 +310,21 @@ class _Unit extends StatelessWidget {
   }
 }
 
-/// The heat, and how much of it is left to build.
+/// The fragmentation, and how much uptime is left to build it.
 ///
 /// Named for the machine rather than for the maths (the code still calls it
-/// drift): racks that have been grinding for days run hot, and a hot
-/// datacentre overloads sooner. It is the one word that also explains the
-/// CAP -- a room reaches its steady temperature and stops climbing -- and it
-/// keeps working while the player is away, which is exactly when the melt
-/// keeps running.
+/// drift): a server that has run for days has fragmented its memory, and
+/// less contiguous room means the model overflows it sooner. It is the one
+/// word that also explains the CAP -- fragmentation saturates and stops
+/// climbing -- and the RESET: a reflash reboots the machine clean. It keeps
+/// working while the player is away, which is exactly when the server keeps
+/// running.
 ///
 /// Cells rather than a smooth fill: this is a track the cycle CROSSES, and
-/// what the player wants to know is how many days of relief are already
+/// what the player wants to know is how many days of uptime are already
 /// spent -- a pour would say only "somewhere in the middle". Sits above the
-/// wall because it is what the wall stands on: every price below has already
-/// had this taken off it.
+/// wall because it is what the wall stands on: every capacity below has
+/// already had this taken off it.
 class _Drift extends StatelessWidget {
   const _Drift({
     required this.progress,
@@ -338,33 +349,32 @@ class _Drift extends StatelessWidget {
       fraction: progress,
       accent: Palette.steel,
       from: Palette.capsuleTree,
-      label: 'НАГРІВ',
-      // Days first, because days are what the cells are counting; the melt
-      // second, because it is what the days BOUGHT. And "знижка" rather than
-      // "поріг −2.5%": the wall below is priced in cubes, so the plain word
-      // for a price that went down is the one the player already knows -- the
-      // tree spends the same word on the same idea.
+      label: 'ФРАГМЕНТАЦІЯ',
+      // Days first, because days are what the cells are counting; the loss
+      // second, because it is what the days BOUGHT: the wall below is
+      // measured in memory, so what shrank is the capacity.
       reading: progress >= 1
-          ? 'рівновага · знижка $melted%'
-          : '${days.toStringAsFixed(1)} / $cap дн · знижка $melted%',
+          ? 'стабілізувалась · місткість −$melted%'
+          : '${days.toStringAsFixed(1)} / $cap дн аптайму · місткість −$melted%',
     );
   }
 }
 
-/// What the rack being filled still wants.
+/// The model's memory against the server being filled.
 ///
-/// One readout under the wall rather than a caption under every rack: with
-/// the ladder locked past the first, five captions were four blanks and a
-/// stray figure. The pair reads like every other progress in the game --
-/// what is held over what it takes -- and the same pile is what a Restart
-/// pays, which is why the figure above says the same number.
+/// One readout under the wall rather than a caption under every server:
+/// with the ladder locked past the first, five captions were four blanks
+/// and a stray figure. The pair reads like every other progress in the
+/// game -- what is held over what it takes -- in bytes, because that is
+/// what a server holds: the parameters above, times their training
+/// footprint.
 class _Toward extends StatelessWidget {
   const _Toward({required this.held, required this.cost});
 
   final String held;
 
-  /// Null once every open rack is full: there is nothing left to fill, and
-  /// the line says so instead of quoting a price for capacity that does not
+  /// Null once every open server is full: there is nothing left to fill,
+  /// and the line says so instead of quoting a capacity that does not
   /// exist yet.
   final String? cost;
 
@@ -376,7 +386,7 @@ class _Toward extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
-          full ? 'СТІНА ПОВНА' : 'НАСТУПНА СТІЙКА',
+          full ? 'СЕРВЕРИ ПОВНІ' : 'ПАМ\'ЯТЬ СЕРВЕРА',
           style: AppText.body(
             8,
             weight: FontWeight.w800,
@@ -411,8 +421,6 @@ class _Toward extends StatelessWidget {
               height: 1,
             ),
           ),
-          const SizedBox(width: 6),
-          const CubesIcon(size: 14),
         ],
       ],
     );

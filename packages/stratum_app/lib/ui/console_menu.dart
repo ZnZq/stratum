@@ -17,10 +17,14 @@ class ConsoleMenu extends StatelessWidget {
     required this.onPause,
     required this.onBackground,
     required this.onClose,
+    required this.floor,
     super.key,
   });
 
   final ValueChanged<GameScreen> onPick;
+
+  /// What the navigation takes under the sheet; see [HudModal.floor].
+  final double floor;
 
   /// Whole-game switches live here too: they are one-tap acts, not places,
   /// but the console is the game's service hatch and this is where a player
@@ -36,6 +40,7 @@ class ConsoleMenu extends StatelessWidget {
       icon: Ic.console,
       title: 'КОНСОЛЬ',
       anchor: ModalAnchor.bottom,
+      floor: floor,
       onClose: onClose,
       child: LayoutBuilder(
         builder: (context, constraints) {

@@ -47,11 +47,17 @@ class HudModal extends StatelessWidget {
     this.accent = Palette.tech,
     this.anchor = ModalAnchor.centre,
     this.inset = 10,
+    this.floor = AppMetrics.navTotal,
     this.contentPadding = const EdgeInsets.fromLTRB(13, 6, 13, 14),
     super.key,
   });
 
   final String title;
+
+  /// How much of the bottom the navigation takes under a bottom or
+  /// stretched sheet: the section row alone, or the row with its strip.
+  /// The shell knows which is showing; the sheet does not.
+  final double floor;
   final VoidCallback onClose;
   final Widget child;
   final String? icon;
@@ -157,14 +163,14 @@ class HudModal extends StatelessWidget {
           ModalAnchor.bottom => Positioned(
             left: inset,
             right: inset,
-            bottom: AppMetrics.navTotal + 8,
+            bottom: floor + 8,
             child: panel,
           ),
           ModalAnchor.stretch => Positioned(
             top: AppMetrics.resourceBar - 8,
             left: inset,
             right: inset,
-            bottom: AppMetrics.navTotal + 10,
+            bottom: floor + 10,
             child: panel,
           ),
           ModalAnchor.fill => Positioned(

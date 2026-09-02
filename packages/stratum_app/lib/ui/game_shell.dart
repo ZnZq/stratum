@@ -59,9 +59,25 @@ class _GameShellState extends State<GameShell> {
   /// insist on covering itself.
   GameScreen? _screen = GameScreen.drill;
 
+  /// Which world's shell is under the screens. Crossing puts the screen
+  /// away first: a world is entered at its home, never mid-section.
+  GameWorld _world = GameWorld.simulation;
+
   /// Where each section was left. Coming back to a section returns to what the
   /// player was doing in it rather than to its first entry.
   final Map<NavSection, GameScreen> _lastIn = {};
+
+  void _cross() {
+    setState(() {
+      _world = _world.other;
+      _screen = null;
+      _console = false;
+      _saves = false;
+      _finance = false;
+    });
+    _syncAudience();
+    _rememberScreen();
+  }
 
   bool _saves = false;
   bool _finance = false;
@@ -90,6 +106,14 @@ class _GameShellState extends State<GameShell> {
     _syncAudience();
     _rememberScreen();
   }
+
+  /// What the navigation takes at the bottom right now: the section row
+  /// with its strip while a section that has one is open, the row alone
+  /// otherwise. Screens and sheets both stand on it.
+  double get _floor => switch (_screen) {
+    final screen? when !screen.section.single => AppMetrics.navTotal,
+    _ => AppMetrics.navBar,
+  };
 
   /// Everything the mine says belongs to the mine; any other screen mutes it.
   void _syncAudience() {
@@ -175,11 +199,18 @@ class _GameShellState extends State<GameShell> {
 
   /// Standing on the shell is a PLACE, not the absence of one. Writing null
   /// for it made the note indistinguishable from "nothing saved yet", so a
-  /// player who quit from the Data Centre came back to the mine.
+  /// player who quit from the Data Centre came back to the mine. Each
+  /// world's shell is its own place.
   static const String _shellValue = 'shell';
+  static const String _centreValue = 'centre';
 
-  void _rememberScreen() =>
-      unawaited(_prefs.set(_screenKey, _screen?.name ?? _shellValue));
+  void _rememberScreen() => unawaited(
+    _prefs.set(
+      _screenKey,
+      _screen?.name ??
+          (_world == GameWorld.centre ? _centreValue : _shellValue),
+    ),
+  );
 
   @override
   void initState() {
@@ -195,8 +226,13 @@ class _GameShellState extends State<GameShell> {
     if (!mounted) return;
     final saved = _prefs[_screenKey];
     if (saved is! String) return;
-    if (saved == _shellValue) {
-      setState(() => _screen = null);
+    if (saved == _shellValue || saved == _centreValue) {
+      setState(() {
+        _screen = null;
+        _world = saved == _centreValue
+            ? GameWorld.centre
+            : GameWorld.simulation;
+      });
       _syncAudience();
       return;
     }
@@ -207,7 +243,12 @@ class _GameShellState extends State<GameShell> {
         .firstOrNull;
     setState(() {
       _screen = found;
-      if (found case final screen?) _lastIn[screen.section] = screen;
+      if (found case final screen?) {
+        _lastIn[screen.section] = screen;
+        // The screen says which world it is in; the console's do not, and
+        // keep whichever world the shell started on.
+        _world = screen.section.world ?? _world;
+      }
     });
     if (found == GameScreen.upgrades) _game.markDrillUpgradesSeen();
     if (found == GameScreen.automation) _game.markAutomationSeen();
@@ -258,15 +299,28 @@ class _GameShellState extends State<GameShell> {
                               // around their edges instead of being covered.
                               const Positioned.fill(child: ShellBackdrop()),
                               if (_screen == null)
-                                Positioned.fill(child: HomeScreen()),
+                                Positioned.fill(
+                                  child: HomeScreen(
+                                    game: _game,
+                                    world: _world,
+                                    marked: worldNeedsAttention(
+                                      _world.other,
+                                      _game,
+                                    ),
+                                    onCross: _cross,
+                                  ),
+                                ),
                               if (_screen case final screen?)
                                 Positioned.fill(
                                   child: Padding(
-                                    padding: const EdgeInsets.fromLTRB(
+                                    // Room for the strip only where there
+                                    // is one: a section that is its own
+                                    // screen runs down to the section row.
+                                    padding: EdgeInsets.fromLTRB(
                                       8,
                                       AppMetrics.resourceBar,
                                       8,
-                                      AppMetrics.navTotal + 4,
+                                      _floor + 4,
                                     ),
                                     child: _framed(screen),
                                   ),
@@ -281,15 +335,18 @@ class _GameShellState extends State<GameShell> {
                                   child: switch ((_saves, _console, _finance)) {
                                     (true, _, _) => SaveMenu(
                                       game: _game,
+                                      floor: _floor,
                                       onClose: () =>
                                           setState(() => _saves = false),
                                     ),
                                     (_, _, true) => FinancingSheet(
                                       game: _game,
+                                      floor: _floor,
                                       onClose: () =>
                                           setState(() => _finance = false),
                                     ),
                                     (_, true, _) => ConsoleMenu(
+                                      floor: _floor,
                                       onPick: _pickScreen,
                                       onPause: () {
                                         setState(() => _console = false);
@@ -339,6 +396,7 @@ class _GameShellState extends State<GameShell> {
                                 right: 0,
                                 child: NavBar(
                                   game: _game,
+                                  world: _world,
                                   screen: _screen,
                                   console: _console,
                                   onSection: _pickSection,

@@ -17,10 +17,18 @@ import 'resource_icon.dart';
 /// every poured tranche compounds the global multiplier, and enough spending
 /// climbs a RANK, which lifts every cap and compounds again.
 class FinancingSheet extends StatelessWidget {
-  const FinancingSheet({required this.game, required this.onClose, super.key});
+  const FinancingSheet({
+    required this.game,
+    required this.onClose,
+    required this.floor,
+    super.key,
+  });
 
   final Game game;
   final VoidCallback onClose;
+
+  /// What the navigation takes under the sheet; see [HudModal.floor].
+  final double floor;
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +39,7 @@ class FinancingSheet extends StatelessWidget {
       title: 'ФІНАНСУВАННЯ',
       accent: Palette.gold,
       anchor: ModalAnchor.stretch,
+      floor: floor,
       onClose: onClose,
       trailing: Text(
         'РАУНД ${sim.financeRound}',
